@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block content %}
+<form method="POST" action="{{ url_for('web.edit_version', version_id=version.id) }}">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="mb-0">Редактирование Версии №{{ version.version_number }}</h1>
+            <p class="text-muted">{{ version.comment }}</p>
+        </div>
+        <a href="{{ url_for('web.versions_index') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> К списку версий
+        </a>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <input type="text" id="searchComplex" class="form-control" placeholder="Поиск по названию ЖК...">
+        </div>
+        <div class="col-md-6">
+            <select id="filterPropType" class="form-select">
+                <option value="">Все типы недвижимости</option>
+                <option value="flat">flat</option>
+                <option value="comm">comm</option>
+                <option value="garage">garage</option>
+                <option value="storageroom">storageroom</option>
+            </select>
+        </div>
+    </div>
+
+    <button type="button" class="btn btn-warning mt-3 mb-3 sticky-top" data-bs-toggle="modal" data-bs-target="#saveChangesModal">
+        <i class="bi bi-save"></i> Сохранить все изменения
+    </button>
+
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover">
+            <thead class="table-light">
+                <tr>
+                    <th>ЖК</th>
+                    <th>Тип недв.</th>
+                    <th>Тип оплаты</th>
+                    <th>МПП (%)</th>
+                    <th>РОП (%)</th>
+                    <th>КД (%)</th>
+                    <th>Акция (%)</th>
+                </tr>
+            </thead>
+            <tbody id="discountsTableBody">
+                {% for discount in discounts %}
+                <tr data-complex="{{ discount.complex_name|lower }}" data-prop-type="{{ discount.property_type.value|lower }}">
+                    <td>{{ discount.complex_name }}</td>
+                    <td>{{ discount.property_type.value }}</td>
+                    <td>{{ discount.payment_method.value }}</td>
+                    <td><input type="number" step="0.1" class="form-control editable" name="discount-{{ discount.id }}-mpp" value="{{ discount.mpp * 100 }}"></td>
+                    <td><input type="number" step="0.1" class="form-control editable" name="discount-{{ discount.id }}-rop" value="{{ discount.rop * 100 }}"></td>
+                    <td><input type="number" step="0.1" class="form-control editable" name="discount-{{ discount.id }}-kd" value="{{ discount.kd * 100 }}"></td>
+                    <td><input type="number" step="0.1" class="form-control editable" name="discount-{{ discount.id }}-action" value="{{ discount.action * 100 }}"></td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="text-center">В этой версии еще нет данных о скидках. Возможно, она была создана в пустой системе.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <button type="button" class="btn btn-warning mt-3" data-bs-toggle="modal" data-bs-target="#saveChangesModal">
+        <i class="bi bi-save"></i> Сохранить все изменения
+    </button>
+
+
+    <div class="modal fade" id="saveChangesModal" tabindex="-1" aria-labelledby="saveChangesModalLabel" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="saveChangesModalLabel">Подтверждение изменений</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+              <div class="mb-3">
+                <label for="changes_comment" class="form-label"><strong>Опишите внесенные изменения (обязательно):</strong></label>
+                <textarea class="form-control" id="changes_comment" name="changes_comment" rows="4" placeholder="Например: Увеличена скидка МПП для ЖК 'Солнечный' в связи с новой акцией" required></textarea>
+              </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+            <button type="submit" class="btn btn-warning">Подтвердить и сохранить</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+</form>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Подсветка редактируемых ячеек
+    const editableInputs = document.querySelectorAll('.editable');
+    editableInputs.forEach(input => {
+        const originalValue = input.value;
+        input.addEventListener('input', function() {
+            if (input.value !== originalValue) {
+                input.parentElement.style.backgroundColor = 'rgba(255, 193, 7, 0.3)';
+            } else {
+                input.parentElement.style.backgroundColor = '';
+            }
+        });
+    });
+
+    // Поиск и фильтрация
+    const searchInput = document.getElementById('searchComplex');
+    const propTypeFilter = document.getElementById('filterPropType');
+    const tableRows = document.querySelectorAll('#discountsTableBody tr');
+
+    function applyFilters() {
+        const searchTerm = searchInput.value.toLowerCase();
+        const propType = propTypeFilter.value.toLowerCase();
+        tableRows.forEach(row => {
+            // Проверяем, есть ли у строки нужные data-атрибуты
+            if (row.dataset.complex && row.dataset.propType) {
+                const complexMatch = row.dataset.complex.includes(searchTerm);
+                const propTypeMatch = propType === '' || row.dataset.propType === propType;
+                if (complexMatch && propTypeMatch) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            }
+        });
+    }
+
+    if (searchInput && propTypeFilter) {
+        searchInput.addEventListener('input', applyFilters);
+        propTypeFilter.addEventListener('change', applyFilters);
+    }
+});
+</script>
+{% endblock %}

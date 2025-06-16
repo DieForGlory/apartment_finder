@@ -97,6 +97,9 @@
                         <li class="nav-item">
                             <a class="nav-link {% if request.endpoint == 'web.upload_discounts' %}active{% endif %}" href="{{ url_for('web.upload_discounts') }}">Загрузить скидки</a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'versions' in request.endpoint %}active{% endif %}" href="{{ url_for('web.versions_index') }}">Управление скидками</a>
+                        </li>
                     </ul>
                     <div class="theme-switcher-container ms-lg-auto">
                         <button id="theme-switcher-btn" class="btn btn-outline-secondary btn-sm">

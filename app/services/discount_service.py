@@ -6,9 +6,111 @@ from ..models.estate_models import EstateSell
 import pandas as pd
 import io
 import copy
+from ..models.discount_models import Discount, DiscountVersion, PropertyType, PaymentMethod
 
 
 # --- Вспомогательные функции (process_discounts_from_excel, и т.д.) остаются без изменений ---
+def create_new_version(comment: str):
+    """Создает новую версию системы скидок, копируя данные из последней существующей."""
+    print(f"\n[DISCOUNT SERVICE] 🚀 Создание новой версии с комментарием: '{comment}'")
+
+    latest_version = DiscountVersion.query.order_by(DiscountVersion.version_number.desc()).first()
+
+    new_version_number = 1
+    if latest_version:
+        new_version_number = latest_version.version_number + 1
+
+    # Создаем новую запись о версии
+    new_version = DiscountVersion(version_number=new_version_number, comment=comment)
+    db.session.add(new_version)
+
+    # Если есть предыдущая версия, копируем все скидки из нее
+    if latest_version:
+        for old_discount in latest_version.discounts:
+            new_discount = Discount(
+                version=new_version,
+                complex_name=old_discount.complex_name,
+                property_type=old_discount.property_type,
+                payment_method=old_discount.payment_method,
+                mpp=old_discount.mpp,
+                rop=old_discount.rop,
+                kd=old_discount.kd,
+                opt=old_discount.opt,
+                gd=old_discount.gd,
+                holding=old_discount.holding,
+                shareholder=old_discount.shareholder,
+                action=old_discount.action,
+                cadastre_date=old_discount.cadastre_date
+            )
+            db.session.add(new_discount)
+
+    db.session.commit()
+    print(f"[DISCOUNT SERVICE] ✔️ Успешно создана версия №{new_version_number}")
+    return new_version
+
+def activate_version(version_id: int):
+    """Активирует выбранную версию, делая все остальные неактивными."""
+    print(f"[DISCOUNT SERVICE] 🔄 Активация версии ID: {version_id}...")
+    # Сбрасываем флаг у всех версий
+    DiscountVersion.query.update({DiscountVersion.is_active: False})
+    # Устанавливаем флаг для нужной версии
+    target_version = DiscountVersion.query.get(version_id)
+    if target_version:
+        target_version.is_active = True
+        db.session.commit()
+        print(f"[DISCOUNT SERVICE] ✔️ Версия №{target_version.version_number} (ID: {version_id}) теперь активна.")
+    else:
+        print(f"[DISCOUNT SERVICE] ❌ Не найдена версия с ID: {version_id}")
+
+
+def update_discounts_for_version(version_id: int, form_data: dict, comment: str):
+    """Обновляет значения скидок для конкретной версии и выводит саммари в консоль."""
+    target_version = DiscountVersion.query.get(version_id)
+    if not target_version:
+        return "Ошибка: Версия не найдена."
+
+    changes_summary = []
+
+    parsed_data = {}
+    for key, value in form_data.items():
+        if key.startswith('discount-'):
+            parts = key.split('-')
+            discount_id = int(parts[1])
+            field_name = parts[2]
+            parsed_data.setdefault(discount_id, {})[field_name] = value
+
+    for discount_id, fields in parsed_data.items():
+        discount = Discount.query.get(discount_id)
+        if not discount or discount.version_id != target_version.id:
+            continue
+
+        log_prefix = f"  - {discount.complex_name} | {discount.property_type.value} | {discount.payment_method.value}:"
+
+        for field, new_value_str in fields.items():
+            try:
+                new_value = float(new_value_str) / 100.0
+                old_value = getattr(discount, field)
+
+                if abs(old_value - new_value) > 1e-9:  # Сравнение для float
+                    changes_summary.append(
+                        f"{log_prefix} поле '{field.upper()}' изменено с {old_value * 100:.1f}% на {new_value * 100:.1f}%")
+                    setattr(discount, field, new_value)
+            except (ValueError, TypeError):
+                continue
+
+    if changes_summary:
+        print(
+            f"\n[DISCOUNT UPDATE] 💾 Сохранение изменений для версии №{target_version.version_number} (ID: {version_id})")
+        # --- ВЫВОДИМ КОММЕНТАРИЙ ---
+        print(f"[COMMENT] 💬: {comment}")
+        for change in changes_summary:
+            print(change)
+        db.session.commit()
+        print("[DISCOUNT UPDATE] ✔️ Изменения успешно сохранены в БД.")
+        return f"Сохранено {len(changes_summary)} изменений."
+    else:
+        print(f"\n[DISCOUNT UPDATE] ❕ Нет изменений для сохранения в версии №{target_version.version_number}.")
+        return "Изменений для сохранения не найдено."
 
 def _normalize_percentage(value):
     try:
@@ -19,23 +121,43 @@ def _normalize_percentage(value):
         return 0.0
 
 
-def process_discounts_from_excel(file_path):
-    print(f"\n[DISCOUNT SERVICE] Начало обработки файла: {file_path}")
+def process_discounts_from_excel(file_path: str, version_id: int):
+    """
+    Обрабатывает Excel-файл и создает/обновляет скидки для УКАЗАННОЙ ВЕРСИИ.
+    """
+    print(f"\n[DISCOUNT SERVICE] Начало обработки файла: {file_path} для версии ID: {version_id}")
     df = pd.read_excel(file_path)
     created_count, updated_count = 0, 0
+
+    # Получаем все скидки для данной версии один раз, чтобы избежать лишних запросов к БД
+    existing_discounts = {
+        (d.complex_name, d.property_type, d.payment_method): d
+        for d in Discount.query.filter_by(version_id=version_id).all()
+    }
+
     for index, row in df.iterrows():
-        discount = Discount.query.filter_by(
-            complex_name=row['ЖК'],
-            property_type=PropertyType(row['Тип недвижимости']),
-            payment_method=PaymentMethod(row['Тип оплаты'])
-        ).first()
+        # Формируем ключ для поиска в словаре
+        key = (
+            row['ЖК'],
+            PropertyType(row['Тип недвижимости']),
+            PaymentMethod(row['Тип оплаты'])
+        )
+
+        discount = existing_discounts.get(key)
+
         if not discount:
-            discount = Discount(complex_name=row['ЖК'], property_type=PropertyType(row['Тип недвижимости']),
-                                payment_method=PaymentMethod(row['Тип оплаты']))
+            discount = Discount(
+                version_id=version_id,  # <-- ПРИВЯЗКА К ВЕРСИИ
+                complex_name=row['ЖК'],
+                property_type=PropertyType(row['Тип недвижимости']),
+                payment_method=PaymentMethod(row['Тип оплаты'])
+            )
             db.session.add(discount)
             created_count += 1
         else:
             updated_count += 1
+
+        # ... (остальная часть функции с присвоением mpp, rop и т.д. остается БЕЗ ИЗМЕНЕНИЙ) ...
         discount.mpp = _normalize_percentage(row.get('МПП'))
         discount.rop = _normalize_percentage(row.get('РОП'))
         discount.kd = _normalize_percentage(row.get('КД'))
@@ -52,7 +174,8 @@ def process_discounts_from_excel(file_path):
                 discount.cadastre_date = None
         else:
             discount.cadastre_date = None
-    db.session.commit()
+
+    # Не коммитим здесь, позволяем вызывающей функции управлять транзакцией
     return f"Обработано {len(df)} строк. Создано: {created_count}, Обновлено: {updated_count}."
 
 
@@ -79,10 +202,19 @@ def generate_discount_template_excel():
 
 def get_discounts_with_summary():
     """
-    Версия 9: Генерирует производные виды оплат "3 транша" и возвращает теги.
+    Версия 10: РАБОТАЕТ С АКТИВНОЙ ВЕРСИЕЙ СКИДОК.
+    Генерирует производные виды оплат и возвращает теги.
     """
+    # 1. Находим активную версию
+    active_version = DiscountVersion.query.filter_by(is_active=True).first()
+    if not active_version:
+        return {}  # Если нет активной версии, возвращаем пустые данные
+
+    # 2. Получаем скидки ТОЛЬКО для активной версии
+    all_discounts = active_version.discounts
+    # ... остальная часть функции get_discounts_with_summary остается такой же, как в discount_service.py
+
     all_sells = EstateSell.query.options(joinedload(EstateSell.house)).all()
-    all_discounts = Discount.query.all()
 
     if not all_discounts: return {}
 
@@ -108,27 +240,24 @@ def get_discounts_with_summary():
         discounts_in_complex = discounts_map.get(complex_name, [])
         details_with_derived = {}
 
-        # Обрабатываем существующие скидки и генерируем производные
         for discount in discounts_in_complex:
             prop_type_val = discount.property_type.value
             details_with_derived.setdefault(prop_type_val, []).append(discount)
 
-            # Для квартир генерируем "3 транша"
             if discount.property_type == PropertyType.FLAT:
                 derived_discount = None
                 if discount.payment_method == PaymentMethod.FULL_PAYMENT:
                     derived_discount = copy.copy(discount)
                     derived_discount.payment_method = PaymentMethod.TRANCHE_100
-                    derived_discount.kd = 0  # Обнуляем КД
+                    derived_discount.kd = 0
                 elif discount.payment_method == PaymentMethod.MORTGAGE:
                     derived_discount = copy.copy(discount)
                     derived_discount.payment_method = PaymentMethod.TRANCHE_MORTGAGE
-                    derived_discount.kd = 0  # Обнуляем КД
+                    derived_discount.kd = 0
 
                 if derived_discount:
                     details_with_derived[prop_type_val].append(derived_discount)
 
-        # Расчет summary (на основе оригинальных данных)
         base_discount_100 = next((d for d in discounts_in_complex if
                                   d.property_type == PropertyType.FLAT and d.payment_method == PaymentMethod.FULL_PAYMENT),
                                  None)
@@ -147,9 +276,8 @@ def get_discounts_with_summary():
         if base_discount_mortgage:
             summary["sum_mortgage"] = base_discount_mortgage.mpp + base_discount_mortgage.rop
 
-        # ... (логика расчета средней цены остается прежней)
         total_discount_rate = (
-                    base_discount_100.mpp + base_discount_100.rop + base_discount_100.kd) if base_discount_100 else 0
+                base_discount_100.mpp + base_discount_100.rop + base_discount_100.kd) if base_discount_100 else 0
         remainder_prices_per_sqm = []
         for sell in sells_by_complex.get(complex_name, []):
             if (
@@ -162,7 +290,6 @@ def get_discounts_with_summary():
             avg_price_per_sqm = sum(remainder_prices_per_sqm) / len(remainder_prices_per_sqm)
             summary["avg_remainder_price_sqm"] = avg_price_per_sqm / 12500
 
-        # Сбор тегов
         for discount in discounts_in_complex:
             if discount.action > summary["max_action_discount"]:
                 summary["max_action_discount"] = discount.action
