@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Действующая система скидок</h1>
+</div>
+
+<div class="form-group mb-4">
+    <input type="text" id="searchInput" class="form-control form-control-lg" placeholder="🔍 Введите название ЖК для поиска...">
+</div>
+
+{% if structured_discounts %}
+    <div class="accordion" id="discountsAccordion">
+        {% for complex_name, data in structured_discounts.items() %}
+            {% if data.summary.sum_100_payment > 0 or data.summary.sum_mortgage > 0 %}
+            <div class="accordion-item mb-2" data-complex-name="{{ complex_name|lower }}">
+                <h2 class="accordion-header" id="heading-{{ loop.index }}">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ loop.index }}" aria-expanded="false" aria-controls="collapse-{{ loop.index }}">
+                        <div class="w-100">
+                            <!-- ИЗМЕНЕНИЕ: Используем более строгую вложенную грид-систему -->
+                            <div class="row align-items-center">
+                                <!-- Колонка с названием -->
+                                <div class="col-lg-4">
+                                    <strong class="fs-5">{{ complex_name }}</strong>
+                                </div>
+                                <!-- Колонка с показателями -->
+                                <div class="col-lg-8">
+                                    <div class="row align-items-center text-center">
+                                        <!-- Вложенная колонка для цены -->
+                                        <div class="col-4">
+                                            {% if data.summary.avg_remainder_price_sqm > 0 %}
+                                                <div class="fw-bold fs-5" style="color: var(--gh-gold);">${{ "{:,.0f}".format(data.summary.avg_remainder_price_sqm) }}</div>
+                                                <small class="text-muted" style="font-size: 0.7rem;">ср. цена дна за м²</small>
+                                            {% else %}
+                                                <div class="fw-bold fs-6 text-warning" style="height: 35px; display: flex; align-items: center; justify-content: center;">Квартиры<br>распроданы</div>
+                                            {% endif %}
+                                        </div>
+                                        <!-- Вложенная колонка для кадастра -->
+                                        <div class="col-3">
+                                        {% if data.summary.months_to_cadastre is not none %}
+                                            <div class="fw-bold fs-5" style="color: var(--gh-gold);">{{ data.summary.months_to_cadastre }}</div>
+                                            <small class="text-muted" style="font-size: 0.7rem;">мес. до кадастра</small>
+                                        {% endif %}
+                                        </div>
+                                        <!-- Вложенная колонка для скидок -->
+                                        <div class="col-5">
+                                             <small class="text-muted" style="font-size: 0.8rem;">Стандартные скидки</small>
+                                            <div class="d-flex justify-content-center mt-1">
+                                                <div class="px-2">
+                                                    <div class="fw-bold fs-5" style="color: var(--gh-gold);">{{ "%.1f"|format(data.summary.sum_100_payment * 100) }}%</div>
+                                                    <small class="text-muted" style="font-size: 0.7rem;">100% Оплата</small>
+                                                </div>
+                                                <div class="px-2">
+                                                    <div class="fw-bold fs-5" style="color: var(--gh-gold);">{{ "%.1f"|format(data.summary.sum_mortgage * 100) }}%</div>
+                                                    <small class="text-muted" style="font-size: 0.7rem;">Ипотека</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Нижний блок с тегами -->
+                            <div class="mt-2 border-top pt-2">
+                                {% if data.summary.max_action_discount > 0 %}
+                                    <span class="badge rounded-pill bg-danger-subtle border border-danger-subtle text-danger-emphasis fs-6 me-1">
+                                        <i class="bi bi-star-fill"></i>
+                                        Акция: {{ "%.1f"|format(data.summary.max_action_discount * 100) }}%
+                                    </span>
+                                {% endif %}
+                                {% for tag in data.summary.available_tags|sort %}
+                                    {% set tag_class = 'secondary' %}
+                                    {% if tag == 'КД' %}{% set tag_class = 'success' %}{% endif %}
+                                    {% if tag == 'ОПТ' %}{% set tag_class = 'info' %}{% endif %}
+                                    {% if tag == 'Холдинг' %}{% set tag_class = 'primary' %}{% endif %}
+                                    <span class="badge rounded-pill bg-{{tag_class}}-subtle border border-{{tag_class}}-subtle text-{{tag_class}}-emphasis me-1">{{ tag }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </button>
+                </h2>
+                <div id="collapse-{{ loop.index }}" class="accordion-collapse collapse" aria-labelledby="heading-{{ loop.index }}">
+                    <div class="accordion-body">
+                        <!-- Детальная информация (остается без изменений) -->
+                        {% for prop_type, discounts in data.details.items() if discounts %}
+                            <h5 class="mt-3">Тип недвижимости: <span class="badge bg-info-subtle border border-info-subtle text-info-emphasis rounded-pill">{{ prop_type }}</span></h5>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered mt-2">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Тип оплаты</th>
+                                            <th>Дата кадастра</th>
+                                            <th>МПП</th>
+                                            <th>РОП</th>
+                                            <th>КД</th>
+                                            <th>ОПТ</th>
+                                            <th>ГД</th>
+                                            <th>Холдинг</th>
+                                            <th>Акционер</th>
+                                            <th>Акция</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for discount in discounts|sort(attribute='payment_method.value') %}
+                                            {% set payment_method_value = discount.payment_method.value %}
+                                            {% set show_row = false %}
+                                            {% if prop_type == 'flat' %}{% set show_row = true %}{% endif %}
+                                            {% if prop_type in ['comm', 'storageroom'] and payment_method_value == '100% оплата' %}{% set show_row = true %}{% endif %}
+                                            {% if prop_type == 'garage' and payment_method_value in ['100% оплата', 'Ипотека'] %}{% set show_row = true %}{% endif %}
+
+                                            {% if show_row %}
+                                            <tr>
+                                                <td><strong>{{ payment_method_value }}</strong></td>
+                                                <td>{{ discount.cadastre_date.strftime('%d.%m.%Y') if discount.cadastre_date else '—' }}</td>
+                                                <td>{{ "%.1f"|format(discount.mpp * 100) }}%</td>
+                                                <td>{{ "%.1f"|format(discount.rop * 100) }}%</td>
+                                                <td>{{ "%.1f"|format(discount.kd * 100) }}%</td>
+                                                <td>{{ "%.1f"|format(discount.opt * 100) }}%</td>
+                                                <td>{{ "%.1f"|format(discount.gd * 100) }}%</td>
+                                                <td>{{ "%.1f"|format(discount.holding * 100) }}%</td>
+                                                <td>{{ "%.1f"|format(discount.shareholder * 100) }}%</td>
+                                                <td>{{ "%.1f"|format(discount.action * 100) }}%</td>
+                                            </tr>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="alert alert-warning">В системе пока нет настроенных скидок.</div>
+{% endif %}
+{% endblock %}
+
+
+{% block scripts %}
+{{ super() }}
+<!-- Скрипт для живого поиска (без изменений) -->
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        const accordionItems = document.querySelectorAll('.accordion-item');
+        searchInput.addEventListener('input', function (e) {
+            const searchTerm = e.target.value.toLowerCase();
+            accordionItems.forEach(function (item) {
+                const complexName = item.dataset.complexName;
+                if (complexName.includes(searchTerm)) {
+                    item.style.display = 'block';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        });
+    }
+});
+</script>
+{% endblock %}

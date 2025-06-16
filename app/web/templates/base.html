@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ru" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Система подбора квартир{% endblock %}</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+    <style>
+        /* :::::: ПЕРЕМЕННЫЕ И ЦВЕТОВАЯ СХЕМА :::::: */
+        :root {
+            --gh-gold: #c4a668;
+            --gh-dark-gold: #b39150;
+            --gh-gold-rgb: 196, 166, 104;
+        }
+
+        [data-bs-theme="light"] {
+            --bs-body-bg: #f8f9fa;
+            --bs-body-color: #212529;
+            --gh-element-bg: #ffffff;
+            --gh-element-bg-rgb: 255, 255, 255;
+            --bs-border-color: #dee2e6;
+            --gh-header-color: #212529;
+            --gh-link-color: #495057;
+        }
+
+        [data-bs-theme="dark"] {
+            /* --- ИЗМЕНЕНИЕ: Сплошной черный фон --- */
+            --bs-body-bg: #000000;
+            --bs-body-color: #dee2e6;
+            --gh-element-bg: #212529;
+            --gh-element-bg-rgb: 33, 37, 41;
+            --bs-border-color: #495057;
+            --gh-header-color: #ffffff;
+            --gh-link-color: #adb5bd;
+        }
+
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background: var(--bs-body-bg);
+            color: var(--bs-body-color);
+        }
+
+        #particles-js {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+
+        .header {
+            background-color: rgba(var(--gh-element-bg-rgb), 0.8);
+            backdrop-filter: blur(10px);
+        }
+
+        .nav-link { font-weight: 500; color: var(--gh-link-color); }
+        .nav-link.active, .nav-link:hover { color: var(--gh-gold) !important; }
+
+        .accordion-item { background-color: var(--gh-element-bg); }
+        .accordion-button:not(.collapsed) {
+            color: var(--gh-header-color);
+            background-color: rgba(var(--gh-gold-rgb), 0.1);
+            box-shadow: inset 0 -1px 0 rgba(0,0,0,.125);
+        }
+        .accordion-button:focus {
+            box-shadow: 0 0 0 .25rem rgba(var(--gh-gold-rgb), 0.25);
+        }
+    </style>
+</head>
+<body class="d-flex flex-column h-100">
+    <div id="particles-js"></div>
+    <header class="header sticky-top border-bottom">
+        <nav class="navbar navbar-expand-lg">
+            <div class="container">
+                <a class="navbar-brand fw-bold" href="{{ url_for('web.index') }}" style="color: var(--gh-gold);">
+                    <i class="bi bi-building-check"></i>
+                    ApartmentFinder
+                </a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav" aria-controls="mainNav" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="mainNav">
+                    <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint == 'web.index' %}active{% endif %}" href="{{ url_for('web.index') }}">Каталог</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint == 'web.discounts_overview' %}active{% endif %}" href="{{ url_for('web.discounts_overview') }}">Система скидок</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint == 'web.upload_discounts' %}active{% endif %}" href="{{ url_for('web.upload_discounts') }}">Загрузить скидки</a>
+                        </li>
+                    </ul>
+                    <div class="theme-switcher-container ms-lg-auto">
+                        <button id="theme-switcher-btn" class="btn btn-outline-secondary btn-sm">
+                            <i class="bi" id="theme-icon"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+        {% block subnav %}{% endblock %}
+    </header>
+
+    <main class="container my-4">
+        {% block content %}{% endblock %}
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
+
+    {% block scripts %}
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // --- ИЗМЕНЕНИЕ: Обновленный код для переключения темы ---
+            const themeSwitcherBtn = document.getElementById('theme-switcher-btn');
+            const themeIcon = document.getElementById('theme-icon');
+            const htmlElement = document.documentElement;
+
+            const getStoredTheme = () => localStorage.getItem('theme');
+            const setStoredTheme = theme => localStorage.setItem('theme', theme);
+
+            const getPreferredTheme = () => {
+                const storedTheme = getStoredTheme();
+                if (storedTheme) return storedTheme;
+                return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            };
+
+            const setTheme = (theme) => {
+                htmlElement.setAttribute('data-bs-theme', theme);
+                if (theme === 'dark') {
+                    themeIcon.classList.remove('bi-moon-stars-fill');
+                    themeIcon.classList.add('bi-sun-fill');
+                } else {
+                    themeIcon.classList.remove('bi-sun-fill');
+                    themeIcon.classList.add('bi-moon-stars-fill');
+                }
+            };
+
+            setTheme(getPreferredTheme());
+
+            themeSwitcherBtn.addEventListener('click', () => {
+                const currentTheme = getPreferredTheme();
+                const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+                setStoredTheme(newTheme);
+                setTheme(newTheme);
+            });
+
+            // --- ИЗМЕНЕНИЕ: Ваша конфигурация particles.js ---
+            particlesJS('particles-js', {
+                "particles": { "number": { "value": 50, "density": { "enable": true, "value_area": 800 } }, "color": { "value": "#c4a668" }, "shape": { "type": "polygon", "stroke": { "width": 1, "color": "#c4a668" }, "polygon": { "nb_sides": 6 } }, "opacity": { "value": 0.2, "random": true, "anim": { "enable": true, "speed": 0.5, "opacity_min": 0.05, "sync": false } }, "size": { "value": 4, "random": true }, "line_linked": { "enable": true, "distance": 180, "color": "#c4a668", "opacity": 0.15, "width": 1 }, "move": { "enable": true, "speed": 0.8, "direction": "none", "random": true, "straight": false, "out_mode": "out" } },
+                "interactivity": { "detect_on": "canvas", "events": { "onhover": { "enable": true, "mode": "bubble" } }, "modes": { "bubble": { "distance": 200, "size": 6, "duration": 2, "opacity": 0.6 } } },
+                "retina_detect": true
+            });
+        });
+    </script>
+    {% endblock %}
+</body>
+</html>
