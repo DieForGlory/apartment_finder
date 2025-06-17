@@ -1,9 +1,10 @@
 import os
 import json
+from ..models.discount_models import PropertyType
 from datetime import datetime
 from werkzeug.utils import secure_filename
 from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app, send_file, jsonify
-
+from ..services.selection_service import find_apartments_by_budget
 from ..core.extensions import db
 from .forms import UploadExcelForm
 from ..services.data_service import get_sells_with_house_info
@@ -234,3 +235,31 @@ def save_complex_comment():
     db.session.commit()
 
     return jsonify({'success': True})
+
+
+
+
+
+
+@web_bp.route('/selection', methods=['GET', 'POST'])
+def selection():
+    """Страница для подбора квартир по бюджету."""
+    results = None
+    # Получаем Enum для передачи в шаблон
+    property_types = list(PropertyType)
+
+    if request.method == 'POST':
+        try:
+            budget = float(request.form.get('budget'))
+            currency = request.form.get('currency')
+            # Получаем новый параметр
+            prop_type_str = request.form.get('property_type')
+
+            results = find_apartments_by_budget(budget, currency, prop_type_str)
+        except (ValueError, TypeError):
+            flash("Пожалуйста, введите корректную сумму бюджета.", "danger")
+    print(results)
+    return render_template('selection.html',
+                           title="Подбор по бюджету",
+                           results=results,
+                           property_types=property_types) # Передаем Enum в шаблон

@@ -21,7 +21,7 @@ class Config:
 
     # !!! ЗАМЕНИТЕ НА РЕАЛЬНЫЙ АДРЕС ПОЛУЧАТЕЛЯ !!!
     MAIL_RECIPIENTS = ['d.plakhotnyi@gh.uz']
-
+    USD_TO_UZS_RATE = 13050.0
 
 class DevelopmentConfig(Config):
     DEBUG = True

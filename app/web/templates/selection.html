@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="mb-4">Система подбора квартир по бюджету</h1>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="POST">
+            <div class="row align-items-end">
+                <div class="col-md-5">
+                    <label for="budget" class="form-label">Сумма клиента на руках</label>
+                    <input type="number" class="form-control form-control-lg" id="budget" name="budget" step="any" required
+                           value="{{ request.form.budget or '' }}">
+                </div>
+                <div class="col-md-2">
+                    <label for="currency" class="form-label">Валюта</label>
+                    <select class="form-select form-select-lg" id="currency" name="currency">
+                        <option value="USD" {% if request.form.currency == 'USD' %}selected{% endif %}>USD ($)</option>
+                        <option value="UZS" {% if request.form.currency == 'UZS' %}selected{% endif %}>UZS</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="property_type" class="form-label">Тип недвижимости</label>
+                    <select class="form-select form-select-lg" id="property_type" name="property_type" required>
+                        {% for pt in property_types %}
+                        <option value="{{ pt.value }}" {% if request.form.property_type == pt.value %}selected{% endif %}>{{ pt.value }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-warning btn-lg w-100">
+                        <i class="bi bi-calculator-fill"></i> Найти
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if results %}
+        <h2 class="mt-5 mb-3">Результаты подбора</h2>
+
+        <div class="accordion" id="complexAccordion">
+            {% for complex_name, complex_data in results.items() %}
+            {% with complex_loop = loop %}
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingComplex-{{ complex_loop.index }}">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseComplex-{{ complex_loop.index }}">
+                        <strong>{{ complex_name }}</strong>
+                        <span class="ms-auto badge bg-success me-2">{{ complex_data.total_matches }}</span>
+                        <span class="text-muted me-2">квартир</span>
+                    </button>
+                </h2>
+                <div id="collapseComplex-{{ complex_loop.index }}" class="accordion-collapse collapse" data-bs-parent="#complexAccordion">
+                    <div class="accordion-body">
+
+                        <div class="accordion" id="paymentAccordion-{{ complex_loop.index }}">
+                            {% for payment_method, payment_data in complex_data.by_payment_method.items() %}
+                            {% with payment_loop = loop %}
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="headingPayment-{{ complex_loop.index }}-{{ payment_loop.index }}">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapsePayment-{{ complex_loop.index }}-{{ payment_loop.index }}">
+                                        {{ payment_method }}
+                                        <span class="ms-auto badge bg-info me-2">{{ payment_data.total }}</span>
+                                        <span class="text-muted me-2">квартир</span>
+                                    </button>
+                                </h2>
+                                <div id="collapsePayment-{{ complex_loop.index }}-{{ payment_loop.index }}" class="accordion-collapse collapse" data-bs-parent="#paymentAccordion-{{ complex_loop.index }}">
+                                    <div class="accordion-body">
+
+                                        <div class="accordion" id="roomsAccordion-{{ complex_loop.index }}-{{ payment_loop.index }}">
+                                             {% for rooms, apartments in payment_data.by_rooms.items()|sort %}
+                                             <div class="accordion-item">
+                                                 <h2 class="accordion-header" id="headingRooms-{{ complex_loop.index }}-{{ payment_loop.index }}-{{ loop.index }}">
+                                                     <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseRooms-{{ complex_loop.index }}-{{ payment_loop.index }}-{{ loop.index }}">
+                                                         {{ rooms }}-комнатные
+                                                         <span class="ms-auto badge bg-secondary me-2">{{ apartments|length }}</span>
+                                                         <span class="text-muted me-2">квартир</span>
+                                                     </button>
+                                                 </h2>
+                                                 <div id="collapseRooms-{{ complex_loop.index }}-{{ payment_loop.index }}-{{ loop.index }}" class="accordion-collapse collapse" data-bs-parent="#roomsAccordion-{{ complex_loop.index }}-{{ payment_loop.index }}">
+                                                     <div class="accordion-body">
+
+                                                         <table class="table table-sm table-hover">
+                                                             <thead>
+                                                                 <tr>
+                                                                     <th>ID</th>
+                                                                     <th>Этаж</th>
+                                                                     <th>Площадь</th>
+                                                                     <th>Первый платеж (UZS)</th>
+                                                                     <th>Сумма договора (UZS)</th>
+                                                                 </tr>
+                                                             </thead>
+                                                             <tbody>
+                                                                {% for apt in apartments %}
+                                                                <tr>
+                                                                    <td>{{ apt.id }}</td>
+                                                                    <td>{{ apt.floor }}</td>
+                                                                    <td>{{ apt.area }} м²</td>
+                                                                    <td>
+                                                                        {% if apt.first_tranche %}
+                                                                            <span class="d-block"><strong>{{ "{:,.0f}".format(apt.first_tranche) }}</strong></span>
+                                                                            <small class="text-muted">(1-й из 3-х траншей)</small>
+                                                                        {% elif apt.initial_payment %}
+                                                                            <span class="d-block"><strong>{{ "{:,.0f}".format(apt.initial_payment) }}</strong></span>
+                                                                            <small class="text-muted">(Первоначальный взнос)</small>
+                                                                        {% else %}
+                                                                            <span class="text-muted">—</span>
+                                                                        {% endif %}
+                                                                    </td>
+                                                                    <td><strong>{{ "{:,.0f}".format(apt.final_price) }}</strong></td>
+                                                                </tr>
+                                                                {% endfor %}
+                                                             </tbody>
+                                                         </table>
+                                                         </div>
+                                                 </div>
+                                             </div>
+                                             {% endfor %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endwith %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endwith %}
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="alert alert-warning mt-4">
+            <h4 class="alert-heading">Ничего не найдено</h4>
+            <p>По вашему запросу не найдено ни одной подходящей квартиры. Попробуйте увеличить сумму бюджета.</p>
+        </div>
+{% endif %}
+
+{% endblock %}
