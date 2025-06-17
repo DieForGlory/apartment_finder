@@ -27,7 +27,7 @@ def _migrate_mysql_to_sqlite():
     try:
         # 1. Миграция таблицы estate_houses
         print("[MIGRATE] 🏡 Загрузка данных из таблицы 'estate_houses'...")
-        mysql_houses = mysql_session.query(EstateHouse).all()
+        mysql_houses = mysql_session.query(EstateHouse).filter(EstateHouse.complex_name.isnot(None)).all()
         for house in mysql_houses:
             # ВОЗВРАЩАЕМ НАДЕЖНОЕ КОПИРОВАНИЕ ОБЪЕКТОВ
             new_house = EstateHouse(

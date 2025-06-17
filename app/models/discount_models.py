@@ -2,33 +2,50 @@ from app.core.extensions import db
 from sqlalchemy import Enum as SQLAlchemyEnum, func
 import enum
 
+
 class PropertyType(enum.Enum):
     FLAT = 'flat'
     COMM = 'comm'
     GARAGE = 'garage'
     STORAGEROOM = 'storageroom'
 
+
 class PaymentMethod(enum.Enum):
     FULL_PAYMENT = '100% оплата'
     MORTGAGE = 'Ипотека'
-    # --- НОВЫЕ ТИПЫ ОПЛАТ ---
     TRANCHE_100 = '3 транша - 100% оплата'
     TRANCHE_MORTGAGE = '3 транша - ипотека'
+
+
+class DiscountVersion(db.Model):
+    """Модель для хранения версий системы скидок."""
+    __tablename__ = 'discount_versions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    version_number = db.Column(db.Integer, nullable=False, unique=True)
+    comment = db.Column(db.Text, nullable=True)
+    is_active = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), server_default=func.now())
+
+    # Поле для хранения JSON с детальными комментариями к изменениям
+    changes_summary_json = db.Column(db.Text, nullable=True)
+
+    # Связи с другими моделями
+    discounts = db.relationship('Discount', back_populates='version', cascade="all, delete-orphan")
+    complex_comments = db.relationship('ComplexComment', back_populates='version', cascade="all, delete-orphan")
 
 
 class Discount(db.Model):
     __tablename__ = 'discounts'
 
     id = db.Column(db.Integer, primary_key=True)
-
-    # --- НОВОЕ ПОЛЕ ДЛЯ СВЯЗИ С ВЕРСИЕЙ ---
     version_id = db.Column(db.Integer, db.ForeignKey('discount_versions.id'), nullable=False, index=True)
 
     complex_name = db.Column(db.String(255), nullable=False, index=True)
     property_type = db.Column(SQLAlchemyEnum(PropertyType), nullable=False)
     payment_method = db.Column(SQLAlchemyEnum(PaymentMethod), nullable=False)
 
-    # ... (колонки для скидок mpp, rop, и т.д. остаются без изменений) ...
+    # Колонки для каждой скидки.
     mpp = db.Column(db.Float, default=0.0)
     rop = db.Column(db.Float, default=0.0)
     kd = db.Column(db.Float, default=0.0)
@@ -42,23 +59,22 @@ class Discount(db.Model):
     version = db.relationship('DiscountVersion', back_populates='discounts')
 
     __table_args__ = (
-        # Уникальность теперь должна учитывать и версию
         db.UniqueConstraint('version_id', 'complex_name', 'property_type', 'payment_method',
                             name='_version_complex_prop_payment_uc'),
     )
 
-class DiscountVersion(db.Model):
-    """Модель для хранения версий системы скидок."""
-    __tablename__ = 'discount_versions'
+
+class ComplexComment(db.Model):
+    """Модель для хранения комментариев к ЖК в рамках версии."""
+    __tablename__ = 'complex_comments'
 
     id = db.Column(db.Integer, primary_key=True)
-    # Номер версии для отображения пользователю
-    version_number = db.Column(db.Integer, nullable=False, unique=True)
-    # Комментарий, описывающий изменения в этой версии
+    version_id = db.Column(db.Integer, db.ForeignKey('discount_versions.id'), nullable=False)
+    complex_name = db.Column(db.String(255), nullable=False, index=True)
     comment = db.Column(db.Text, nullable=True)
-    # Флаг, указывающий, является ли эта версия активной (используемой в расчетах)
-    is_active = db.Column(db.Boolean, default=False, nullable=False)
-    created_at = db.Column(db.DateTime(timezone=True), server_default=func.now())
 
-    # Связь с записями скидок этой версии
-    discounts = db.relationship('Discount', back_populates='version', cascade="all, delete-orphan")
+    version = db.relationship('DiscountVersion', back_populates='complex_comments')
+
+    __table_args__ = (
+        db.UniqueConstraint('version_id', 'complex_name', name='_version_complex_uc'),
+    )

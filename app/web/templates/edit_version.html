@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 
 {% block content %}
-<form method="POST" action="{{ url_for('web.edit_version', version_id=version.id) }}">
+<form id="discounts-form" method="POST" action="{{ url_for('web.edit_version', version_id=version.id) }}">
+    <input type="hidden" name="changes_json" id="changes_json_input">
 
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
@@ -13,6 +14,12 @@
         </a>
     </div>
 
+    <div class="my-4">
+        <button type="button" class="btn btn-outline-info w-100" data-bs-toggle="modal" data-bs-target="#complexListModal">
+            <i class="bi bi-chat-left-text-fill"></i>
+            Посмотреть и отредактировать комментарии к ЖК
+        </button>
+    </div>
     <div class="row mb-3">
         <div class="col-md-6">
             <input type="text" id="searchComplex" class="form-control" placeholder="Поиск по названию ЖК...">
@@ -28,7 +35,7 @@
         </div>
     </div>
 
-    <button type="button" class="btn btn-warning mt-3 mb-3 sticky-top" data-bs-toggle="modal" data-bs-target="#saveChangesModal">
+    <button type="button" id="save-changes-btn-top" class="btn btn-warning mt-3 mb-3 sticky-top">
         <i class="bi bi-save"></i> Сохранить все изменения
     </button>
 
@@ -51,59 +58,151 @@
                     <td>{{ discount.complex_name }}</td>
                     <td>{{ discount.property_type.value }}</td>
                     <td>{{ discount.payment_method.value }}</td>
-                    <td><input type="number" step="0.1" class="form-control editable" name="discount-{{ discount.id }}-mpp" value="{{ discount.mpp * 100 }}"></td>
-                    <td><input type="number" step="0.1" class="form-control editable" name="discount-{{ discount.id }}-rop" value="{{ discount.rop * 100 }}"></td>
-                    <td><input type="number" step="0.1" class="form-control editable" name="discount-{{ discount.id }}-kd" value="{{ discount.kd * 100 }}"></td>
-                    <td><input type="number" step="0.1" class="form-control editable" name="discount-{{ discount.id }}-action" value="{{ discount.action * 100 }}"></td>
+                    {% set key = discount.complex_name ~ '|' ~ discount.property_type.value ~ '|' ~ discount.payment_method.value %}
+                    <td><input type="number" step="0.1" class="form-control editable" data-field-name="МПП" name="discount-{{ key }}-mpp" value="{{ discount.mpp * 100 }}"></td>
+                    <td><input type="number" step="0.1" class="form-control editable" data-field-name="РОП" name="discount-{{ key }}-rop" value="{{ discount.rop * 100 }}"></td>
+                    <td><input type="number" step="0.1" class="form-control editable" data-field-name="КД" name="discount-{{ key }}-kd" value="{{ discount.kd * 100 }}"></td>
+                    <td><input type="number" step="0.1" class="form-control editable" data-field-name="Акция" name="discount-{{ key }}-action" value="{{ discount.action * 100 }}"></td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="7" class="text-center">В этой версии еще нет данных о скидках. Возможно, она была создана в пустой системе.</td>
+                    <td colspan="7" class="text-center">В этой версии еще нет данных о скидках.</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 
-    <button type="button" class="btn btn-warning mt-3" data-bs-toggle="modal" data-bs-target="#saveChangesModal">
+    <button type="button" id="save-changes-btn-bottom" class="btn btn-warning mt-3">
         <i class="bi bi-save"></i> Сохранить все изменения
     </button>
+</form>
 
-
-    <div class="modal fade" id="saveChangesModal" tabindex="-1" aria-labelledby="saveChangesModalLabel" aria-hidden="true">
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title" id="saveChangesModalLabel">Подтверждение изменений</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body">
-              <div class="mb-3">
-                <label for="changes_comment" class="form-label"><strong>Опишите внесенные изменения (обязательно):</strong></label>
-                <textarea class="form-control" id="changes_comment" name="changes_comment" rows="4" placeholder="Например: Увеличена скидка МПП для ЖК 'Солнечный' в связи с новой акцией" required></textarea>
-              </div>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-            <button type="submit" class="btn btn-warning">Подтвердить и сохранить</button>
-          </div>
-        </div>
+<div class="modal fade" id="summaryModal" tabindex="-1" aria-labelledby="summaryModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="summaryModalLabel">Обзор и подтверждение изменений</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="summaryModalBody"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+        <button type="button" id="confirm-save-btn" class="btn btn-warning">Подтвердить и сохранить</button>
       </div>
     </div>
-
-</form>
+  </div>
+</div>
+<div class="modal fade" id="complexListModal" tabindex="-1" aria-labelledby="complexListModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="complexListModalLabel">Комментарии к ЖК в этой версии</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="list-group list-group-flush">
+            {% for complex_name in discounts | map(attribute='complex_name') | unique | sort %}
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+                <span>
+                    <i class="bi bi-building me-2"></i>{{ complex_name }}
+                </span>
+                <button type="button" class="btn btn-outline-secondary btn-sm"
+                        data-bs-toggle="modal" data-bs-target="#commentModal"
+                        data-bs-dismiss="modal"
+                        data-complex-name="{{ complex_name }}">
+                    <i class="bi bi-pencil"></i>
+                    <span class="d-none d-sm-inline">Редактировать</span>
+                </button>
+            </div>
+            {% endfor %}
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal fade" id="commentModal" tabindex="-1" aria-labelledby="commentModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="commentModalLabel">Комментарий для ЖК: <span id="commentModalComplexName"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+          <input type="hidden" id="commentModalComplexNameInput">
+          <textarea class="form-control" id="commentModalTextarea" rows="4" placeholder="Введите комментарий для этого ЖК..."></textarea>
+          <div id="comment-alert-placeholder"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+        <button type="button" id="saveCommentBtn" class="btn btn-primary">Сохранить комментарий</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
+
 
 {% block scripts %}
 {{ super() }}
 <script>
+// Передаем комментарии из Flask в JavaScript
+const complexComments = {{ complex_comments|tojson|safe if complex_comments is defined else '{}' }};
+
 document.addEventListener('DOMContentLoaded', function() {
-    // Подсветка редактируемых ячеек
+    // --- ВСЯ ЛОГИКА ДЛЯ МОДАЛЬНОГО ОКНА КОММЕНТАРИЕВ К ЖК ---
+    const commentModal = document.getElementById('commentModal');
+    if(commentModal) {
+        commentModal.addEventListener('show.bs.modal', event => {
+            const button = event.relatedTarget;
+            const complexName = button.dataset.complexName;
+
+            document.getElementById('commentModalComplexName').textContent = complexName;
+            document.getElementById('commentModalComplexNameInput').value = complexName;
+
+            // Заполняем textarea существующим комментарием или оставляем пустой
+            document.getElementById('commentModalTextarea').value = complexComments[complexName] || '';
+            document.getElementById('comment-alert-placeholder').innerHTML = '';
+        });
+
+        document.getElementById('saveCommentBtn').addEventListener('click', () => {
+            const complexName = document.getElementById('commentModalComplexNameInput').value;
+            const commentText = document.getElementById('commentModalTextarea').value;
+            const versionId = {{ version.id }};
+
+            fetch("{{ url_for('web.save_complex_comment') }}", {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    version_id: versionId,
+                    complex_name: complexName,
+                    comment: commentText
+                })
+            }).then(response => response.json())
+              .then(data => {
+                  if(data.success) {
+                      // Обновляем наш JS-объект с комментариями
+                      complexComments[complexName] = commentText;
+                      // Показываем уведомление об успехе
+                      const alertPlaceholder = document.getElementById('comment-alert-placeholder');
+                      alertPlaceholder.innerHTML = '<div class="alert alert-success mt-3">Комментарий сохранен.</div>';
+                      setTimeout(() => { alertPlaceholder.innerHTML = ''}, 2000);
+                  }
+              });
+        });
+    }
+
+    // --- ВСЯ ЛОГИКА ДЛЯ ОСНОВНОЙ ФОРМЫ СОХРАНЕНИЯ СКИДОК ---
+    const initialValues = {};
     const editableInputs = document.querySelectorAll('.editable');
+
     editableInputs.forEach(input => {
-        const originalValue = input.value;
-        input.addEventListener('input', function() {
-            if (input.value !== originalValue) {
+        initialValues[input.name] = input.value;
+        input.addEventListener('input', () => {
+             if (input.value !== initialValues[input.name]) {
                 input.parentElement.style.backgroundColor = 'rgba(255, 193, 7, 0.3)';
             } else {
                 input.parentElement.style.backgroundColor = '';
@@ -111,7 +210,97 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Поиск и фильтрация
+    function prepareAndShowSummaryModal() {
+        const changes = {};
+        editableInputs.forEach(input => {
+            if (input.value !== initialValues[input.name]) {
+                const row = input.closest('tr');
+                const complex = row.dataset.complex;
+                const propType = row.dataset.propType;
+                const groupKey = `${complex}___${propType}`;
+
+                if (!changes[groupKey]) {
+                    changes[groupKey] = {
+                        complex: complex,
+                        propType: propType,
+                        modifications: []
+                    };
+                }
+
+                changes[groupKey].modifications.push({
+                    paymentMethod: row.cells[2].textContent.trim(),
+                    fieldName: input.dataset.fieldName,
+                    oldValue: initialValues[input.name],
+                    newValue: input.value
+                });
+            }
+        });
+
+        const modalBody = document.getElementById('summaryModalBody');
+
+        if (Object.keys(changes).length === 0) {
+            alert('Изменений для сохранения не найдено.');
+            return;
+        }
+
+        let html = '<p>Пожалуйста, опишите причину внесенных изменений для каждой группы.</p>';
+        Object.entries(changes).forEach(([key, group], index) => {
+            html += `
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <strong>${group.complex}</strong> - <span class="badge bg-info-subtle text-info-emphasis">${group.propType}</span>
+                    </div>
+                    <div class="card-body">
+                        <h6>Изменения:</h6>
+                        <ul>
+                            ${group.modifications.map(mod => `<li><strong>${mod.paymentMethod}</strong> - поле "${mod.fieldName}" изменено с ${mod.oldValue}% на <strong>${mod.newValue}%</strong></li>`).join('')}
+                        </ul>
+                        <div class="mt-2">
+                            <label for="comment-${index}" class="form-label"><strong>Комментарий к этой группе (обязательно):</strong></label>
+                            <textarea class="form-control comment-input" id="comment-${index}" data-group-key="${key}" rows="2" required></textarea>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        modalBody.innerHTML = html;
+
+        window.pendingChanges = changes;
+
+        const summaryModal = new bootstrap.Modal(document.getElementById('summaryModal'));
+        summaryModal.show();
+    }
+
+    document.getElementById('save-changes-btn-top').addEventListener('click', prepareAndShowSummaryModal);
+    document.getElementById('save-changes-btn-bottom').addEventListener('click', prepareAndShowSummaryModal);
+
+    document.getElementById('confirm-save-btn').addEventListener('click', function() {
+        const commentTextareas = document.querySelectorAll('.comment-input');
+        let allCommentsFilled = true;
+
+        commentTextareas.forEach(textarea => {
+            if (!textarea.value.trim()) {
+                allCommentsFilled = false;
+                textarea.classList.add('is-invalid');
+            } else {
+                textarea.classList.remove('is-invalid');
+                const groupKey = textarea.dataset.groupKey;
+                if(window.pendingChanges[groupKey]) {
+                    window.pendingChanges[groupKey].comment = textarea.value.trim();
+                }
+            }
+        });
+
+        if (!allCommentsFilled) {
+            alert('Пожалуйста, заполните комментарии для всех групп изменений.');
+            return;
+        }
+
+        document.getElementById('changes_json_input').value = JSON.stringify(window.pendingChanges);
+        document.getElementById('discounts-form').submit();
+    });
+
+    // --- ЛОГИКА ФИЛЬТРАЦИИ И ПОИСКА ---
     const searchInput = document.getElementById('searchComplex');
     const propTypeFilter = document.getElementById('filterPropType');
     const tableRows = document.querySelectorAll('#discountsTableBody tr');
@@ -120,9 +309,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const searchTerm = searchInput.value.toLowerCase();
         const propType = propTypeFilter.value.toLowerCase();
         tableRows.forEach(row => {
-            // Проверяем, есть ли у строки нужные data-атрибуты
             if (row.dataset.complex && row.dataset.propType) {
-                const complexMatch = row.dataset.complex.includes(searchTerm);
+                const complexMatch = row.dataset.complex.toLowerCase().includes(searchTerm);
                 const propTypeMatch = propType === '' || row.dataset.propType === propType;
                 if (complexMatch && propTypeMatch) {
                     row.style.display = '';

@@ -3,7 +3,8 @@ from flask import Flask
 from .core.config import DevelopmentConfig
 from .core.extensions import db
 from .models import estate_models, discount_models
-
+from .models import estate_models, discount_models
+from .services import email_service
 
 def create_app(config_class=DevelopmentConfig):
     """

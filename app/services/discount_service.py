@@ -1,116 +1,16 @@
+import json
+import copy
 from datetime import date
 from sqlalchemy.orm import joinedload
+from flask import render_template_string
+
 from ..core.extensions import db
-from ..models.discount_models import Discount, PropertyType, PaymentMethod
+from ..models.discount_models import Discount, DiscountVersion, PropertyType, PaymentMethod, ComplexComment
 from ..models.estate_models import EstateSell
+from .email_service import send_email
 import pandas as pd
 import io
-import copy
-from ..models.discount_models import Discount, DiscountVersion, PropertyType, PaymentMethod
 
-
-# --- Вспомогательные функции (process_discounts_from_excel, и т.д.) остаются без изменений ---
-def create_new_version(comment: str):
-    """Создает новую версию системы скидок, копируя данные из последней существующей."""
-    print(f"\n[DISCOUNT SERVICE] 🚀 Создание новой версии с комментарием: '{comment}'")
-
-    latest_version = DiscountVersion.query.order_by(DiscountVersion.version_number.desc()).first()
-
-    new_version_number = 1
-    if latest_version:
-        new_version_number = latest_version.version_number + 1
-
-    # Создаем новую запись о версии
-    new_version = DiscountVersion(version_number=new_version_number, comment=comment)
-    db.session.add(new_version)
-
-    # Если есть предыдущая версия, копируем все скидки из нее
-    if latest_version:
-        for old_discount in latest_version.discounts:
-            new_discount = Discount(
-                version=new_version,
-                complex_name=old_discount.complex_name,
-                property_type=old_discount.property_type,
-                payment_method=old_discount.payment_method,
-                mpp=old_discount.mpp,
-                rop=old_discount.rop,
-                kd=old_discount.kd,
-                opt=old_discount.opt,
-                gd=old_discount.gd,
-                holding=old_discount.holding,
-                shareholder=old_discount.shareholder,
-                action=old_discount.action,
-                cadastre_date=old_discount.cadastre_date
-            )
-            db.session.add(new_discount)
-
-    db.session.commit()
-    print(f"[DISCOUNT SERVICE] ✔️ Успешно создана версия №{new_version_number}")
-    return new_version
-
-def activate_version(version_id: int):
-    """Активирует выбранную версию, делая все остальные неактивными."""
-    print(f"[DISCOUNT SERVICE] 🔄 Активация версии ID: {version_id}...")
-    # Сбрасываем флаг у всех версий
-    DiscountVersion.query.update({DiscountVersion.is_active: False})
-    # Устанавливаем флаг для нужной версии
-    target_version = DiscountVersion.query.get(version_id)
-    if target_version:
-        target_version.is_active = True
-        db.session.commit()
-        print(f"[DISCOUNT SERVICE] ✔️ Версия №{target_version.version_number} (ID: {version_id}) теперь активна.")
-    else:
-        print(f"[DISCOUNT SERVICE] ❌ Не найдена версия с ID: {version_id}")
-
-
-def update_discounts_for_version(version_id: int, form_data: dict, comment: str):
-    """Обновляет значения скидок для конкретной версии и выводит саммари в консоль."""
-    target_version = DiscountVersion.query.get(version_id)
-    if not target_version:
-        return "Ошибка: Версия не найдена."
-
-    changes_summary = []
-
-    parsed_data = {}
-    for key, value in form_data.items():
-        if key.startswith('discount-'):
-            parts = key.split('-')
-            discount_id = int(parts[1])
-            field_name = parts[2]
-            parsed_data.setdefault(discount_id, {})[field_name] = value
-
-    for discount_id, fields in parsed_data.items():
-        discount = Discount.query.get(discount_id)
-        if not discount or discount.version_id != target_version.id:
-            continue
-
-        log_prefix = f"  - {discount.complex_name} | {discount.property_type.value} | {discount.payment_method.value}:"
-
-        for field, new_value_str in fields.items():
-            try:
-                new_value = float(new_value_str) / 100.0
-                old_value = getattr(discount, field)
-
-                if abs(old_value - new_value) > 1e-9:  # Сравнение для float
-                    changes_summary.append(
-                        f"{log_prefix} поле '{field.upper()}' изменено с {old_value * 100:.1f}% на {new_value * 100:.1f}%")
-                    setattr(discount, field, new_value)
-            except (ValueError, TypeError):
-                continue
-
-    if changes_summary:
-        print(
-            f"\n[DISCOUNT UPDATE] 💾 Сохранение изменений для версии №{target_version.version_number} (ID: {version_id})")
-        # --- ВЫВОДИМ КОММЕНТАРИЙ ---
-        print(f"[COMMENT] 💬: {comment}")
-        for change in changes_summary:
-            print(change)
-        db.session.commit()
-        print("[DISCOUNT UPDATE] ✔️ Изменения успешно сохранены в БД.")
-        return f"Сохранено {len(changes_summary)} изменений."
-    else:
-        print(f"\n[DISCOUNT UPDATE] ❕ Нет изменений для сохранения в версии №{target_version.version_number}.")
-        return "Изменений для сохранения не найдено."
 
 def _normalize_percentage(value):
     try:
@@ -129,25 +29,22 @@ def process_discounts_from_excel(file_path: str, version_id: int):
     df = pd.read_excel(file_path)
     created_count, updated_count = 0, 0
 
-    # Получаем все скидки для данной версии один раз, чтобы избежать лишних запросов к БД
     existing_discounts = {
         (d.complex_name, d.property_type, d.payment_method): d
         for d in Discount.query.filter_by(version_id=version_id).all()
     }
 
     for index, row in df.iterrows():
-        # Формируем ключ для поиска в словаре
         key = (
             row['ЖК'],
             PropertyType(row['Тип недвижимости']),
             PaymentMethod(row['Тип оплаты'])
         )
-
         discount = existing_discounts.get(key)
 
         if not discount:
             discount = Discount(
-                version_id=version_id,  # <-- ПРИВЯЗКА К ВЕРСИИ
+                version_id=version_id,
                 complex_name=row['ЖК'],
                 property_type=PropertyType(row['Тип недвижимости']),
                 payment_method=PaymentMethod(row['Тип оплаты'])
@@ -157,7 +54,6 @@ def process_discounts_from_excel(file_path: str, version_id: int):
         else:
             updated_count += 1
 
-        # ... (остальная часть функции с присвоением mpp, rop и т.д. остается БЕЗ ИЗМЕНЕНИЙ) ...
         discount.mpp = _normalize_percentage(row.get('МПП'))
         discount.rop = _normalize_percentage(row.get('РОП'))
         discount.kd = _normalize_percentage(row.get('КД'))
@@ -175,7 +71,6 @@ def process_discounts_from_excel(file_path: str, version_id: int):
         else:
             discount.cadastre_date = None
 
-    # Не коммитим здесь, позволяем вызывающей функции управлять транзакцией
     return f"Обработано {len(df)} строк. Создано: {created_count}, Обновлено: {updated_count}."
 
 
@@ -202,19 +97,17 @@ def generate_discount_template_excel():
 
 def get_discounts_with_summary():
     """
-    Версия 10: РАБОТАЕТ С АКТИВНОЙ ВЕРСИЕЙ СКИДОК.
-    Генерирует производные виды оплат и возвращает теги.
+    Получает данные для страницы "Система скидок", включая комментарии к ЖК.
     """
-    # 1. Находим активную версию
     active_version = DiscountVersion.query.filter_by(is_active=True).first()
     if not active_version:
-        return {}  # Если нет активной версии, возвращаем пустые данные
+        return {}
 
-    # 2. Получаем скидки ТОЛЬКО для активной версии
     all_discounts = active_version.discounts
-    # ... остальная часть функции get_discounts_with_summary остается такой же, как в discount_service.py
 
-    all_sells = EstateSell.query.options(joinedload(EstateSell.house)).all()
+    # --- НОВОЕ: Загружаем комментарии для активной версии ---
+    comments = ComplexComment.query.filter_by(version_id=active_version.id).all()
+    comments_map = {c.complex_name: c.comment for c in comments}
 
     if not all_discounts: return {}
 
@@ -222,6 +115,7 @@ def get_discounts_with_summary():
     for d in all_discounts:
         discounts_map.setdefault(d.complex_name, []).append(d)
 
+    all_sells = EstateSell.query.options(joinedload(EstateSell.house)).all()
     sells_by_complex = {}
     for s in all_sells:
         if s.house:
@@ -236,6 +130,9 @@ def get_discounts_with_summary():
     for complex_name in all_complex_names:
         summary = {"sum_100_payment": 0, "sum_mortgage": 0, "months_to_cadastre": None, "avg_remainder_price_sqm": 0,
                    "available_tags": set(), "max_action_discount": 0.0}
+
+        # --- НОВОЕ: Добавляем комментарий в итоговые данные ---
+        summary["complex_comment"] = comments_map.get(complex_name)
 
         discounts_in_complex = discounts_map.get(complex_name, [])
         details_with_derived = {}
@@ -277,7 +174,7 @@ def get_discounts_with_summary():
             summary["sum_mortgage"] = base_discount_mortgage.mpp + base_discount_mortgage.rop
 
         total_discount_rate = (
-                base_discount_100.mpp + base_discount_100.rop + base_discount_100.kd) if base_discount_100 else 0
+                    base_discount_100.mpp + base_discount_100.rop + base_discount_100.kd) if base_discount_100 else 0
         remainder_prices_per_sqm = []
         for sell in sells_by_complex.get(complex_name, []):
             if (
@@ -300,3 +197,276 @@ def get_discounts_with_summary():
         final_data[complex_name] = {"summary": summary, "details": details_with_derived}
 
     return final_data
+
+
+def _generate_version_comparison_summary(old_version, new_version, comments_data=None):
+    """Генерирует HTML-отчет о различиях между двумя версиями, включая комментарии."""
+    if comments_data is None:
+        comments_data = {}
+
+    old_discounts = {
+        (d.complex_name, d.property_type.value, d.payment_method.value): d
+        for d in old_version.discounts
+    }
+    new_discounts = {
+        (d.complex_name, d.property_type.value, d.payment_method.value): d
+        for d in new_version.discounts
+    }
+
+    changes = {'added': [], 'removed': [], 'modified': [], 'user_comments': comments_data}
+
+    for key, new_d in new_discounts.items():
+        if key not in old_discounts:
+            changes['added'].append(f"Добавлена скидка для {key[0]} ({key[1]}, {key[2]})")
+            continue
+
+        old_d = old_discounts[key]
+        diffs = []
+
+        for field in ['mpp', 'rop', 'kd', 'opt', 'gd', 'holding', 'shareholder', 'action']:
+            old_val = getattr(old_d, field)
+            new_val = getattr(new_d, field)
+
+            if abs(old_val - new_val) > 1e-9:
+                delta = new_val - old_val
+                old_percent = old_val * 100
+                new_percent = new_val * 100
+                delta_percent = abs(delta * 100)
+
+                if delta > 0:
+                    verb = "увеличилась на"
+                else:
+                    verb = "уменьшилась на"
+
+                diff_text = (
+                    f"<b>{field.upper()}</b> {verb} {delta_percent:.1f} % "
+                    f"(с {old_percent:.1f}% до {new_percent:.1f}%)"
+                )
+                diffs.append(diff_text)
+
+        if diffs:
+            changes['modified'].append(
+                f"<strong>{key[0]} ({key[1]}, {key[2]}):</strong><ul>{''.join(f'<li>{d}</li>' for d in diffs)}</ul>")
+
+    for key, old_d in old_discounts.items():
+        if key not in new_discounts:
+            changes['removed'].append(f"Удалена скидка для {key[0]} ({key[1]}, {key[2]})")
+
+    email_html = render_template_string("""
+        <h3>Здравствуйте!</h3>
+        <p>В системе ApartmentFinder была активирована новая версия скидок.</p>
+        <p>
+            <b>Предыдущая активная версия:</b> №{{ old_v.version_number }} (от {{ old_v.created_at.strftime('%Y-%m-%d %H:%M') }})<br>
+            <b>Новая активная версия:</b> №{{ new_v.version_number }} (от {{ new_v.created_at.strftime('%Y-%m-%d %H:%M') }})
+        </p>
+        <hr>
+        <h4>Детальное саммари изменений:</h4>
+
+        {% if changes.user_comments %}
+            {% for group_data in changes.user_comments.values() %}
+                {% if group_data.comment %}
+                    <div style="background-color: #f8f9fa; border-left: 4px solid #ffc107; padding: 10px; margin-bottom: 15px;">
+                        <p style="margin: 0;"><b>Комментарий к группе '{{ group_data.complex }} ({{ group_data.propType }})':</b></p>
+                        <p style="margin: 0;"><i>«{{ group_data.comment }}»</i></p>
+                    </div>
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+
+        {% if changes.modified %}
+            <h5>Измененные скидки:</h5>
+            <div>
+                {% for change in changes.modified %}<p style="margin: 5px 0;">{{ change|safe }}</p>{% endfor %}
+            </div>
+        {% endif %}
+
+        {% if changes.added %}
+            <h5>Добавленные скидки:</h5>
+            <ul>
+                {% for change in changes.added %}<li>{{ change }}</li>{% endfor %}
+            </ul>
+        {% endif %}
+
+        {% if changes.removed %}
+            <h5>Удаленные скидки:</h5>
+            <ul>
+                {% for change in changes.removed %}<li>{{ change }}</li>{% endfor %}
+            </ul>
+        {% endif %}
+
+        {% if not (changes.modified or changes.added or changes.removed) %}
+            <p>Структурных изменений в скидках не обнаружено.</p>
+        {% endif %}
+    """, old_v=old_version, new_v=new_version, changes=changes)
+
+    return email_html
+
+
+def create_blank_version(comment: str):
+    """Создает новую, ПУСТУЮ запись о версии скидок."""
+    print(f"\n[DISCOUNT SERVICE] 🚀 Создание ПУСТОЙ версии с комментарием: '{comment}'")
+
+    latest_version = DiscountVersion.query.order_by(DiscountVersion.version_number.desc()).first()
+
+    new_version_number = 1
+    if latest_version:
+        new_version_number = latest_version.version_number + 1
+
+    new_version = DiscountVersion(version_number=new_version_number, comment=comment)
+    db.session.add(new_version)
+
+    db.session.commit()
+
+    print(f"[DISCOUNT SERVICE] ✔️ Успешно создана пустая версия №{new_version_number}")
+    return new_version
+
+
+def create_new_version(comment: str):
+    """Создает новую версию системы скидок, копируя данные из последней существующей."""
+    print(f"\n[DISCOUNT SERVICE] 🚀 Создание новой версии с комментарием: '{comment}'")
+
+    latest_version = DiscountVersion.query.order_by(DiscountVersion.version_number.desc()).first()
+
+    new_version_number = 1
+    if latest_version:
+        new_version_number = latest_version.version_number + 1
+
+    new_version = DiscountVersion(version_number=new_version_number, comment=comment)
+    db.session.add(new_version)
+
+    if latest_version:
+        discounts_to_copy = Discount.query.filter_by(version_id=latest_version.id).all()
+        print(
+            f"[DISCOUNT SERVICE] 📝 Найдено {len(discounts_to_copy)} скидок для копирования из версии №{latest_version.version_number}.")
+
+        for old_discount in discounts_to_copy:
+            new_discount = Discount(
+                version=new_version,
+                complex_name=old_discount.complex_name,
+                property_type=old_discount.property_type,
+                payment_method=old_discount.payment_method,
+                mpp=old_discount.mpp,
+                rop=old_discount.rop,
+                kd=old_discount.kd,
+                opt=old_discount.opt,
+                gd=old_discount.gd,
+                holding=old_discount.holding,
+                shareholder=old_discount.shareholder,
+                action=old_discount.action,
+                cadastre_date=old_discount.cadastre_date
+            )
+            db.session.add(new_discount)
+
+        # --- НОВОЕ: Копируем комментарии к ЖК ---
+        comments_to_copy = ComplexComment.query.filter_by(version_id=latest_version.id).all()
+        for old_comment in comments_to_copy:
+            new_comment = ComplexComment(
+                version=new_version,
+                complex_name=old_comment.complex_name,
+                comment=old_comment.comment
+            )
+            db.session.add(new_comment)
+        print(f"[DISCOUNT SERVICE] 📝 Скопировано {len(comments_to_copy)} комментариев к ЖК.")
+
+    db.session.commit()
+    print(f"[DISCOUNT SERVICE] ✔️ Успешно создана версия №{new_version_number}")
+    return new_version
+
+
+def update_discounts_for_version(version_id: int, form_data: dict, changes_json: str):
+    """Обновляет значения скидок по бизнес-ключу и выводит саммари."""
+    target_version = DiscountVersion.query.get(version_id)
+    if not target_version:
+        return "Ошибка: Версия не найдена."
+
+    discounts_map = {
+        (d.complex_name, d.property_type.value, d.payment_method.value): d
+        for d in target_version.discounts
+    }
+
+    updated_fields_count = 0
+
+    for key, field_value in form_data.items():
+        if key.startswith('discount-'):
+            try:
+                data_part = key[len('discount-'):]
+                business_key_str, field_name = data_part.rsplit('-', 1)
+                complex_name, prop_type, payment_method = business_key_str.split('|')
+            except ValueError:
+                continue
+
+            discount_to_update = discounts_map.get((complex_name, prop_type, payment_method))
+
+            if discount_to_update:
+                try:
+                    new_value = float(field_value) / 100.0
+                    if abs(getattr(discount_to_update, field_name) - new_value) > 1e-9:
+                        setattr(discount_to_update, field_name, new_value)
+                        updated_fields_count += 1
+                except (ValueError, TypeError):
+                    continue
+
+    print(f"\n[DISCOUNT UPDATE] 💾 Сохранение изменений для версии №{target_version.version_number} (ID: {version_id})")
+    try:
+        changes_data = json.loads(changes_json)
+        print("-" * 50)
+        for group_key, group_data in changes_data.items():
+            print(f"Группа: {group_data['complex']} ({group_data['propType']})")
+            print(f"  [COMMENT] 💬: {group_data.get('comment', 'Без комментария')}")
+            for mod in group_data.get('modifications', []):
+                print(
+                    f"    - Поле '{mod['fieldName']}' ({mod['paymentMethod']}): {mod['oldValue']}% → {mod['newValue']}%")
+        print("-" * 50)
+    except (json.JSONDecodeError, AttributeError):
+        print("[DISCOUNT UPDATE] ⚠️ Не удалось разобрать JSON с комментариями.")
+
+    if updated_fields_count > 0:
+        db.session.commit()
+        print(f"[DISCOUNT UPDATE] ✔️ Изменения успешно сохранены в БД. Затронуто полей: {updated_fields_count}")
+        return f"Изменения успешно сохранены."
+    else:
+        db.session.rollback()
+        print("[DISCOUNT UPDATE] ❕ Нет фактических изменений для сохранения в БД.")
+        return "Изменений для сохранения не найдено."
+
+
+def activate_version(version_id: int):
+    """Активирует выбранную версию (надежный метод) и возвращает данные для email."""
+    print(f"[DISCOUNT SERVICE] 🔄 Активация версии ID: {version_id}...")
+
+    target_version = DiscountVersion.query.get(version_id)
+    if not target_version:
+        print(f"[DISCOUNT SERVICE] ❌ Не найдена версия с ID: {version_id}")
+        return None
+
+    old_active_version = DiscountVersion.query.filter_by(is_active=True).first()
+
+    if old_active_version and old_active_version.id == target_version.id:
+        print(f"[DISCOUNT SERVICE] ❕ Версия №{target_version.version_number} уже активна. Действий не требуется.")
+        return None
+
+    if old_active_version:
+        old_active_version.is_active = False
+        print(f"[DISCOUNT SERVICE] Деактивирована старая версия: №{old_active_version.version_number}")
+
+    target_version.is_active = True
+    print(f"[DISCOUNT SERVICE] Активирована новая версия: №{target_version.version_number}")
+
+    db.session.commit()
+    print(f"[DISCOUNT SERVICE] ✔️ Изменения статусов версий сохранены в БД.")
+
+    email_data = None
+    if old_active_version:
+        # --- НОВОЕ: Передаем комментарии из JSON в генератор саммари ---
+        comments_data = json.loads(target_version.changes_summary_json) if target_version.changes_summary_json else None
+        summary_html = _generate_version_comparison_summary(old_active_version, target_version,
+                                                            comments_data=comments_data)
+        subject = f"ApartmentFinder: Активирована новая версия скидок №{target_version.version_number}"
+        email_data = {'subject': subject, 'html_body': summary_html}
+    else:
+        subject = f"ApartmentFinder: Активирована первая версия скидок №{target_version.version_number}"
+        html_body = "Это первая активация в системе."
+        email_data = {'subject': subject, 'html_body': html_body}
+
+    # Возвращаем данные для отправки письма, а не отправляем его отсюда
+    return email_data

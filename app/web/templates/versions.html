@@ -4,7 +4,7 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1>Версии системы скидок</h1>
     <div>
-        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#newVersionModal">
+        <button type="button" class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#newVersionModal">
             <i class="bi bi-plus-circle"></i> Создать новую версию
         </button>
     </div>
@@ -19,7 +19,7 @@
                 <th>Комментарий</th>
                 <th>Дата создания</th>
                 <th>Статус</th>
-                <th>Действия</th>
+                <th class="text-end">Действия</th>
             </tr>
         </thead>
         <tbody>
@@ -30,25 +30,25 @@
                 <td>{{ v.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
                 <td>
                     {% if v.id == active_version_id %}
-                        <span class="badge bg-success">АКТИВНАЯ</span>
+                        <span class="badge rounded-pill bg-success-subtle border border-success-subtle text-success-emphasis">Активная</span>
                     {% else %}
-                        <span class="badge bg-secondary">Неактивная</span>
+                        <span class="badge rounded-pill bg-secondary-subtle border border-secondary-subtle text-secondary-emphasis">Неактивная</span>
                     {% endif %}
                 </td>
-                <td>
-                    <div class="d-flex">
+                <td class="text-end">
+                    <div class="btn-group" role="group">
                         {% if v.id == latest_version_id %}
-                            <a href="{{ url_for('web.edit_version', version_id=v.id) }}" class="btn btn-primary btn-sm me-2">
+                            <a href="{{ url_for('web.edit_version', version_id=v.id) }}" class="btn btn-outline-primary btn-sm">
                                 <i class="bi bi-pencil"></i> Редактировать
                             </a>
                         {% else %}
-                            <a class="btn btn-secondary btn-sm me-2 disabled" title="Редактировать можно только последнюю версию">
-                                <i class="bi bi-pencil"></i> Редактировать
+                            <a href="{{ url_for('web.view_version', version_id=v.id) }}" class="btn btn-outline-secondary btn-sm">
+                                <i class="bi bi-eye"></i> Просмотреть
                             </a>
                         {% endif %}
 
                         {% if v.id != active_version_id %}
-                            <form action="{{ url_for('web.activate_discount_version', version_id=v.id) }}" method="POST">
+                            <form action="{{ url_for('web.activate_discount_version', version_id=v.id) }}" method="POST" class="ms-2">
                                 <button type="submit" class="btn btn-outline-success btn-sm">Активировать</button>
                             </form>
                         {% endif %}
@@ -76,7 +76,7 @@
         <div class="modal-body">
           <p>Будет создана полная копия последней версии скидок. Все изменения следует вносить уже в новой версии.</p>
           <div class="mb-3">
-            <label for="comment" class="form-label">Причина создания новой версии (необязательно):</label>
+            <label for="comment" class="form-label">Комментарий к версии (необязательно):</label>
             <textarea class="form-control" id="comment" name="comment" rows="3" placeholder="Например: Скидки на осенний период"></textarea>
           </div>
         </div>

@@ -1,19 +1,23 @@
 import os
+import json
+from datetime import datetime
 from werkzeug.utils import secure_filename
-from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app, send_file
+from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app, send_file, jsonify
 
 from ..core.extensions import db
 from .forms import UploadExcelForm
 from ..services.data_service import get_sells_with_house_info
+from ..services.email_service import send_email
 from ..services.discount_service import (
     process_discounts_from_excel,
     generate_discount_template_excel,
     get_discounts_with_summary,
     create_new_version,
+    create_blank_version,
     activate_version,
     update_discounts_for_version
 )
-from ..models.discount_models import Discount, DiscountVersion
+from ..models.discount_models import Discount, DiscountVersion, ComplexComment
 
 # Создаем Blueprint. 'web' - это имя, которое мы будем использовать для ссылки на эти роуты.
 web_bp = Blueprint('web', __name__, template_folder='templates')
@@ -53,7 +57,7 @@ def index():
 def upload_discounts():
     """
     Страница для загрузки файла со скидками.
-    Создает новую версию и делает ее активной.
+    Создает новую ПУСТУЮ версию, наполняет ее из файла и делает активной.
     """
     form = UploadExcelForm()
     if form.validate_on_submit():
@@ -66,19 +70,18 @@ def upload_discounts():
         f.save(file_path)
 
         try:
-            # 1. Сначала создаем новую версию, используя имя файла как комментарий
             comment = f"Загрузка из файла: {filename}"
-            new_version = create_new_version(comment=comment)
+            new_version = create_blank_version(comment=comment)
 
-            # 2. Обрабатываем Excel, привязывая скидки к ID новой версии
             result_message = process_discounts_from_excel(file_path, new_version.id)
             db.session.commit()
 
-            # 3. Активируем новую версию
-            activate_version(new_version.id)
+            email_data = activate_version(new_version.id)
+            if email_data:
+                send_email(email_data['subject'], email_data['html_body'])
 
             flash(
-                f"Файл успешно загружен. Создана и активирована новая версия №{new_version.version_number}. {result_message}",
+                f"Файл успешно загружен. Создана и активирована новая версия №{new_version.version_number} на основе файла. {result_message}",
                 "success")
             return redirect(url_for('web.versions_index'))
 
@@ -99,8 +102,6 @@ def discounts_overview():
     return render_template('discounts.html', title="Система скидок", structured_discounts=discounts_data)
 
 
-# --- НОВЫЕ МАРШРУТЫ ДЛЯ УПРАВЛЕНИЯ ВЕРСИЯМИ ---
-
 @web_bp.route('/versions')
 def versions_index():
     """Главная страница управления версиями."""
@@ -108,15 +109,29 @@ def versions_index():
     active_version_obj = next((v for v in versions if v.is_active), None)
     active_version_id = active_version_obj.id if active_version_obj else None
 
-    # Находим ID самой последней версии
     latest_version_id = versions[0].id if versions else None
 
     return render_template(
         'versions.html',
         versions=versions,
         active_version_id=active_version_id,
-        latest_version_id=latest_version_id,  # <-- Передаем ID в шаблон
+        latest_version_id=latest_version_id,
         title="Версии скидок"
+    )
+
+
+@web_bp.route('/versions/view/<int:version_id>')
+def view_version(version_id):
+    """Страница просмотра конкретной версии в режиме 'только чтение'."""
+    version = DiscountVersion.query.get_or_404(version_id)
+    discounts = Discount.query.filter_by(version_id=version_id).order_by(Discount.complex_name, Discount.property_type,
+                                                                         Discount.payment_method).all()
+
+    return render_template(
+        'view_version.html',
+        version=version,
+        discounts=discounts,
+        title=f"Просмотр Версии №{version.version_number}"
     )
 
 
@@ -131,40 +146,91 @@ def edit_version(version_id):
     version = DiscountVersion.query.get_or_404(version_id)
 
     if request.method == 'POST':
-        # Получаем комментарий из формы
-        comment = request.form.get('changes_comment', 'Изменения без комментария.')
-        # Передаем комментарий в сервисную функцию
-        result_message = update_discounts_for_version(version_id, request.form, comment)
-        flash(result_message, "info")
-        return redirect(url_for('web.edit_version', version_id=version_id))
+        changes_json = request.form.get('changes_json')
+        if not changes_json:
+            flash("Нет данных об изменениях для сохранения.", "warning")
+            return redirect(url_for('web.edit_version', version_id=version_id))
 
+        try:
+            current_time_str = datetime.now().strftime('%Y-%m-%d %H:%M')
+            new_version_comment = f"Обновление от {current_time_str}"
+
+            new_version = create_new_version(comment=new_version_comment)
+
+            # Сохраняем JSON с комментариями в саму версию для будущего использования
+            new_version.changes_summary_json = changes_json
+
+            update_discounts_for_version(new_version.id, request.form, changes_json)
+
+            email_data = activate_version(new_version.id)
+            if email_data:
+                send_email(email_data['subject'], email_data['html_body'])
+
+            flash(f"Изменения сохранены. Создана и активирована новая версия №{new_version.version_number}.", "success")
+
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Произошла критическая ошибка при сохранении: {e}", "danger")
+
+        return redirect(url_for('web.versions_index'))
+
+    # --- НАЧАЛО БЛОКА ДЛЯ GET-ЗАПРОСА ---
     discounts = Discount.query.filter_by(version_id=version_id).order_by(Discount.complex_name, Discount.property_type,
                                                                          Discount.payment_method).all()
+
+    # Загружаем комментарии для этой версии
+    comments_for_version = ComplexComment.query.filter_by(version_id=version_id).all()
+    complex_comments = {c.complex_name: c.comment for c in comments_for_version}
+    # --- КОНЕЦ БЛОКА ---
 
     return render_template(
         'edit_version.html',
         version=version,
         discounts=discounts,
+        complex_comments=complex_comments,  # Передаем комментарии в шаблон
         title=f"Редактирование Версии №{version.version_number}"
     )
 
+
 @web_bp.route('/versions/new', methods=['POST'])
 def new_discount_version():
-    """Создает новую версию."""
+    """Создает новую версию вручную."""
     comment = request.form.get('comment', 'Новая версия без комментария.')
     new_version = create_new_version(comment)
     flash(f"Создана новая версия №{new_version.version_number}. Теперь вы можете ее отредактировать и активировать.",
           "success")
-    # Перенаправляем сразу на страницу редактирования новой версии
     return redirect(url_for('web.edit_version', version_id=new_version.id))
 
 
 @web_bp.route('/versions/activate/<int:version_id>', methods=['POST'])
 def activate_discount_version(version_id):
-    """Активирует выбранную версию."""
-    activate_version(version_id)
+    """Активирует выбранную версию вручную."""
+    email_data = activate_version(version_id)
+    if email_data:
+        send_email(email_data['subject'], email_data['html_body'])
+
     version = DiscountVersion.query.get(version_id)
     flash(f"Версия №{version.version_number} успешно активирована.", "success")
     return redirect(url_for('web.versions_index'))
 
-# --- КОНЕЦ НОВЫХ МАРШРУТОВ ---
+
+@web_bp.route('/versions/comment/save', methods=['POST'])
+def save_complex_comment():
+    """Сохраняет комментарий к ЖК через AJAX."""
+    data = request.get_json()
+    version_id = data.get('version_id')
+    complex_name = data.get('complex_name')
+    comment_text = data.get('comment')
+
+    if not all([version_id, complex_name]):
+        return jsonify({'success': False, 'error': 'Missing data'}), 400
+
+    comment = ComplexComment.query.filter_by(version_id=version_id, complex_name=complex_name).first()
+    if not comment:
+        comment = ComplexComment(version_id=version_id, complex_name=complex_name)
+        db.session.add(comment)
+
+    comment.comment = comment_text
+    db.session.commit()
+
+    return jsonify({'success': True})
