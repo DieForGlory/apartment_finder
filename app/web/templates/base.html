@@ -27,6 +27,7 @@
             --bs-border-color: #dee2e6;
             --gh-header-color: #212529;
             --gh-link-color: #495057;
+            --gh-card-shadow: rgba(0,0,0,0.05);
         }
 
         [data-bs-theme="dark"] {
@@ -38,12 +39,14 @@
             --bs-border-color: #495057;
             --gh-header-color: #ffffff;
             --gh-link-color: #adb5bd;
+            --gh-card-shadow: rgba(0,0,0,0.3); /* Более заметная тень для темной темы */
         }
 
         body {
             font-family: 'Montserrat', sans-serif;
             background: var(--bs-body-bg);
             color: var(--bs-body-color);
+            transition: background-color 0.3s ease, color 0.3s ease; /* Плавный переход для темы */
         }
 
         #particles-js {
@@ -52,18 +55,40 @@
             height: 100%;
             top: 0;
             left: 0;
-            pointer-events: none;
+            z-index: -1; /* Отправляем на задний план */
+            pointer-events: none; /* Игнорируем события мыши */
         }
 
         .header {
             background-color: rgba(var(--gh-element-bg-rgb), 0.8);
             backdrop-filter: blur(10px);
+            box-shadow: 0 2px 10px var(--gh-card-shadow); /* Добавляем тень к шапке */
         }
 
-        .nav-link { font-weight: 500; color: var(--gh-link-color); }
-        .nav-link.active, .nav-link:hover { color: var(--gh-gold) !important; }
+        .nav-link {
+            font-weight: 500;
+            color: var(--gh-link-color);
+            transition: color 0.2s ease, transform 0.2s ease; /* Переход для ссылок */
+        }
+        .nav-link.active, .nav-link:hover {
+            color: var(--gh-gold) !important;
+            transform: translateY(-2px); /* Легкий эффект при наведении */
+        }
+        .nav-link:focus {
+            outline: 2px solid rgba(var(--gh-gold-rgb), 0.5); /* Видимый фокус */
+            outline-offset: 2px;
+        }
 
-        .accordion-item { background-color: var(--gh-element-bg); }
+        .accordion-item {
+            background-color: var(--gh-element-bg);
+            border-color: var(--bs-border-color); /* Бордюр аккордеона */
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+        .accordion-button {
+            color: var(--bs-body-color); /* Цвет текста кнопки аккордеона */
+            background-color: var(--gh-element-bg);
+            transition: color 0.3s ease, background-color 0.3s ease;
+        }
         .accordion-button:not(.collapsed) {
             color: var(--gh-header-color);
             background-color: rgba(var(--gh-gold-rgb), 0.1);
@@ -71,7 +96,79 @@
         }
         .accordion-button:focus {
             box-shadow: 0 0 0 .25rem rgba(var(--gh-gold-rgb), 0.25);
+            border-color: rgba(var(--gh-gold-rgb), 0.5);
         }
+
+        /* Общие стили для кнопок и форм */
+        .btn {
+            transition: all 0.2s ease-in-out;
+        }
+        .btn-outline-secondary, .btn-outline-success, .btn-outline-primary, .btn-warning {
+            border-width: 2px; /* Чуть более толстая рамка для кнопок */
+        }
+        .btn-outline-secondary:hover {
+            background-color: var(--gh-gold);
+            color: var(--bs-body-bg);
+            border-color: var(--gh-gold);
+        }
+
+        .form-control, .form-select, .form-control-file {
+            background-color: var(--gh-element-bg);
+            color: var(--bs-body-color);
+            border-color: var(--bs-border-color);
+            transition: all 0.2s ease-in-out;
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: var(--gh-gold);
+            box-shadow: 0 0 0 .25rem rgba(var(--gh-gold-rgb), 0.25);
+            background-color: var(--gh-element-bg); /* Сохраняем фон при фокусе */
+            color: var(--bs-body-color);
+        }
+
+        .table {
+            --bs-table-bg: var(--gh-element-bg);
+            --bs-table-color: var(--bs-body-color);
+            --bs-table-border-color: var(--bs-border-color);
+        }
+        .table-striped tbody tr:nth-of-type(odd) {
+            background-color: rgba(var(--bs-body-color-rgb), 0.05); /* Легкий фон для чередующихся строк */
+        }
+        .table-hover tbody tr:hover {
+            background-color: rgba(var(--gh-gold-rgb), 0.1); /* Эффект при наведении на строки */
+        }
+
+        /* Улучшение для карточек в selection.html и apartment_details.html */
+        .card {
+            background-color: var(--gh-element-bg);
+            border-color: var(--bs-border-color);
+            box-shadow: 0 4px 15px var(--gh-card-shadow);
+            transition: all 0.3s ease;
+        }
+
+        /* Стили для модальных окон */
+        .modal-content {
+            background-color: var(--gh-element-bg);
+            color: var(--bs-body-color);
+            border-color: var(--bs-border-color);
+            box-shadow: 0 5px 25px rgba(0,0,0,0.2);
+        }
+        .modal-header {
+            border-bottom-color: var(--bs-border-color);
+        }
+        .modal-footer {
+            border-top-color: var(--bs-border-color);
+        }
+
+        /* Дополнительные стили для баджей */
+        .badge {
+            font-weight: 600;
+            padding: 0.4em 0.7em;
+        }
+        .badge.bg-success-subtle { background-color: rgba(var(--bs-success-rgb), 0.15) !important; color: var(--bs-success) !important; border-color: rgba(var(--bs-success-rgb), 0.2) !important; }
+        .badge.bg-secondary-subtle { background-color: rgba(var(--bs-secondary-rgb), 0.15) !important; color: var(--bs-secondary) !important; border-color: rgba(var(--bs-secondary-rgb), 0.2) !important; }
+        .badge.bg-danger-subtle { background-color: rgba(var(--bs-danger-rgb), 0.15) !important; color: var(--bs-danger) !important; border-color: rgba(var(--bs-danger-rgb), 0.2) !important; }
+        .badge.bg-info-subtle { background-color: rgba(var(--bs-info-rgb), 0.15) !important; color: var(--bs-info) !important; border-color: rgba(var(--bs-info-rgb), 0.2) !important; }
+        .badge.bg-primary-subtle { background-color: rgba(var(--bs-primary-rgb), 0.15) !important; color: var(--bs-primary) !important; border-color: rgba(var(--bs-primary-rgb), 0.2) !important; }
     </style>
 </head>
 <body class="d-flex flex-column h-100">
@@ -103,6 +200,9 @@
                         </li>
                         <li class="nav-item">
                             <a class="nav-link {% if 'versions' in request.endpoint %}active{% endif %}" href="{{ url_for('web.versions_index') }}">Управление скидками</a>
+                        </li>
+                        <li class="nav-item"> {# НОВАЯ ССЫЛКА #}
+                            <a class="nav-link {% if request.endpoint == 'web.manage_exclusions' %}active{% endif %}" href="{{ url_for('web.manage_exclusions') }}">Исключения</a>
                         </li>
                     </ul>
                     <div class="theme-switcher-container ms-lg-auto">

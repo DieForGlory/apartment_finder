@@ -3,7 +3,7 @@ import copy
 from datetime import date
 from sqlalchemy.orm import joinedload
 from flask import render_template_string
-
+import requests
 from ..core.extensions import db
 from ..models.discount_models import Discount, DiscountVersion, PropertyType, PaymentMethod, ComplexComment
 from ..models.estate_models import EstateSell
@@ -12,6 +12,40 @@ import pandas as pd
 import io
 
 
+def get_current_usd_rate():
+    """
+    Получает актуальный курс USD к UZS с API Центрального банка Республики Узбекистан.
+    Возвращает курс (float) или None в случае ошибки.
+    """
+    # API ЦБРУ: https://cbu.uz/ru/arkhiv-kursov-valyut/
+    # Пример API: https://cbu.uz/oz/arkhiv-kursov-valyut/json/
+    # Для получения актуального курса на сегодня, можно использовать:
+    # https://cbu.uz/oz/arkhiv-kursov-valyut/json/all/
+    # Искать по "Ccy":"USD"
+
+    api_url = "https://cbu.uz/oz/arkhiv-kursov-valyut/json/"
+    print(f"\n[DISCOUNT SERVICE] Попытка получить курс USD с API ЦБ: {api_url}")
+
+    try:
+        response = requests.get(api_url, timeout=5, verify=False)  # Таймаут 5 секунд
+        response.raise_for_status()  # Проверить на HTTP ошибки (4xx, 5xx)
+        data = response.json()
+
+        for currency_data in data:
+            if currency_data.get("Ccy") == "USD":
+                rate = float(currency_data.get("Rate").replace(',', '.'))  # Заменить запятую на точку для float
+                print(f"[DISCOUNT SERVICE] ✔️ Получен актуальный курс USD с ЦБ: {rate}")
+                return rate
+
+        print("[DISCOUNT SERVICE] ❕ Курс USD не найден в ответе API ЦБ.")
+        return None
+
+    except requests.exceptions.RequestException as e:
+        print(f"[DISCOUNT SERVICE] ❌ Ошибка при запросе к API ЦБ: {e}")
+        return None
+    except (json.JSONDecodeError, AttributeError, KeyError, ValueError) as e:
+        print(f"[DISCOUNT SERVICE] ❌ Ошибка обработки ответа API ЦБ: {e}")
+        return None
 def _normalize_percentage(value):
     try:
         num_value = float(value)
@@ -27,6 +61,15 @@ def process_discounts_from_excel(file_path: str, version_id: int):
     """
     print(f"\n[DISCOUNT SERVICE] Начало обработки файла: {file_path} для версии ID: {version_id}")
     df = pd.read_excel(file_path)
+
+    # --- НОВОЕ: ОТЛАДОЧНЫЙ ВЫВОД ДАТАФРЕЙМА ---
+    print("[DISCOUNT SERVICE] Загруженный DataFrame:")
+    print(df.head())  # Выводит первые 5 строк DataFrame
+    if df.empty:
+        print("[DISCOUNT SERVICE] DataFrame пуст. Возможно, файл некорректен или пуст.")
+        return "Ошибка: Файл Excel пуст или не содержит данных."
+    # --- КОНЕЦ ОТЛАДОЧНОГО ВЫВОДА ---
+
     created_count, updated_count = 0, 0
 
     existing_discounts = {
@@ -34,43 +77,93 @@ def process_discounts_from_excel(file_path: str, version_id: int):
         for d in Discount.query.filter_by(version_id=version_id).all()
     }
 
+    # --- НОВОЕ: ОТЛАДОЧНЫЙ БЛОК TRY-EXCEPT ДЛЯ КАЖДОЙ СТРОКИ ---
     for index, row in df.iterrows():
-        key = (
-            row['ЖК'],
-            PropertyType(row['Тип недвижимости']),
-            PaymentMethod(row['Тип оплаты'])
-        )
-        discount = existing_discounts.get(key)
+        try:
+            # --- НОВОЕ: ВЫВОД ТЕКУЩЕЙ СТРОКИ ИЗ EXCEL ---
+            print(f"[DISCOUNT SERVICE] Обработка строки {index}: {row.to_dict()}")
+            # --- КОНЕЦ ВЫВОДА ---
 
-        if not discount:
-            discount = Discount(
-                version_id=version_id,
-                complex_name=row['ЖК'],
-                property_type=PropertyType(row['Тип недвижимости']),
-                payment_method=PaymentMethod(row['Тип оплаты'])
-            )
-            db.session.add(discount)
-            created_count += 1
-        else:
-            updated_count += 1
+            # Проверка наличия всех обязательных колонок
+            required_columns = ['ЖК', 'Тип недвижимости', 'Тип оплаты']
+            for col in required_columns:
+                if col not in row:
+                    raise KeyError(f"Отсутствует обязательная колонка: '{col}' в строке {index}")
 
-        discount.mpp = _normalize_percentage(row.get('МПП'))
-        discount.rop = _normalize_percentage(row.get('РОП'))
-        discount.kd = _normalize_percentage(row.get('КД'))
-        discount.opt = _normalize_percentage(row.get('ОПТ'))
-        discount.gd = _normalize_percentage(row.get('ГД'))
-        discount.holding = _normalize_percentage(row.get('Холдинг'))
-        discount.shareholder = _normalize_percentage(row.get('Акционер'))
-        discount.action = _normalize_percentage(row.get('Акция'))
-        cadastre_date_val = row.get('Дата кадастра')
-        if pd.notna(cadastre_date_val):
+            # Добавим дополнительную проверку на тип данных для property_type и payment_method
+            prop_type_val = row['Тип недвижимости']
+            payment_method_val = row['Тип оплаты']
+
+            # Проверка, что значения соответствуют Enum
             try:
-                discount.cadastre_date = pd.to_datetime(cadastre_date_val).date()
-            except (ValueError, TypeError):
-                discount.cadastre_date = None
-        else:
-            discount.cadastre_date = None
+                property_type_enum = PropertyType(prop_type_val)
+            except ValueError:
+                raise ValueError(
+                    f"Неизвестный 'Тип недвижимости': '{prop_type_val}' в строке {index}. Ожидается: {', '.join([pt.value for pt in PropertyType])}")
 
+            try:
+                payment_method_enum = PaymentMethod(payment_method_val)
+            except ValueError:
+                raise ValueError(
+                    f"Неизвестный 'Тип оплаты': '{payment_method_val}' в строке {index}. Ожидается: {', '.join([pm.value for pm in PaymentMethod])}")
+
+            key = (
+                row['ЖК'],
+                property_type_enum,
+                payment_method_enum
+            )
+            discount = existing_discounts.get(key)
+
+            if not discount:
+                discount = Discount(
+                    version_id=version_id,
+                    complex_name=row['ЖК'],
+                    property_type=property_type_enum,
+                    payment_method=payment_method_enum
+                )
+                db.session.add(discount)
+                created_count += 1
+            else:
+                updated_count += 1
+
+            # --- НОВОЕ: ВЫВОД ЗНАЧЕНИЙ ПЕРЕД ПРИСВОЕНИЕМ ---
+            print(f"[DISCOUNT SERVICE] Значения скидок для '{row['ЖК']}':")
+            print(f"  МПП: {row.get('МПП')}, РОП: {row.get('РОП')}, КД: {row.get('КД')}")
+            # --- КОНЕЦ ВЫВОДА ---
+
+            discount.mpp = _normalize_percentage(row.get('МПП'))
+            discount.rop = _normalize_percentage(row.get('РОП'))
+            discount.kd = _normalize_percentage(row.get('КД'))
+            discount.opt = _normalize_percentage(row.get('ОПТ'))
+            discount.gd = _normalize_percentage(row.get('ГД'))
+            discount.holding = _normalize_percentage(row.get('Холдинг'))
+            discount.shareholder = _normalize_percentage(row.get('Акционер'))
+            discount.action = _normalize_percentage(row.get('Акция'))
+
+            cadastre_date_val = row.get('Дата кадастра')
+            if pd.notna(cadastre_date_val):
+                try:
+                    discount.cadastre_date = pd.to_datetime(cadastre_date_val).date()
+                except (ValueError, TypeError):
+                    print(
+                        f"[DISCOUNT SERVICE] ВНИМАНИЕ: Не удалось разобрать дату кадастра '{cadastre_date_val}' в строке {index}. Устанавливаю None.")
+                    discount.cadastre_date = None
+            else:
+                discount.cadastre_date = None
+
+        except KeyError as ke:
+            print(f"[DISCOUNT SERVICE] ❌ ОШИБКА ОБРАБОТКИ СТРОКИ {index} (KeyError): {ke}. Пропускаю строку.")
+            # Если это критическая ошибка, можно re-raise или сбросить весь файл.
+            # Пока пропускаем, чтобы увидеть другие ошибки.
+        except ValueError as ve:
+            print(f"[DISCOUNT SERVICE] ❌ ОШИБКА ОБРАБОТКИ СТРОКИ {index} (ValueError): {ve}. Пропускаю строку.")
+        except Exception as ex:
+            print(
+                f"[DISCOUNT SERVICE] ❌ НЕИЗВЕСТНАЯ ОШИБКА ОБРАБОТКИ СТРОКИ {index}: {type(ex).__name__}: {ex}. Пропускаю строку.")
+
+    # --- КОНЕЦ ОТЛАДОЧНОГО БЛОКА ---
+
+    print(f"[DISCOUNT SERVICE] Завершение обработки. Создано: {created_count}, Обновлено: {updated_count}.")
     return f"Обработано {len(df)} строк. Создано: {created_count}, Обновлено: {updated_count}."
 
 
@@ -99,93 +192,136 @@ def get_discounts_with_summary():
     """
     Получает данные для страницы "Система скидок", включая комментарии к ЖК.
     """
+    print("\n" + "=" * 80)
+    print("[DISCOUNT SERVICE - SUMMARY] НАЧАЛО РАСЧЕТА ДЛЯ СИСТЕМЫ СКИДОК")
+
     active_version = DiscountVersion.query.filter_by(is_active=True).first()
     if not active_version:
+        print("[DISCOUNT SERVICE - SUMMARY] ❌ Нет активной версии скидок.")
+        print("=" * 80 + "\n")
         return {}
+    print(f"[DISCOUNT SERVICE - SUMMARY] Активная версия: №{active_version.version_number}")
 
     all_discounts = active_version.discounts
+    print(f"[DISCOUNT SERVICE - SUMMARY] Найдено скидок в активной версии: {len(all_discounts)}")
 
-    # --- НОВОЕ: Загружаем комментарии для активной версии ---
     comments = ComplexComment.query.filter_by(version_id=active_version.id).all()
     comments_map = {c.complex_name: c.comment for c in comments}
 
-    if not all_discounts: return {}
+    if not all_discounts:
+        print("[DISCOUNT SERVICE - SUMMARY] ❕ В активной версии нет данных по скидкам.")
+        print("=" * 80 + "\n")
+        return {}
 
     discounts_map = {}
     for d in all_discounts:
         discounts_map.setdefault(d.complex_name, []).append(d)
+    print(f"[DISCOUNT SERVICE - SUMMARY] ЖК со скидками: {len(discounts_map)}")
 
     all_sells = EstateSell.query.options(joinedload(EstateSell.house)).all()
     sells_by_complex = {}
     for s in all_sells:
         if s.house:
             sells_by_complex.setdefault(s.house.complex_name, []).append(s)
+    print(f"[DISCOUNT SERVICE - SUMMARY] Объектов EstateSell всего: {len(all_sells)}")
 
     final_data = {}
     valid_statuses = ["Маркетинговый резерв", "Подбор"]
     tag_fields = {'kd': 'КД', 'opt': 'ОПТ', 'gd': 'ГД', 'holding': 'Холдинг', 'shareholder': 'Акционер'}
 
     all_complex_names = sorted(list(discounts_map.keys()))
+    print(f"[DISCOUNT SERVICE - SUMMARY] Обработка {len(all_complex_names)} уникальных ЖК.")
 
     for complex_name in all_complex_names:
+        print(f"\n[DISCOUNT SERVICE - SUMMARY] --- Обработка ЖК: {complex_name} ---")
         summary = {"sum_100_payment": 0, "sum_mortgage": 0, "months_to_cadastre": None, "avg_remainder_price_sqm": 0,
                    "available_tags": set(), "max_action_discount": 0.0}
 
-        # --- НОВОЕ: Добавляем комментарий в итоговые данные ---
         summary["complex_comment"] = comments_map.get(complex_name)
 
         discounts_in_complex = discounts_map.get(complex_name, [])
-        details_with_derived = {}
+        details_by_prop_type = {}
 
         for discount in discounts_in_complex:
             prop_type_val = discount.property_type.value
-            details_with_derived.setdefault(prop_type_val, []).append(discount)
-
-            if discount.property_type == PropertyType.FLAT:
-                derived_discount = None
-                if discount.payment_method == PaymentMethod.FULL_PAYMENT:
-                    derived_discount = copy.copy(discount)
-                    derived_discount.payment_method = PaymentMethod.TRANCHE_100
-                    derived_discount.kd = 0
-                elif discount.payment_method == PaymentMethod.MORTGAGE:
-                    derived_discount = copy.copy(discount)
-                    derived_discount.payment_method = PaymentMethod.TRANCHE_MORTGAGE
-                    derived_discount.kd = 0
-
-                if derived_discount:
-                    details_with_derived[prop_type_val].append(derived_discount)
+            details_by_prop_type.setdefault(prop_type_val, []).append(discount)
 
         base_discount_100 = next((d for d in discounts_in_complex if
                                   d.property_type == PropertyType.FLAT and d.payment_method == PaymentMethod.FULL_PAYMENT),
                                  None)
-        base_discount_mortgage = next((d for d in discounts_in_complex if
-                                       d.property_type == PropertyType.FLAT and d.payment_method == PaymentMethod.MORTGAGE),
-                                      None)
+
+        print(
+            f"[DISCOUNT SERVICE - SUMMARY] Базовая скидка 100% (Квартира): {'Найдена' if base_discount_100 else 'НЕ НАЙДЕНА'}")
 
         if base_discount_100:
-            summary["sum_100_payment"] = base_discount_100.mpp + base_discount_100.rop
+            summary["sum_100_payment"] = (base_discount_100.mpp or 0) + (base_discount_100.rop or 0)
             if base_discount_100.cadastre_date:
                 today = date.today()
                 if base_discount_100.cadastre_date > today:
                     delta = base_discount_100.cadastre_date - today
                     summary["months_to_cadastre"] = int(delta.days / 30.44)
 
-        if base_discount_mortgage:
-            summary["sum_mortgage"] = base_discount_mortgage.mpp + base_discount_mortgage.rop
+        base_discount_mortgage = next((d for d in discounts_in_complex if
+                                       d.property_type == PropertyType.FLAT and d.payment_method == PaymentMethod.MORTGAGE),
+                                      None)
+        print(
+            f"[DISCOUNT SERVICE - SUMMARY] Базовая скидка Ипотека (Квартира): {'Найдена' if base_discount_mortgage else 'НЕ НАЙДЕНА'}")
 
-        total_discount_rate = (
-                    base_discount_100.mpp + base_discount_100.rop + base_discount_100.kd) if base_discount_100 else 0
+        if base_discount_mortgage:
+            summary["sum_mortgage"] = (base_discount_mortgage.mpp or 0) + (base_discount_mortgage.rop or 0)
+
+        total_discount_rate = 0
+        if base_discount_100:
+            total_discount_rate = (base_discount_100.mpp or 0) + \
+                                  (base_discount_100.rop or 0) + \
+                                  (base_discount_100.kd or 0) + \
+                                  (base_discount_100.action or 0)
+        print(f"[DISCOUNT SERVICE - SUMMARY] Общая ставка дисконта для дна (100%): {total_discount_rate * 100:.2f}%")
+
         remainder_prices_per_sqm = []
-        for sell in sells_by_complex.get(complex_name, []):
-            if (
-                    sell.estate_sell_status_name in valid_statuses and sell.estate_sell_category == 'flat' and sell.estate_price and sell.estate_price > 0 and sell.estate_area and sell.estate_area > 0):
-                price_after_deduction = sell.estate_price - 3_000_000
+        sells_in_complex = sells_by_complex.get(complex_name, [])
+        print(f"[DISCOUNT SERVICE - SUMMARY] Объектов EstateSell в ЖК '{complex_name}': {len(sells_in_complex)}")
+
+        processed_sells_count = 0
+        for sell in sells_in_complex:
+            # Отладочный вывод для каждого объекта EstateSell
+            print(
+                f"  - Проверка Sell ID: {sell.id}, Status: '{sell.estate_sell_status_name}', Category: '{sell.estate_sell_category}', Price: {sell.estate_price}, Area: {sell.estate_area}")
+
+            # Проверка условий фильтрации
+            is_valid_status = sell.estate_sell_status_name in valid_statuses
+            is_flat_category = sell.estate_sell_category == PropertyType.FLAT.value  # Важно: PropertyType.FLAT.value должно быть "Квартира"
+            is_valid_price = sell.estate_price and sell.estate_price > 0
+            is_valid_area = sell.estate_area and sell.estate_area > 0
+
+            if (is_valid_status and is_flat_category and is_valid_price and is_valid_area):
+                price_after_deduction = (sell.estate_price or 0) - 3_000_000
                 if price_after_deduction > 0:
                     final_price = price_after_deduction * (1 - total_discount_rate)
-                    remainder_prices_per_sqm.append(final_price / sell.estate_area)
+                    if sell.estate_area and sell.estate_area > 0:
+                        remainder_prices_per_sqm.append(final_price / sell.estate_area)
+                        print(
+                            f"    ✔️ Sell ID {sell.id} прошел фильтры. Цена после вычета: {price_after_deduction:,.0f}, Итоговая цена: {final_price:,.0f}, Цена за м²: {final_price / sell.estate_area:,.0f}")
+                        processed_sells_count += 1
+                    else:
+                        print(f"    - Sell ID {sell.id} не прошел: Площадь 0 или None.")
+                else:
+                    print(f"    - Sell ID {sell.id} не прошел: Цена после вычета <= 0 ({price_after_deduction:,.0f}).")
+            else:
+                print(
+                    f"    - Sell ID {sell.id} не прошел фильтры: Статус: {is_valid_status}, Категория: {is_flat_category}, Цена: {is_valid_price}, Площадь: {is_valid_area}")
+
+        print(
+            f"[DISCOUNT SERVICE - SUMMARY] Найдено подходящих объектов EstateSell для расчета дна: {processed_sells_count}")
+
         if remainder_prices_per_sqm:
             avg_price_per_sqm = sum(remainder_prices_per_sqm) / len(remainder_prices_per_sqm)
-            summary["avg_remainder_price_sqm"] = avg_price_per_sqm / 12500
+            avg_price_per_sqm_usd = avg_price_per_sqm / 12500.0  # Используем фиксированный курс для отображения
+            summary["avg_remainder_price_sqm"] = avg_price_per_sqm_usd
+            print(f"[DISCOUNT SERVICE - SUMMARY] Рассчитана средняя цена дна: ${avg_price_per_sqm_usd:,.0f}")
+        else:
+            summary["avg_remainder_price_sqm"] = 0  # Убедимся, что явно 0, если нет данных
+            print("[DISCOUNT SERVICE - SUMMARY] Нет подходящих объектов для расчета средней цены дна. Установлено 0.")
 
         for discount in discounts_in_complex:
             if discount.action > summary["max_action_discount"]:
@@ -194,8 +330,10 @@ def get_discounts_with_summary():
                 if getattr(discount, field, 0) > 0:
                     summary["available_tags"].add(tag_name)
 
-        final_data[complex_name] = {"summary": summary, "details": details_with_derived}
+        final_data[complex_name] = {"summary": summary, "details": details_by_prop_type}
 
+    print("[DISCOUNT SERVICE - SUMMARY] ЗАВЕРШЕНИЕ РАСЧЕТА ДЛЯ СИСТЕМЫ СКИДОК")
+    print("=" * 80 + "\n")
     return final_data
 
 
@@ -303,7 +441,7 @@ def _generate_version_comparison_summary(old_version, new_version, comments_data
 
 
 def create_blank_version(comment: str):
-    """Создает новую, ПУСТУЮ запись о версии скидок."""
+    """Создает новую, ПУСТУЮ запись о версии скидок БЕЗ КОММИТА."""
     print(f"\n[DISCOUNT SERVICE] 🚀 Создание ПУСТОЙ версии с комментарием: '{comment}'")
 
     latest_version = DiscountVersion.query.order_by(DiscountVersion.version_number.desc()).first()
@@ -315,9 +453,10 @@ def create_blank_version(comment: str):
     new_version = DiscountVersion(version_number=new_version_number, comment=comment)
     db.session.add(new_version)
 
-    db.session.commit()
+    # !!! УДАЛЕНО: db.session.commit() !!!
+    db.session.flush()  # Используем flush, чтобы получить ID для new_version, но не фиксируем транзакцию
 
-    print(f"[DISCOUNT SERVICE] ✔️ Успешно создана пустая версия №{new_version_number}")
+    print(f"[DISCOUNT SERVICE] ✔️ Успешно подготовлена пустая версия №{new_version_number}")
     return new_version
 
 

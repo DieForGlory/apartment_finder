@@ -2,7 +2,7 @@ import os
 from app import create_app
 from app.core.config import DevelopmentConfig
 from app.services.initial_load_service import load_all_initial_data
-
+from app.models import exclusion_models
 # Создаем экземпляр приложения Flask
 app = create_app(DevelopmentConfig)
 

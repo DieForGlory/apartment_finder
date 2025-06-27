@@ -1,9 +1,8 @@
+# app/core/extensions.py
 from flask_sqlalchemy import SQLAlchemy
 
-# Создаем экземпляр SQLAlchemy.
-# Впоследствии мы свяжем его с нашим Flask app через app.init_app()
 db = SQLAlchemy()
 
-# Сюда же в будущем можно добавить другие расширения, например:
-# from flask_migrate import Migrate
-# migrate = Migrate()
+# Возможно, здесь или в app/__init__.py нужно импортировать новые модели,
+# чтобы они были зарегистрированы в SQLAlchemy при db.create_all()
+# from app.models import exclusion_models # Пример

@@ -3,6 +3,7 @@ from app.core.extensions import db
 import time
 from sqlalchemy import distinct
 
+
 def get_sells_with_house_info(page, per_page):
     """
     Получает предложения о продаже для конкретной страницы.
@@ -30,6 +31,8 @@ def get_sells_with_house_info(page, per_page):
     except Exception as e:
         print(f"[DATA SERVICE] ❌ ОШИБКА при запросе данных с пагинацией: {e}")
         return None
+
+
 def get_all_complex_names():
     """Возвращает список уникальных названий ЖК из базы данных."""
     print("[DATA SERVICE] _names Запрос уникальных названий ЖК...")
@@ -43,3 +46,23 @@ def get_all_complex_names():
     except Exception as e:
         print(f"[DATA SERVICE] ❌ ОШИБКА при запросе названий ЖК: {e}")
         return []
+
+
+def get_filter_options():
+    """
+    НОВАЯ ФУНКЦИЯ: Получает уникальные значения для фильтров этажей и комнат.
+    """
+    print("[DATA SERVICE] 🔎 Запрос уникальных значений для фильтров...")
+    try:
+        # Запрос уникальных этажей. Исключаем None и сортируем.
+        floors = sorted([f[0] for f in db.session.query(distinct(EstateSell.estate_floor)).filter(
+            EstateSell.estate_floor.isnot(None)).all()])
+        # Запрос уникальных комнат. Исключаем None и сортируем.
+        rooms = sorted([r[0] for r in db.session.query(distinct(EstateSell.estate_rooms)).filter(
+            EstateSell.estate_rooms.isnot(None)).all()])
+
+        print(f"[DATA SERVICE] ✔️ Найдено этажей: {len(floors)}, комнат: {len(rooms)}")
+        return {'floors': floors, 'rooms': rooms}
+    except Exception as e:
+        print(f"[DATA SERVICE] ❌ ОШИБКА при запросе опций для фильтров: {e}")
+        return {'floors': [], 'rooms': []}

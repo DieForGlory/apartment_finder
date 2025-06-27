@@ -1,0 +1,543 @@
+{% extends "base.html" %}
+
+{% block styles %}
+{{ super() }}
+<style>
+    /* Кастомные стили для карточки объекта */
+    .gradient-heading {
+        background: -webkit-linear-gradient(45deg, var(--gh-gold), #a78d53);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: 700;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+    }
+
+    .card-glass {
+        background: rgba(var(--gh-element-bg-rgb), 0.85); /* Чуть менее прозрачный */
+        backdrop-filter: blur(15px); /* Более сильное размытие */
+        border: 1px solid rgba(var(--bs-border-color-rgb), 0.15); /* Более тонкая рамка */
+        border-radius: 1rem; /* Более выраженные углы */
+        box-shadow: 0 8px 30px rgba(0,0,0,0.15); /* Более заметная тень */
+        transition: all 0.3s ease-in-out;
+    }
+    .card-glass:hover {
+        box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+        transform: translateY(-3px); /* Легкий подъем */
+    }
+
+    .list-group-item-custom {
+        background-color: transparent;
+        border-bottom: 1px solid rgba(var(--bs-border-color-rgb), 0.1);
+        padding-left: 0;
+        padding-right: 0;
+    }
+    .list-group-item-custom:last-child {
+        border-bottom: none;
+    }
+
+    .price-final {
+        font-size: 2rem; /* Больше размер */
+        font-weight: 700;
+        color: var(--gh-gold);
+        text-shadow: 0 0 5px rgba(var(--gh-gold-rgb), 0.3); /* Легкое свечение */
+    }
+
+    .price-initial {
+        font-size: 1.5rem; /* Больше размер */
+        font-weight: 600;
+        color: var(--bs-primary);
+    }
+
+    .payment-option-card {
+        border-radius: 0.75rem;
+        border: 1px solid rgba(var(--bs-border-color-rgb), 0.2);
+        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        margin-bottom: 1.5rem; /* Увеличенный отступ между карточками оплаты */
+        overflow: hidden; /* Чтобы градиент не вылезал */
+        position: relative;
+    }
+    .payment-option-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+    }
+
+    /* Стиль для визуального отделения: градиентные рамки */
+    .payment-option-card.full-payment {
+        border-image: linear-gradient(to right, var(--gh-gold), transparent) 1;
+        background-color: rgba(var(--gh-gold-rgb), 0.03); /* Очень легкий фон */
+    }
+    .payment-option-card.mortgage {
+        border-image: linear-gradient(to right, var(--bs-primary), transparent) 1;
+        background-color: rgba(var(--bs-primary-rgb), 0.03);
+    }
+
+    /* Стили для кнопок дропдауна */
+    .additional-discount-item {
+        cursor: pointer;
+        transition: background-color 0.2s ease, color 0.2s ease;
+    }
+    .additional-discount-item:hover {
+        background-color: var(--bs-tertiary-bg); /* Более нейтральный hover */
+    }
+    .additional-discount-item.active {
+        background-color: rgba(var(--bs-success-rgb), 0.2); /* Активная скидка */
+        color: var(--bs-success);
+        font-weight: bold;
+    }
+    [data-bs-theme="dark"] .additional-discount-item.active {
+        background-color: rgba(var(--bs-success-rgb), 0.3);
+    }
+    .dropdown-menu {
+        backdrop-filter: blur(8px); /* Размытие для дропдауна */
+        background-color: rgba(var(--gh-element-bg-rgb), 0.9);
+        border-color: rgba(var(--bs-border-color-rgb), 0.1);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+
+    .discount-value-display {
+        color: var(--bs-danger);
+        font-weight: bold;
+    }
+    .discount-label {
+        color: var(--bs-body-color);
+    }
+
+    .btn-additional-discounts-toggle.active {
+        background-color: var(--bs-success);
+        border-color: var(--bs-success);
+        color: white;
+    }
+    .btn-additional-discounts-toggle.active:hover {
+        background-color: var(--bs-success-dark);
+        border-color: var(--bs-success-dark);
+    }
+
+    /* Улучшенный разделитель в таблице скидок */
+    hr.my-2 {
+        border-top: 1px dashed rgba(var(--bs-body-color-rgb), 0.2);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="gradient-heading">Карточка объекта </h1>
+    <div class="d-flex gap-2"> {# Добавляем div для группировки кнопок #}
+        <a href="{{ url_for('web.selection') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Назад к подбору
+        </a>
+        {# Добавляем проверку перед отображением кнопки "Распечатать КП" #}
+        {% if data.apartment and data.apartment.id is not none %}
+        <button id="printKpBtn" class="btn btn-primary" data-sell-id="{{ data.apartment.id }}">
+            <i class="bi bi-printer me-1"></i> Распечатать КП
+        </button>
+        {% else %}
+        <button type="button" class="btn btn-secondary disabled" title="ID объекта недоступен для КП">
+            <i class="bi bi-printer me-1"></i> Распечатать КП
+        </button>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row g-4">
+    {# Блок с основной информацией об объекте #}
+    <div class="col-lg-5">
+        <div class="card-glass h-100 p-4">
+            <h4 class="card-title mb-4 border-bottom pb-2">
+                <i class="bi bi-building me-2" style="color: var(--gh-gold);"></i>
+                {{ data.apartment.house.complex_name if data.apartment and data.apartment.house else 'N/A' }}
+            </h4>
+            <ul class="list-group list-group-flush">
+                <li class="list-group-item-custom d-flex justify-content-between align-items-center">
+                    <span class="text-muted"><i class="bi bi-check-circle me-2"></i>Статус</span>
+                    <span class="badge fs-6 fw-normal bg-success-subtle border border-success-subtle text-success-emphasis rounded-pill">
+                        {{ data.apartment.estate_sell_status_name if data.apartment else 'N/A' }}
+                    </span>
+                </li>
+                <li class="list-group-item-custom d-flex justify-content-between align-items-center">
+                    <span class="text-muted"><i class="bi bi-house-door me-2"></i>Номер дома</span>
+                    <strong>{{ data.apartment.house.geo_house if data.apartment and data.apartment.house else 'N/A' }}</strong>
+                </li>
+                <li class="list-group-item-custom d-flex justify-content-between align-items-center">
+                    <span class="text-muted"><i class="bi bi-layers me-2"></i>Этаж</span>
+                    <strong>{{ data.apartment.estate_floor if data.apartment else 'N/A' }}</strong>
+                </li>
+                <li class="list-group-item-custom d-flex justify-content-between align-items-center">
+                    <span class="text-muted"><i class="bi bi-door-closed me-2"></i>Комнаты</span>
+                    <strong>{{ data.apartment.estate_rooms if data.apartment else 'N/A' }}</strong>
+                </li>
+                <li class="list-group-item-custom d-flex justify-content-between align-items-center">
+                    <span class="text-muted"><i class="bi bi-arrows-fullscreen me-2"></i>Площадь</span>
+                    <strong>{{ data.apartment.estate_area if data.apartment else 'N/A' }} м²</strong>
+                </li>
+                <li class="list-group-item-custom d-flex justify-content-between align-items-center">
+                    <span class="text-muted"><i class="bi bi-building-fill-check me-2"></i>Тип объекта</span>
+                    <strong>{{ data.apartment.estate_sell_category if data.apartment else 'N/A' }}</strong>
+                </li>
+                <li class="list-group-item-custom d-flex justify-content-between align-items-center">
+                    <span class="text-muted"><i class="bi bi-tag me-2"></i>Базовая цена</span>
+                    <strong>{{ "{:,.0f}".format(data.apartment.estate_price) if data.apartment and data.apartment.estate_price is not none else 'N/A' }} UZS</strong>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    {# Блок с вариантами оплаты #}
+    <div class="col-lg-7">
+        <div class="card-glass h-100 p-4">
+            <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-2">
+                <h4 class="card-title mb-0">
+                    <i class="bi bi-cash-stack me-2" style="color: var(--gh-gold);"></i>
+                    Варианты оплаты
+                </h4>
+            </div>
+
+            {% if data.pricing %}
+                <div class="d-flex flex-column gap-4"> {# Увеличенный зазор между карточками оплаты #}
+                {% for option in data.pricing %}
+                    {% set card_class = '' %}
+                    {% if option.payment_method == '100% оплата' %}{% set card_class = 'full-payment' %}
+                    {% elif option.payment_method == 'Ипотека' %}{% set card_class = 'mortgage' %}
+                    {% endif %}
+                    <div class="payment-option-card {{ card_class }}"
+                         data-payment-method="{{ option.payment_method }}"
+                         data-base-price-deducted="{{ option.price_after_deduction }}"
+                         data-apartment-complex-name="{{ data.apartment.house.complex_name if data.apartment and data.apartment.house else '' }}"
+                         data-payment-method-raw="{{ option.payment_method }}"> {# Добавляем сырой payment_method для JS #}
+
+                        <div class="card-header bg-transparent border-bottom-0 pt-3 px-3">
+                            <h5 class="mb-0 fw-bold">{{ option.payment_method }}</h5>
+                        </div>
+                        <div class="card-body pt-2 px-3">
+                            <table class="table table-sm table-borderless small mb-2">
+                                <tbody>
+                                    <tr>
+                                        <td class="discount-label">Базовая цена</td>
+                                        <td class="text-end">{{ "{:,.0f}".format(option.base_price) }}</td>
+                                    </tr>
+                                    <tr class="text-danger">
+                                        <td class="discount-label">Вычет</td>
+                                        <td class="text-end">- {{ "{:,.0f}".format(option.deduction) }}</td>
+                                    </tr>
+                                    {% for discount in option.discounts if discount.value > 0 %}
+                                    <tr class="text-danger">
+                                        <td class="discount-label">Скидка {{ discount.name }} (<span class="static-discount-percent">{{ "%.1f"|format(discount.value * 100) }}</span>%)</td>
+                                        {% set discount_amount = option.price_after_deduction * discount.value %}
+                                        <td class="text-end">- <span class="static-discount-amount">{{ "{:,.0f}".format(discount_amount) }}</span></td>
+                                    </tr>
+                                    {% endfor %}
+
+                                    {# Место для динамических скидок #}
+                                    <tr class="additional-discount-row d-none" data-discount-type="kd">
+                                        <td class="discount-label">Доп. скидка КД (<span class="applied-discount-percent">0.0</span>%)</td>
+                                        <td class="text-end"><span class="applied-discount-amount">0</span></td>
+                                    </tr>
+                                    <tr class="additional-discount-row d-none" data-discount-type="opt">
+                                        <td class="discount-label">Доп. скидка ОПТ (<span class="applied-discount-percent">0.0</span>%)</td>
+                                        <td class="text-end"><span class="applied-discount-amount">0</span></td>
+                                    </tr>
+                                    <tr class="additional-discount-row d-none" data-discount-type="gd">
+                                        <td class="discount-label">Доп. скидка ГД (<span class="applied-discount-percent">0.0</span>%)</td>
+                                        <td class="text-end"><span class="applied-discount-amount">0</span></td>
+                                    </tr>
+                                    <tr class="additional-discount-row d-none" data-discount-type="holding">
+                                        <td class="discount-label">Доп. скидка Холдинг (<span class="applied-discount-percent">0.0</span>%)</td>
+                                        <td class="text-end"><span class="applied-discount-amount">0</span></td>
+                                    </tr>
+                                    <tr class="additional-discount-row d-none" data-discount-type="shareholder">
+                                        <td class="discount-label">Доп. скидка Акционер (<span class="applied-discount-percent">0.0</span>%)</td>
+                                        <td class="text-end"><span class="applied-discount-amount">0</span></td>
+                                    </tr>
+                                    <tr class="additional-discount-row d-none" data-discount-type="action">
+                                        <td class="discount-label">Доп. скидка Акция (<span class="applied-discount-percent">0.0</span>%)</td>
+                                        <td class="text-end"><span class="applied-discount-amount">0</span></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <hr class="my-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="fw-bold fs-5">Итого:</span>
+                                <span class="price-final" data-original-final-price="{{ option.final_price }}">{{ "{:,.0f}".format(option.final_price) }} UZS</span>
+                            </div>
+                            {% if option.initial_payment is not none %} {# Убедимся, что initial_payment не None #}
+                            <div class="d-flex justify-content-between align-items-center mt-2 text-primary">
+                                <span class="fs-6">Первый взнос:</span>
+                                <span class="price-initial" data-original-initial-payment="{{ option.initial_payment }}">{{ "{:,.0f}".format(option.initial_payment) }} UZS</span>
+                            </div>
+                            {% endif %}
+
+                            {# Выпадающее меню для дополнительных скидок #}
+                            <div class="dropdown mt-3">
+                                <button class="btn btn-outline-info btn-sm dropdown-toggle w-100 btn-additional-discounts-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="bi bi-percent me-1"></i> Применить доп. скидки
+                                </button>
+                                <ul class="dropdown-menu">
+                                    {# Используем Jinja2 filter `selectattr` для поиска нужного объекта #}
+                                    {% set complex_name_for_filter = data.apartment.house.complex_name if data.apartment and data.apartment.house else '' %}
+                                    {% set current_discount_object = all_discounts_for_property_type | selectattr('complex_name', 'eq', complex_name_for_filter) | selectattr('payment_method', 'eq', option.payment_method) | first %}
+
+                                    {% if current_discount_object %}
+                                        {% for field_name, display_name in [('kd', 'КД'), ('opt', 'ОПТ'), ('gd', 'ГД'), ('holding', 'Холдинг'), ('shareholder', 'Акционер'), ('action', 'Акция')] %}
+                                            {# Проверяем, есть ли скидка и её значение больше нуля #}
+                                            {% if current_discount_object[field_name] is defined and current_discount_object[field_name] > 0 %}
+                                            <li>
+                                                <a class="dropdown-item additional-discount-item"
+                                                   href="#"
+                                                   data-discount-type="{{ field_name }}"
+                                                   data-max-percent="{{ "%.1f"|format(current_discount_object[field_name] * 100) }}">
+                                                    {{ display_name }} (макс. {{ "%.1f"|format(current_discount_object[field_name] * 100) }}%)
+                                                </a>
+                                            </li>
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% else %}
+                                        <li><span class="dropdown-item-text text-muted p-3">Доп. скидок не найдено для этого типа оплаты.</span></li>
+                                    {% endif %}
+                                </ul>
+                            </div>
+                            <div class="alert alert-danger mt-2 d-none discount-error-alert" role="alert">
+                                Применить скидку невозможно. Превышен лимит!
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+                </div>
+            {% else %}
+                <div class="alert alert-warning">
+                    Не удалось рассчитать варианты оплаты.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // ВРЕМЕННЫЙ КОД ДЛЯ ОТЛАДКИ (максимально безопасный):
+    console.log("DEBUG: Raw data object from Flask:", {{ (data if data is not none else {})|tojson|safe }});
+    console.log("DEBUG: pricingData (should be from data.pricing)", {{ (data.pricing if data and data.pricing is not none else [])|tojson|safe }});
+    console.log("DEBUG: allDiscountsForPropertyType (should be from passed variable)", {{ (all_discounts_for_property_type if all_discounts_for_property_type is not none else [])|tojson|safe }});
+    console.log("DEBUG: Apartment data:", {{ (data.apartment if data and data.apartment is not none else {})|tojson|safe }});
+    // КОНЕЦ ВРЕМЕННОГО КОДА
+
+    // Основные объявления переменных, также с защитой
+    const pricingData = {{ (data.pricing if data and data.pricing is not none else [])|tojson|safe }};
+    const allDiscountsForPropertyType = {{ (all_discounts_for_property_type if all_discounts_for_property_type is not none else [])|tojson|safe }};
+
+    // Этот объект будет хранить примененные вручную доп. скидки для каждого метода оплаты.
+    // Инициализируем его с 0% для всех возможных скидок, чтобы избежать Undefined
+    // В этой версии объекта `appliedAdditionalDiscounts` не используется для заполнения полей ввода напрямую.
+    const appliedAdditionalDiscounts = {};
+    pricingData.forEach(option => {
+        appliedAdditionalDiscounts[option.payment_method] = {
+            total: 0,
+            details: {
+                kd: 0.0, opt: 0.0, gd: 0.0, holding: 0.0, shareholder: 0.0, action: 0.0
+            }
+        };
+    });
+
+    // Функция для форматирования числа как валюты
+    function formatCurrency(value) {
+        return value.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    }
+
+    // Сохраним максимальные лимиты скидок, переданные с сервера.
+    const discountLimits = {};
+    allDiscountsForPropertyType.forEach(d => {
+        if (!discountLimits[d.complex_name]) {
+            discountLimits[d.complex_name] = {};
+        }
+        if (!discountLimits[d.complex_name][d.payment_method]) {
+            discountLimits[d.complex_name][d.payment_method] = {};
+        }
+        discountLimits[d.complex_name][d.payment_method] = {
+            kd: d.kd * 100,
+            opt: d.opt * 100,
+            gd: d.gd * 100,
+            holding: d.holding * 100,
+            shareholder: d.shareholder * 100,
+            action: d.action * 100
+        };
+    });
+
+    function calculateFinalPrice(basePriceDeducted, initialStaticDiscountRate, paymentMethod, complexName) {
+        let totalDiscountRate = initialStaticDiscountRate;
+
+        // Добавляем примененные вручную дополнительные скидки
+        if (appliedAdditionalDiscounts[paymentMethod]) {
+            for (const type in appliedAdditionalDiscounts[paymentMethod].details) {
+                totalDiscountRate += appliedAdditionalDiscounts[paymentMethod].details[type];
+            }
+        }
+
+        let finalPrice = basePriceDeducted * (1 - (totalDiscountRate / 100));
+
+        // Логика ипотеки
+        if (paymentMethod === 'Ипотека') {
+            const MAX_MORTGAGE = 420000000;
+            const MIN_INITIAL_PAYMENT_PERCENT = 0.15;
+
+            let priceAfterAllDiscounts = basePriceDeducted * (1 - (totalDiscountRate / 100));
+            let initialPayment = priceAfterAllDiscounts - MAX_MORTGAGE;
+            let minRequiredPayment = priceAfterAllDiscounts * MIN_INITIAL_PAYMENT_PERCENT;
+
+            if (initialPayment < 0) {
+                initialPayment = 0;
+                finalPrice = MAX_MORTGAGE;
+            } else if (initialPayment < minRequiredPayment) {
+                initialPayment = minRequiredPayment;
+                finalPrice = initialPayment + MAX_MORTGAGE;
+            }
+
+            return { finalPrice: finalPrice, initialPayment: initialPayment };
+
+        }
+        return { finalPrice: finalPrice, initialPayment: null };
+    }
+
+    // Обновляет UI для конкретной опции оплаты
+    function updateOptionUI(optionElement, basePriceDeducted, initialStaticDiscountRate, paymentMethod, complexName) {
+        const finalPriceSpan = optionElement.querySelector('.price-final');
+        const initialPaymentSpan = optionElement.querySelector('.price-initial');
+        const toggleButton = optionElement.querySelector('.btn-additional-discounts-toggle');
+        const errorAlert = optionElement.querySelector('.discount-error-alert');
+
+        const calculatedPrices = calculateFinalPrice(basePriceDeducted, initialStaticDiscountRate, paymentMethod, complexName);
+
+        finalPriceSpan.textContent = formatCurrency(calculatedPrices.finalPrice) + ' UZS';
+
+        if (initialPaymentSpan) {
+            if (calculatedPrices.initialPayment !== null && calculatedPrices.initialPayment >= 0) {
+                initialPaymentSpan.textContent = formatCurrency(calculatedPrices.initialPayment) + ' UZS';
+            } else {
+                initialPaymentSpan.textContent = '— UZS';
+            }
+        }
+
+        // Обновление строк дополнительных скидок
+        const currentAppliedDetails = appliedAdditionalDiscounts[paymentMethod] ? appliedAdditionalDiscounts[paymentMethod].details : {};
+        let anyAdditionalDiscountApplied = false;
+        let totalAppliedPercent = 0;
+
+        optionElement.querySelectorAll('.additional-discount-row').forEach(row => {
+            const discountType = row.dataset.discountType;
+            const appliedValue = currentAppliedDetails[discountType] || 0;
+
+            if (appliedValue > 0) {
+                row.classList.remove('d-none');
+                row.querySelector('.applied-discount-percent').textContent = appliedValue.toFixed(1);
+
+                const discountAmount = basePriceDeducted * (appliedValue / 100);
+                row.querySelector('.applied-discount-amount').textContent = '- ' + formatCurrency(discountAmount);
+                anyAdditionalDiscountApplied = true;
+                totalAppliedPercent += appliedValue;
+            } else {
+                row.classList.add('d-none');
+            }
+        });
+
+        // Обновление класса кнопки-переключателя
+        if (anyAdditionalDiscountApplied) {
+            toggleButton.classList.add('active');
+            toggleButton.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> Доп. скидки (${totalAppliedPercent.toFixed(1)}%)`;
+        } else {
+            toggleButton.classList.remove('active');
+            toggleButton.innerHTML = `<i class="bi bi-percent me-1"></i> Применить доп. скидки`;
+        }
+
+        // Сброс и скрытие общего сообщения об ошибке
+        errorAlert.classList.add('d-none');
+        errorAlert.textContent = 'Применить скидку невозможно. Превышен лимит!';
+    }
+
+    // Инициализация при загрузке: собираем базовые ставки скидок
+    const staticDiscountRates = {};
+    document.querySelectorAll('.payment-option-card').forEach(optionElement => {
+        const paymentMethod = optionElement.dataset.paymentMethod;
+        const basePriceDeducted = parseFloat(optionElement.dataset.basePriceDeducted);
+        const complexName = optionElement.dataset.apartmentComplexName;
+
+        let totalStaticDiscount = 0;
+        optionElement.querySelectorAll('.static-discount-percent').forEach(span => {
+            totalStaticDiscount += parseFloat(span.textContent);
+        });
+        staticDiscountRates[paymentMethod] = totalStaticDiscount;
+
+        updateOptionUI(optionElement, basePriceDeducted, staticDiscountRates[paymentMethod], paymentMethod, complexName);
+    });
+
+    // Обработчик кликов по дополнительным скидкам (старый вариант без ручного ввода)
+    document.querySelectorAll('.additional-discount-item').forEach(item => {
+        item.addEventListener('click', function(e) {
+            e.preventDefault();
+            const discountType = this.dataset.discountType;
+            const maxPercent = parseFloat(this.dataset.maxPercent);
+
+            const dropdownMenu = this.closest('.dropdown-menu');
+            const paymentOptionCard = dropdownMenu.closest('.payment-option-card');
+            const paymentMethod = paymentOptionCard.dataset.paymentMethod;
+            const complexName = paymentOptionCard.dataset.apartmentComplexName;
+            const basePriceDeducted = parseFloat(paymentOptionCard.dataset.basePriceDeducted);
+
+            const errorAlert = paymentOptionCard.querySelector('.discount-error-alert');
+            errorAlert.classList.add('d-none');
+
+            // Проверяем, была ли уже применена эта скидка
+            if (appliedAdditionalDiscounts[paymentMethod].details[discountType]) {
+                // Если скидка уже применена, снимаем её
+                appliedAdditionalDiscounts[paymentMethod].total -= appliedAdditionalDiscounts[paymentMethod].details[discountType];
+                delete appliedAdditionalDiscounts[paymentMethod].details[discountType];
+                this.classList.remove('active');
+            } else {
+                // Пытаемся применить новую скидку
+                if (maxPercent > 0) {
+                    appliedAdditionalDiscounts[paymentMethod].details[discountType] = maxPercent;
+                    this.classList.add('active');
+                } else {
+                    errorAlert.textContent = 'Данная скидка недоступна или её значение равно 0%.';
+                    errorAlert.classList.remove('d-none');
+                }
+            }
+
+            // Пересчитываем и обновляем UI для данной опции оплаты
+            updateOptionUI(paymentOptionCard, basePriceDeducted, staticDiscountRates[paymentMethod], paymentMethod, complexName);
+        });
+    });
+
+    // --- НОВАЯ ЛОГИКА ДЛЯ КНОПКИ "РАСПЕЧАТАТЬ КП" ---
+    const printKpBtn = document.getElementById('printKpBtn');
+    if (printKpBtn) {
+        printKpBtn.addEventListener('click', function() {
+            const sellId = this.dataset.sellId;
+            let queryParams = new URLSearchParams();
+
+            // Собираем актуальные final_price и initial_payment для каждого payment_method
+            document.querySelectorAll('.payment-option-card').forEach(optionElement => {
+                const paymentMethod = optionElement.dataset.paymentMethod; // '100% оплата' или 'Ипотека'
+                const currentFinalPrice = parseFloat(optionElement.querySelector('.price-final').textContent.replace(/[^0-9,-]+/g, "").replace(/,/g, ""));
+
+                queryParams.append(`fp_${paymentMethod}`, currentFinalPrice);
+
+                const initialPaymentSpan = optionElement.querySelector('.price-initial');
+                if (initialPaymentSpan && initialPaymentSpan.textContent !== '— UZS') {
+                    const currentInitialPayment = parseFloat(initialPaymentSpan.textContent.replace(/[^0-9,-]+/g, "").replace(/,/g, ""));
+                    queryParams.append(`ip_${paymentMethod}`, currentInitialPayment);
+                }
+                // Также передаем базовую цену до вычета, чтобы "Выгода" можно было рассчитать
+                const basePriceDeducted = parseFloat(optionElement.dataset.basePriceDeducted);
+                queryParams.append(`bpd_${paymentMethod}`, basePriceDeducted);
+
+            });
+
+            // Формируем URL с собранными параметрами
+            const printUrl = `{{ url_for('web.generate_commercial_offer', sell_id=data.apartment.id) }}?${queryParams.toString()}`;
+            window.open(printUrl, '_blank');
+        });
+    }
+});
+</script>
+{% endblock %}

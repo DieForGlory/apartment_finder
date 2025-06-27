@@ -1,20 +1,23 @@
+# app/models/discount_models.py
+
 from app.core.extensions import db
 from sqlalchemy import Enum as SQLAlchemyEnum, func
 import enum
 
 
 class PropertyType(enum.Enum):
-    FLAT = 'flat'
-    COMM = 'comm'
-    GARAGE = 'garage'
-    STORAGEROOM = 'storageroom'
+    FLAT = 'Квартира'
+    COMM = 'Коммерческое помещение'
+    GARAGE = 'Парковка'
+    STORAGEROOM = 'Кладовое помещение'
 
 
 class PaymentMethod(enum.Enum):
+    """
+    Оставили только два основных способа оплаты.
+    """
     FULL_PAYMENT = '100% оплата'
     MORTGAGE = 'Ипотека'
-    TRANCHE_100 = '3 транша - 100% оплата'
-    TRANCHE_MORTGAGE = '3 транша - ипотека'
 
 
 class DiscountVersion(db.Model):

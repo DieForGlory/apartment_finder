@@ -5,15 +5,86 @@
     <h1>Действующая система скидок</h1>
 </div>
 
-<div class="form-group mb-4">
-    <input type="text" id="searchInput" class="form-control form-control-lg" placeholder="🔍 Введите название ЖК для поиска...">
+<div class="row mb-4">
+    <div class="col-md-8">
+        <input type="text" id="searchInput" class="form-control form-control-lg" placeholder="🔍 Введите название ЖК для поиска...">
+    </div>
+    <div class="col-md-4 d-flex align-items-center">
+        <div class="form-check form-switch fs-5">
+            <input class="form-check-input" type="checkbox" id="showOnlyCadastreSwitch">
+            <label class="form-check-label text-muted" for="showOnlyCadastreSwitch" style="font-size: 0.9rem;">Показывать только с датой кадастра</label>
+        </div>
+    </div>
 </div>
+
+{# Добавляем специфические стили для аккордеонов на странице скидок #}
+<style>
+    /* Стиль для каждого элемента аккордеона на странице скидок */
+    .accordion-item {
+        background: rgba(0, 0, 0, 0.5); /* Полупрозрачный черный фон */
+        backdrop-filter: blur(10px); /* Эффект размытия (глассморфозм) */
+        border: 1px solid transparent; /* Изначально прозрачная рамка */
+        border-image: linear-gradient(45deg, var(--gh-gold), rgba(var(--gh-gold-rgb), 0.3)) 1; /* Золотой градиентный контур */
+        border-radius: 0.75rem; /* Скругленные углы */
+        margin-bottom: 1rem; /* Отступ между элементами */
+        overflow: hidden; /* Важно для border-image и скругления */
+        transition: all 0.3s ease-in-out; /* Плавный переход */
+    }
+
+    .accordion-item:hover {
+        border-image: linear-gradient(45deg, var(--gh-gold), rgba(var(--gh-gold-rgb), 0.7)) 1; /* Более яркий градиент при наведении */
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.4); /* Легкая тень */
+        transform: translateY(-2px); /* Небольшой подъем */
+    }
+
+    /* Стиль для кнопки аккордеона (заголовок) */
+    .accordion-button {
+        background-color: rgba(0, 0, 0, 0.4); /* Чуть более темный полупрозрачный фон */
+        color: var(--bs-body-color); /* Цвет текста из темы (для светлой/темной) */
+        font-weight: 500;
+        padding: 1rem 1.25rem; /* Внутренние отступы */
+        border-bottom: 1px solid rgba(var(--bs-body-color-rgb), 0.1); /* Тонкая разделительная линия */
+        transition: all 0.3s ease-in-out;
+    }
+
+    .accordion-button:not(.collapsed) {
+        background-color: rgba(var(--gh-gold-rgb), 0.15); /* Золотой фон при открытии */
+        color: var(--gh-gold); /* Золотой текст при открытии */
+        box-shadow: none; /* Убираем стандартную тень */
+        border-bottom-color: rgba(var(--gh-gold-rgb), 0.4); /* Золотая разделительная линия */
+    }
+
+    .accordion-button::after {
+        filter: invert(var(--bs-accordion-btn-icon-invert)); /* Адаптируем цвет иконки под тему */
+        color: var(--bs-body-color); /* Убедимся, что иконка видна */
+    }
+
+    /* Стили для тела аккордеона */
+    .accordion-body {
+        background-color: rgba(0, 0, 0, 0.3); /* Немного светлее, чем заголовок */
+        color: var(--bs-body-color);
+        padding: 1rem 1.25rem;
+    }
+
+    /* Стили для таблиц внутри аккордеона */
+    .accordion-body table {
+        --bs-table-bg: transparent; /* Прозрачный фон таблицы */
+        --bs-table-color: var(--bs-body-color);
+        --bs-table-border-color: rgba(var(--bs-body-color-rgb), 0.1); /* Тонкие рамки */
+    }
+    .accordion-body .table-light thead {
+        background-color: rgba(var(--gh-gold-rgb), 0.1); /* Легкий золотой фон для заголовков таблицы */
+        color: var(--gh-gold);
+    }
+</style>
 
 {% if structured_discounts %}
     <div class="accordion" id="discountsAccordion">
         {% for complex_name, data in structured_discounts.items() %}
             {% if data.summary.sum_100_payment > 0 or data.summary.sum_mortgage > 0 %}
-            <div class="accordion-item mb-2" data-complex-name="{{ complex_name|lower }}">
+            <div class="accordion-item mb-2"
+                 data-complex-name="{{ complex_name|lower }}"
+                 data-cadastre-date-exists="{{ 'true' if data.summary.months_to_cadastre is not none else 'false' }}">
                 <h2 class="accordion-header" id="heading-{{ loop.index }}">
                     <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ loop.index }}" aria-expanded="false" aria-controls="collapse-{{ loop.index }}">
                         <div class="w-100">
@@ -103,9 +174,9 @@
                                         {% for discount in discounts|sort(attribute='payment_method.value') %}
                                             {% set payment_method_value = discount.payment_method.value %}
                                             {% set show_row = false %}
-                                            {% if prop_type == 'flat' %}{% set show_row = true %}{% endif %}
-                                            {% if prop_type in ['comm', 'storageroom'] and payment_method_value == '100% оплата' %}{% set show_row = true %}{% endif %}
-                                            {% if prop_type == 'garage' and payment_method_value in ['100% оплата', 'Ипотека'] %}{% set show_row = true %}{% endif %}
+                                            {% if prop_type == 'Квартира' %}{% set show_row = true %}{% endif %}
+                                            {% if prop_type in ['Коммерческое помещение', 'Кладовое помещение'] and payment_method_value == '100% оплата' %}{% set show_row = true %}{% endif %}
+                                            {% if prop_type == 'Парковка' and payment_method_value in ['100% оплата', 'Ипотека'] %}{% set show_row = true %}{% endif %}
 
                                             {% if show_row %}
                                             <tr>
@@ -143,20 +214,36 @@
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const searchInput = document.getElementById('searchInput');
-    if (searchInput) {
-        const accordionItems = document.querySelectorAll('.accordion-item');
-        searchInput.addEventListener('input', function (e) {
-            const searchTerm = e.target.value.toLowerCase();
-            accordionItems.forEach(function (item) {
-                const complexName = item.dataset.complexName;
-                if (complexName.includes(searchTerm)) {
-                    item.style.display = 'block';
-                } else {
-                    item.style.display = 'none';
-                }
-            });
+    const showOnlyCadastreSwitch = document.getElementById('showOnlyCadastreSwitch');
+    const accordionItems = document.querySelectorAll('.accordion-item');
+
+    function applyFilters() {
+        const searchTerm = searchInput.value.toLowerCase();
+        const showCadastreOnly = showOnlyCadastreSwitch.checked;
+
+        accordionItems.forEach(function (item) {
+            const complexName = item.dataset.complexName;
+            const hasCadastreDate = item.dataset.cadastreDateExists === 'true';
+
+            const searchMatch = complexName.includes(searchTerm);
+            const cadastreMatch = !showCadastreOnly || hasCadastreDate;
+
+            if (searchMatch && cadastreMatch) {
+                item.style.display = 'block';
+            } else {
+                item.style.display = 'none';
+            }
         });
     }
+
+    if (searchInput) {
+        searchInput.addEventListener('input', applyFilters);
+    }
+    if (showOnlyCadastreSwitch) {
+        showOnlyCadastreSwitch.addEventListener('change', applyFilters);
+    }
+
+    applyFilters();
 });
 </script>
 {% endblock %}
