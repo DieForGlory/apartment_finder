@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-<form id="discounts-form" method="POST" action="{{ url_for('web.edit_version', version_id=version.id) }}">
+<form id="discounts-form" method="POST" action="{{ url_for('discount.edit_version', version_id=version.id) }}">
     <input type="hidden" name="changes_json" id="changes_json_input">
 
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -15,7 +15,7 @@
                 <strong>Создана:</strong> {{ version.created_at.strftime('%Y-%m-%d %H:%M') if version.created_at else 'Еще не сохранено' }}
             </p>
         </div>
-        <a href="{{ url_for('web.versions_index') }}" class="btn btn-secondary">
+        <a href="{{ url_for('discount.versions_index') }}" class="btn btn-secondary">
             <i class="bi bi-arrow-left"></i> К списку версий
         </a>
     </div>
@@ -179,7 +179,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const commentText = document.getElementById('commentModalTextarea').value;
             const versionId = {{ version.id }};
 
-            fetch("{{ url_for('web.save_complex_comment') }}", {
+            fetch("{{ url_for('discount.save_complex_comment') }}", {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({

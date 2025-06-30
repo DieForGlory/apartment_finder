@@ -5,7 +5,7 @@
     <h1>Управление версиями скидок</h1>
     <div>
         {% if current_user.role.name == 'ADMIN' %}
-        <form action="{{ url_for('web.create_draft_version') }}" method="POST">
+        <form action="{{ url_for('discount.create_draft_version') }}" method="POST">
              <button type="submit" class="btn btn-warning">
                 <i class="bi bi-pencil-square"></i> Создать черновик
             </button>
@@ -46,12 +46,12 @@
                             <div class="btn-group" role="group">
                                 {% if v.is_active or v.was_ever_activated %}
                                     {# Просмотр для активных и архивных версий #}
-                                    <a href="{{ url_for('web.view_version', version_id=v.id) }}" class="btn btn-outline-secondary btn-sm">
+                                    <a href="{{ url_for('discount.view_version', version_id=v.id) }}" class="btn btn-outline-secondary btn-sm">
                                         <i class="bi bi-eye"></i> Просмотреть
                                     </a>
                                 {% else %}
                                     {# Действия для черновиков (которые никогда не были активны) #}
-                                    <a href="{{ url_for('web.edit_version', version_id=v.id) }}" class="btn btn-outline-primary btn-sm">
+                                    <a href="{{ url_for('discount.edit_version', version_id=v.id) }}" class="btn btn-outline-primary btn-sm">
                                         <i class="bi bi-pencil"></i> Редактировать
                                     </a>
 
@@ -61,7 +61,7 @@
                                         Активировать
                                     </button>
 
-                                    <form action="{{ url_for('web.delete_version', version_id=v.id) }}" method="POST" onsubmit="return confirm('Вы уверены, что хотите безвозвратно удалить этот черновик?');" class="ms-2">
+                                    <form action="{{ url_for('discount.delete_version', version_id=v.id) }}" method="POST" onsubmit="return confirm('Вы уверены, что хотите безвозвратно удалить этот черновик?');" class="ms-2">
                                         <button type="submit" class="btn btn-outline-danger btn-sm">
                                             <i class="bi bi-trash"></i>
                                         </button>

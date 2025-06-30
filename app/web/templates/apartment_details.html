@@ -93,7 +93,7 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="gradient-heading">Карточка объекта </h1>
     <div class="d-flex gap-2">
-        <a href="{{ url_for('web.selection') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Назад к подбору</a>
+        <a href="{{ url_for('main.selection') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Назад к подбору</a>
         {% if data.apartment and data.apartment.id is not none %}
         <button id="printKpBtn" class="btn btn-primary" data-sell-id="{{ data.apartment.id }}"><i class="bi bi-printer me-1"></i> Распечатать КП</button>
         {% else %}

@@ -9,8 +9,7 @@ from .services import email_service
 
 # НОВОЕ: создаем экземпляр LoginManager
 login_manager = LoginManager()
-# НОВОЕ: указываем на view для логина. 'web.login' - это blueprint 'web' и функция 'login'
-login_manager.login_view = 'web.login'
+login_manager.login_view = 'auth.login'
 login_manager.login_message = "Пожалуйста, войдите в систему для доступа к этой странице."
 login_manager.login_message_category = "info"
 
@@ -35,8 +34,14 @@ def create_app(config_class=DevelopmentConfig):
     login_manager.init_app(app) # НОВОЕ
 
     # Регистрируем роуты
-    from .web.routes import web_bp
-    app.register_blueprint(web_bp)
+    from .web.main_routes import main_bp
+    from .web.auth_routes import auth_bp
+    from .web.discount_routes import discount_bp
+
+    # 2. Регистрируем их в приложении
+    app.register_blueprint(main_bp)
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(discount_bp)
 
     return app
 

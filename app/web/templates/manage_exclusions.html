@@ -12,7 +12,7 @@
 
 <div class="card card-glass mb-4 p-4">
     <h5 class="card-title mb-3">Добавить квартиру в исключения</h5>
-    <form method="POST" action="{{ url_for('web.manage_exclusions') }}">
+    <form method="POST" action="{{ url_for('main.manage_exclusions') }}">
         <input type="hidden" name="action" value="add">
         <div class="row g-3 align-items-end">
             <div class="col-md-4">
@@ -52,7 +52,7 @@
                     <td>{{ excluded_sell.comment or '—' }}</td>
                     <td>{{ excluded_sell.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
                     <td class="text-end">
-                        <form method="POST" action="{{ url_for('web.manage_exclusions') }}" onsubmit="return confirm('Вы уверены, что хотите удалить исключение для ID {{ excluded_sell.sell_id }}?');">
+                        <form method="POST" action="{{ url_for('main.manage_exclusions') }}" onsubmit="return confirm('Вы уверены, что хотите удалить исключение для ID {{ excluded_sell.sell_id }}?');">
                             <input type="hidden" name="action" value="delete">
                             <input type="hidden" name="sell_id_to_manage" value="{{ excluded_sell.sell_id }}">
                             <button type="submit" class="btn btn-danger btn-sm">

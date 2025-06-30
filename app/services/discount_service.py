@@ -308,7 +308,8 @@ def get_discounts_with_summary():
             if discount.action > summary["max_action_discount"]:
                 summary["max_action_discount"] = discount.action
             for field, tag_name in tag_fields.items():
-                if getattr(discount, field, 0) > 0:
+                value = getattr(discount, field)
+                if value is not None and value > 0:
                     summary["available_tags"].add(tag_name)
 
         final_data[complex_name] = {"summary": summary, "details": details_by_prop_type}

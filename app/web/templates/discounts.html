@@ -187,7 +187,7 @@
                                                 <td>{% if discount.rop > 0 %}{{ "%.1f"|format(discount.rop * 100) }}%{% else %}—{% endif %}</td>
                                                 <td>{% if discount.kd > 0 %}{{ "%.1f"|format(discount.kd * 100) }}%{% else %}—{% endif %}</td>
                                                 <td>{% if discount.opt > 0 %}{{ "%.1f"|format(discount.opt * 100) }}%{% else %}—{% endif %}</td>
-                                                <td>{% if discount.gd > 0 %}{{ "%.1f"|format(discount.gd * 100) }}%{% else %}—{% endif %}</td>
+                                                <td>{% if discount.gd is not none and discount.gd > 0 %}{{ "%.1f"|format(discount.gd * 100) }}%{% else %}—{% endif %}</td>
                                                 <td>{% if discount.holding > 0 %}{{ "%.1f"|format(discount.holding * 100) }}%{% else %}—{% endif %}</td>
                                                 <td>{% if discount.action > 0 %}{{ "%.1f"|format(discount.action * 100) }}%{% else %}—{% endif %}</td>
                                             </tr>

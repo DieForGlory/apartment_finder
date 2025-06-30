@@ -177,7 +177,7 @@
     <header class="header sticky-top border-bottom">
         <nav class="navbar navbar-expand-lg">
             <div class="container">
-                <a class="navbar-brand fw-bold" href="{{ url_for('web.selection') }}" style="color: var(--gh-gold);">
+                <a class="navbar-brand fw-bold" href="{{ url_for('main.selection') }}" style="color: var(--gh-gold);">
                     <i class="bi bi-building-check"></i>
                     ApartmentFinder
                 </a>
@@ -191,33 +191,33 @@
 
                             {% if current_user.role.name in ['ADMIN', 'MANAGER'] %}
                             <li class="nav-item">
-                                <a class="nav-link {% if request.endpoint == 'web.index' %}active{% endif %}" href="{{ url_for('web.index') }}">Каталог</a>
+                                <a class="nav-link {% if request.endpoint == 'main.index' %}active{% endif %}" href="{{ url_for('main.index') }}">Каталог</a>
                             </li>
                             {% endif %}
 
                             <li class="nav-item">
-                                <a class="nav-link {% if request.endpoint == 'web.selection' %}active{% endif %}" href="{{ url_for('web.selection') }}">Подбор по бюджету</a>
+                                <a class="nav-link {% if request.endpoint == 'main.selection' %}active{% endif %}" href="{{ url_for('main.selection') }}">Подбор по бюджету</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link {% if request.endpoint == 'web.discounts_overview' %}active{% endif %}" href="{{ url_for('web.discounts_overview') }}">Система скидок</a>
+                                <a class="nav-link {% if request.endpoint == 'discount.discounts_overview' %}active{% endif %}" href="{{ url_for('discount.discounts_overview') }}">Система скидок</a>
                             </li>
 
                             {% if current_user.role.name == 'ADMIN' %}
                             <li class="nav-item dropdown">
-                                <a class="nav-link dropdown-toggle {% if request.endpoint in ['web.versions_index', 'web.upload_discounts', 'web.manage_exclusions', 'web.user_management'] %}active{% endif %}" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <a class="nav-link dropdown-toggle {% if request.endpoint in ['discount.versions_index', 'discount.upload_discounts', 'main.manage_exclusions', 'auth.user_management'] %}active{% endif %}" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                     Администрирование
                                 </a>
                                 <ul class="dropdown-menu" aria-labelledby="adminDropdown">
-                                    <li><a class="dropdown-item" href="{{ url_for('web.versions_index') }}">Управление скидками</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('web.upload_discounts') }}">Загрузить скидки</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('web.manage_exclusions') }}">Исключения</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('discount.versions_index') }}">Управление скидками</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('discount.upload_discounts') }}">Загрузить скидки</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('main.manage_exclusions') }}">Исключения</a></li>
                                     <li><hr class="dropdown-divider"></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('web.user_management') }}">Управление пользователями</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('auth.user_management') }}">Управление пользователями</a></li>
                                 </ul>
                             </li>
                             {% elif current_user.role.name == 'MANAGER' %}
                             <li class="nav-item">
-                                <a class="nav-link {% if 'versions' in request.endpoint %}active{% endif %}" href="{{ url_for('web.versions_index') }}">Управление скидками</a>
+                                <a class="nav-link {% if 'versions' in request.endpoint %}active{% endif %}" href="{{ url_for('discount.versions_index') }}">Управление скидками</a>
                             </li>
                             {% endif %}
                         {% endif %}
@@ -231,13 +231,13 @@
                                 </a>
                                 <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarUserDropdown">
                                     <li>
-                                        <a class="dropdown-item" href="{{ url_for('web.change_password') }}">
+                                        <a class="dropdown-item" href="{{ url_for('auth.change_password') }}">
                                             <i class="bi bi-key-fill me-2"></i>Сменить пароль
                                         </a>
                                     </li>
                                     <li><hr class="dropdown-divider"></li>
                                     <li>
-                                        <a class="dropdown-item text-danger" href="{{ url_for('web.logout') }}">
+                                        <a class="dropdown-item text-danger" href="{{ url_for('auth.logout') }}">
                                             <i class="bi bi-box-arrow-right me-2"></i>Выйти
                                         </a>
                                     </li>
