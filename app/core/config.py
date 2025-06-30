@@ -23,6 +23,9 @@ class Config:
     MAIL_RECIPIENTS = ['d.plakhotnyi@gh.uz']
     USD_TO_UZS_RATE = 13050.0
 
+    SQLALCHEMY_BINDS = {
+        'discounts': f'sqlite:///{os.path.join(os.path.abspath(os.path.dirname(__file__)), "..", "..", "instance", "discounts.db")}'
+    }
 class DevelopmentConfig(Config):
     DEBUG = True
     # Основной базой остается локальная SQLite, здесь ничего не меняем.

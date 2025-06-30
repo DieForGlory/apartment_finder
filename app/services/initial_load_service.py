@@ -86,32 +86,29 @@ def _migrate_mysql_estate_data_to_sqlite():
 
 def load_all_initial_data(is_initial_setup=False):
     """
-    Наполняет локальную БД данными из MySQL и Excel.
+    Наполняет ОБЕ базы данных.
     Вызывается только при ПЕРВОНАЧАЛЬНОМ запуске, когда БД пуста.
-
-    is_initial_setup: True, если это первый запуск приложения и БД создается.
     """
     print("\n[INITIAL LOAD] 🚀 НАЧАЛО ПРОЦЕССА ПЕРВОНАЧАЛЬНОЙ ЗАГРУЗКИ ДАННЫХ...")
 
     if is_initial_setup:
-        # Create all tables if it's the very first setup
-        print("[INITIAL LOAD] 🛠️ Создание всех таблиц базы данных...")
+        print("[INITIAL LOAD] 🛠️ Создание всех таблиц в обеих базах данных...")
+        # db.create_all() создаст таблицы во всех привязанных базах данных
         db.create_all()
         print("[INITIAL LOAD] ✔️ Таблицы созданы.")
 
     try:
         # 1. Мигрируем данные по недвижимости из MySQL
-        # _migrate_mysql_estate_data_to_sqlite уже очищает EstateHouse и EstateSell
         _migrate_mysql_estate_data_to_sqlite()
 
-        # 2. Загружаем скидки из Excel (только если их нет или нужно перезаписать)
-        # Очищаем существующие версии скидок для чистой начальной загрузки
+        # 2. Очищаем и загружаем скидки из Excel (только при первоначальной настройке)
         print("[INITIAL LOAD] 🧹 Очистка существующих версий скидок для начальной загрузки...")
-        db.session.query(Discount).delete()
-        db.session.query(DiscountVersion).delete()
+        # Явно указываем, из какой сессии удалять (хотя bind_key в модели уже это делает)
+        # Это для дополнительной ясности
+        db.session.query(Discount).delete(synchronize_session=False)
+        db.session.query(DiscountVersion).delete(synchronize_session=False)
         db.session.commit()
         print("[INITIAL LOAD] ✔️ Версии скидок очищены.")
-
 
         if os.path.exists(DISCOUNTS_EXCEL_PATH):
             print(f"[INITIAL LOAD] 📥 Загрузка скидок из файла: {DISCOUNTS_EXCEL_PATH}")
@@ -121,14 +118,14 @@ def load_all_initial_data(is_initial_setup=False):
                 is_active=True
             )
             db.session.add(initial_version)
-            db.session.flush() # Get ID for initial_version
+            db.session.flush()
 
             process_discounts_from_excel(DISCOUNTS_EXCEL_PATH, initial_version.id)
             print("[INITIAL LOAD] ✔️ Скидки из Excel успешно подготовлены в 'Версию 1'.")
         else:
             print(f"[INITIAL LOAD] ⚠️  ВНИМАНИЕ: Файл со скидками не найден ({DISCOUNTS_EXCEL_PATH}). Пропускаем шаг.")
 
-        db.session.commit() # Final commit for the initial load process
+        db.session.commit()
         print("[INITIAL LOAD] ✅ ПРОЦЕСС ПЕРВОНАЧАЛЬНОЙ ЗАГРУЗКИ ЗАВЕРШЕН.\n")
 
     except Exception as e:
@@ -141,10 +138,12 @@ def load_all_initial_data(is_initial_setup=False):
 def refresh_estate_data_from_mysql():
     """
     Обновляет только данные по недвижимости (дома, квартиры) из MySQL.
-    Используется для кнопки "Обновить данные".
+    НЕ ТРОГАЕТ СКИДКИ.
+    Используется для кнопки "Обновить данные" и при каждом перезапуске.
     """
     print("\n[REFRESH DATA] 🔄 НАЧАЛО ПРОЦЕССА ОБНОВЛЕНИЯ ДАННЫХ НЕДВИЖИМОСТИ ИЗ MySQL...")
     try:
+        # Эта функция теперь будет вызываться при каждом запуске приложения
         _migrate_mysql_estate_data_to_sqlite()
         print("[REFRESH DATA] ✅ ДАННЫЕ НЕДВИЖИМОСТИ УСПЕШНО ОБНОВЛЕНЫ ИЗ MySQL.\n")
         return True

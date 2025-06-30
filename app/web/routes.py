@@ -308,66 +308,87 @@ def apartment_details(sell_id):
 @web_bp.route('/commercial-offer/<int:sell_id>')
 def generate_commercial_offer(sell_id):
     """
-    Генерирует коммерческое предложение для конкретного объекта.
-    Получает актуальные цены из параметров запроса и курс USD с API ЦБ.
+    Генерирует КП. Пересчитывает все цены на сервере на основе выбранных скидок.
     """
+    # 1. Получаем базовые данные по квартире и всем возможным скидкам
     card_data = get_apartment_card_data(sell_id)
+    if not card_data.get('apartment'):
+        return "Apartment not found", 404
 
-    passed_pricing = {}
+    # 2. Получаем JSON с выбранными пользователем скидками из URL
+    selections_json = request.args.get('selections', '{}')
+    try:
+        user_selections = json.loads(selections_json)
+    except json.JSONDecodeError:
+        user_selections = {}
 
-    for option in card_data.get('pricing', []):
-        payment_method = option['payment_method']
-
-        final_price_key = f"fp_{payment_method}"
-        final_price_str = request.args.get(final_price_key)
-
-        initial_payment_key = f"ip_{payment_method}"
-        initial_payment_str = request.args.get(initial_payment_key)
-
-        base_price_deducted_key = f"bpd_{payment_method}"
-        base_price_deducted_str = request.args.get(base_price_deducted_key)
-
-        current_option_data = {
-            'payment_method': payment_method,
-            'base_price': option['base_price'],
-            'deduction': option['deduction'],
-            'price_after_deduction': float(base_price_deducted_str) if base_price_deducted_str else option[
-                'price_after_deduction'],
-            'final_price': float(final_price_str) if final_price_str else option['final_price'],
-            'initial_payment': float(initial_payment_str) if initial_payment_str else None
-        }
-        passed_pricing[payment_method] = current_option_data
-
+    # 3. Пересчитываем все варианты оплаты на сервере
     updated_pricing_for_template = []
-    for option_from_service in card_data.get('pricing', []):
-        method = option_from_service['payment_method']
-        if method in passed_pricing:
-            updated_pricing_for_template.append(passed_pricing[method])
-        else:
-            updated_pricing_for_template.append(option_from_service)
+    base_options = card_data.get('pricing', [])
+    all_discounts = card_data.get('all_discounts_for_property_type', [])
 
-    for method, data_from_passed in passed_pricing.items():
-        if data_from_passed not in updated_pricing_for_template:
-            updated_pricing_for_template.append(data_from_passed)
+    for option in base_options:
+        type_key = option['type_key']
+        base_price_deducted = option['price_after_deduction']
+
+        # Начинаем с базовых скидок (МПП, РОП)
+        total_discount_rate = sum(d['value'] for d in option.get('discounts', []))
+
+        applied_discounts_details = []
+        for disc in option.get('discounts', []):
+            applied_discounts_details.append({
+                'name': disc['name'],
+                'amount': base_price_deducted * disc['value']
+            })
+
+        # Ищем объект скидок для этого типа оплаты
+        base_payment_method_value = '100% оплата' if '100' in type_key or 'full_payment' in type_key else 'Ипотека'
+        discount_object = next((d for d in all_discounts if d['payment_method'] == base_payment_method_value), None)
+
+        # Применяем дополнительные скидки, выбранные пользователем
+        if type_key in user_selections and discount_object:
+            for disc_name, disc_percent in user_selections[type_key].items():
+                server_percent = discount_object.get(disc_name, 0) * 100
+                # Убедимся, что пользователь не подделал процент скидки
+                if abs(float(disc_percent) - server_percent) < 0.01:
+                    rate_to_add = server_percent / 100.0
+                    total_discount_rate += rate_to_add
+                    applied_discounts_details.append({
+                        'name': disc_name.upper(),
+                        'amount': base_price_deducted * rate_to_add
+                    })
+
+        # Пересчитываем финальную цену и ПВ на основе итоговой ставки
+        final_price = base_price_deducted * (1 - total_discount_rate)
+        initial_payment = None
+
+        if 'mortgage' in type_key:
+            from ..services.selection_service import MAX_MORTGAGE, MIN_INITIAL_PAYMENT_PERCENT
+            initial_payment = final_price - MAX_MORTGAGE
+            min_req_payment = final_price * MIN_INITIAL_PAYMENT_PERCENT
+            if initial_payment < 0: initial_payment = 0
+            if initial_payment < min_req_payment: initial_payment = min_req_payment
+            final_price = initial_payment + MAX_MORTGAGE
+
+        # Собираем итоговый объект для шаблона
+        option['final_price'] = final_price
+        option['initial_payment'] = initial_payment
+        option['applied_discounts'] = applied_discounts_details
+        updated_pricing_for_template.append(option)
 
     card_data['pricing'] = updated_pricing_for_template
 
+    # Получаем курс валют и дату
     current_date = datetime.now().strftime("%d.%m.%Y %H:%M")
-
-    # --- НОВОЕ: Получаем актуальный курс USD ---
     usd_rate_from_cbu = get_current_usd_rate()
-    # Если курс ЦБ не получен, используем захардкоженный из конфига как запасной вариант
-    fallback_usd_rate = current_app.config.get('USD_TO_UZS_RATE', 12650.0)  # Запасной курс из config.py
+    fallback_usd_rate = current_app.config.get('USD_TO_UZS_RATE', 12650.0)
     actual_usd_rate = usd_rate_from_cbu if usd_rate_from_cbu is not None else fallback_usd_rate
-    print(
-        f"[ROUTES] Итоговый курс USD для КП: {actual_usd_rate} (из ЦБ: {usd_rate_from_cbu}, запасной: {fallback_usd_rate})")
-    # --- КОНЕЦ НОВОГО ---
 
     return render_template(
         'commercial_offer.html',
         data=card_data,
         current_date=current_date,
-        usd_to_uzs_rate=actual_usd_rate,  # Передаем курс в шаблон
+        usd_to_uzs_rate=actual_usd_rate,
         title=f"КП по объекту ID {sell_id}"
     )
 

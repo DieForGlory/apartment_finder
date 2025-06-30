@@ -130,6 +130,7 @@ def get_apartment_card_data(sell_id: int):
     Собирает все данные для детальной карточки квартиры, включая все варианты оплаты
     и максимальные значения дополнительных скидок для JavaScript.
     """
+    # ... (начало функции, получение sell, active_version, property_type_enum - без изменений) ...
     sell = db.session.query(EstateSell).options(joinedload(EstateSell.house)).filter_by(id=sell_id).first()
     if not sell:
         abort(404)
@@ -149,6 +150,7 @@ def get_apartment_card_data(sell_id: int):
         complex_name=sell.house.complex_name
     ).all()
 
+    # ... (сериализация скидок и данных о квартире - без изменений) ...
     serialized_discounts = []
     for d in all_discounts_for_property_type:
         serialized_discounts.append({
@@ -165,8 +167,6 @@ def get_apartment_card_data(sell_id: int):
             'action': d.action if d.action is not None else 0.0,
             'cadastre_date': d.cadastre_date.isoformat() if d.cadastre_date else None
         })
-
-    # ... (отладочный вывод serialized_discounts)
 
     serialized_house = {
         'id': sell.house.id,
@@ -187,75 +187,109 @@ def get_apartment_card_data(sell_id: int):
         'estate_area': sell.estate_area,
         'house': serialized_house
     }
+    # --- НАЧАЛО ИЗМЕНЕНИЙ В ЛОГИКЕ РАСЧЕТА ---
 
     discounts_map = {
         (d['complex_name'], PaymentMethod(d['payment_method'])): d
         for d in serialized_discounts
     }
 
-    pricing_options = []
+    pricing_options = []  # <-- Здесь будем хранить все 4 варианта
     base_price = serialized_apartment['estate_price']
     price_after_deduction = base_price - DEDUCTION_AMOUNT
 
+    # --- 1. Расчет для "100% оплата" и "Легкий старт (100% оплата)" ---
+    pm_full_payment = PaymentMethod.FULL_PAYMENT
+    discount_data_100 = discounts_map.get((serialized_house['complex_name'], pm_full_payment))
+
+    if discount_data_100:
+        mpp_val = discount_data_100.get('mpp', 0.0)
+        rop_val = discount_data_100.get('rop', 0.0)
+
+        # Расчет для "Легкий старт (100% оплата)" - БЕЗ КД
+        rate_easy_start_100 = mpp_val + rop_val
+        price_easy_start_100 = price_after_deduction * (1 - rate_easy_start_100)
+        pricing_options.append({
+            "payment_method": "Легкий старт (100% оплата)",
+            "type_key": "easy_start_100",  # Уникальный ключ для фронтенда
+            "base_price": base_price,
+            "deduction": DEDUCTION_AMOUNT,
+            "price_after_deduction": price_after_deduction,
+            "final_price": price_easy_start_100,
+            "initial_payment": None,
+            "mortgage_body": None,
+            "discounts": [{"name": "МПП", "value": mpp_val}, {"name": "РОП", "value": rop_val}]
+        })
+
+    # --- 2. Расчет для "Ипотека" и "Легкий старт (ипотека)" ---
+    pm_mortgage = PaymentMethod.MORTGAGE
+    discount_data_mortgage = discounts_map.get((serialized_house['complex_name'], pm_mortgage))
+
+    if discount_data_mortgage:
+        mpp_val = discount_data_mortgage.get('mpp', 0.0)
+        rop_val = discount_data_mortgage.get('rop', 0.0)
+
+        # Расчет для "Легкий старт (ипотека)" - БЕЗ КД
+        rate_easy_start_mortgage = mpp_val + rop_val
+        price_for_easy_mortgage = price_after_deduction * (1 - rate_easy_start_mortgage)
+
+        initial_payment_easy = price_for_easy_mortgage - MAX_MORTGAGE
+        min_required_payment_easy = price_for_easy_mortgage * MIN_INITIAL_PAYMENT_PERCENT
+
+        if initial_payment_easy < 0: initial_payment_easy = 0
+        if initial_payment_easy < min_required_payment_easy: initial_payment_easy = min_required_payment_easy
+
+        final_price_easy_mortgage = initial_payment_easy + MAX_MORTGAGE
+
+        pricing_options.append({
+            "payment_method": "Легкий старт (ипотека)",
+            "type_key": "easy_start_mortgage",  # Уникальный ключ
+            "base_price": base_price,
+            "deduction": DEDUCTION_AMOUNT,
+            "price_after_deduction": price_after_deduction,
+            "final_price": final_price_easy_mortgage,
+            "initial_payment": initial_payment_easy,
+            "mortgage_body": MAX_MORTGAGE,
+            "discounts": [{"name": "МПП", "value": mpp_val}, {"name": "РОП", "value": rop_val}]
+        })
+
+    # --- 3. Добавляем стандартные калькуляторы (они уже есть в коде, можно просто скопировать и адаптировать) ---
     for payment_method_enum in PaymentMethod:
         discount_data_for_method = discounts_map.get((serialized_house['complex_name'], payment_method_enum))
-
         mpp_val = discount_data_for_method.get('mpp', 0.0) if discount_data_for_method else 0.0
         rop_val = discount_data_for_method.get('rop', 0.0) if discount_data_for_method else 0.0
-        kd_val = discount_data_for_method.get('kd', 0.0) if discount_data_for_method else 0.0
-        # Обратите внимание, что KD, OPT, GD, Holding, Shareholder, Action
-        # передаются в all_discounts_for_property_type для JS,
-        # но в этом блоке только те, что используются в "статическом" расчете
 
         option_details = {
             "payment_method": payment_method_enum.value,
+            "type_key": payment_method_enum.name.lower(),  # Ключ для стандартных типов
             "base_price": base_price,
             "deduction": DEDUCTION_AMOUNT,
             "price_after_deduction": price_after_deduction,
             "final_price": None,
             "initial_payment": None,
             "mortgage_body": None,
-            "discounts": []  # Здесь будут только статичные скидки (МПП, РОП)
+            "discounts": []
         }
 
         if payment_method_enum == PaymentMethod.FULL_PAYMENT:
-            # ИЗМЕНЕНИЕ ЗДЕСЬ: Убираем kd_val из total_discount_rate для 100% оплаты
             total_discount_rate = mpp_val + rop_val
             final_price = price_after_deduction * (1 - total_discount_rate)
             option_details["final_price"] = final_price
-            option_details["discounts"] = [
-                {"name": "МПП", "value": mpp_val},
-                {"name": "РОП", "value": rop_val},
-                # ИЗМЕНЕНИЕ ЗДЕСЬ: Не включаем KD в список дефолтных скидок, если его не нужно отображать
-                # Она все равно будет в all_discounts_for_property_type для JS для ручного применения
-            ]
-            # Однако, если KD было больше 0, и мы его не добавляем в discounts,
-            # но хотим, чтобы оно было доступно в all_discounts_for_property_type, это нормально.
-            # Нам нужно убедиться, что оно попадает в all_discounts_for_property_type.
-            # Если kd_val > 0, но оно не в списке discounts, оно не отобразится как "статическая" скидка,
-            # но будет доступно в дропдауне.
+            option_details["discounts"] = [{"name": "МПП", "value": mpp_val}, {"name": "РОП", "value": rop_val}]
 
         elif payment_method_enum == PaymentMethod.MORTGAGE:
             total_discount_rate = mpp_val + rop_val
             final_price = price_after_deduction * (1 - total_discount_rate)
             initial_payment = final_price - MAX_MORTGAGE
-
-            if initial_payment < 0:
-                initial_payment = 0
-                final_price = MAX_MORTGAGE
-
+            if initial_payment < 0: initial_payment = 0
             min_required_payment = final_price * MIN_INITIAL_PAYMENT_PERCENT
-            if initial_payment < min_required_payment:
-                initial_payment = min_required_payment
-                final_price = initial_payment + MAX_MORTGAGE
+            if initial_payment < min_required_payment: initial_payment = min_required_payment
 
-            option_details["final_price"] = final_price
+            final_price_mortgage = initial_payment + MAX_MORTGAGE
+            option_details["final_price"] = final_price_mortgage
             option_details["initial_payment"] = initial_payment
             option_details["mortgage_body"] = MAX_MORTGAGE
-            option_details["discounts"] = [
-                {"name": "МПП", "value": mpp_val},
-                {"name": "РОП", "value": rop_val},
-            ]
+            option_details["discounts"] = [{"name": "МПП", "value": mpp_val}, {"name": "РОП", "value": rop_val}]
 
         if option_details["final_price"] is not None:
             pricing_options.append(option_details)
@@ -263,5 +297,5 @@ def get_apartment_card_data(sell_id: int):
     return {
         'apartment': serialized_apartment,
         'pricing': pricing_options,
-        'all_discounts_for_property_type': serialized_discounts  # KD все еще здесь, для ручного применения
+        'all_discounts_for_property_type': serialized_discounts
     }

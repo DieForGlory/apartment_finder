@@ -1,0 +1,99 @@
+/* Кастомные стили для карточки объекта */
+.gradient-heading {
+    background: -webkit-linear-gradient(45deg, var(--gh-gold), #a78d53);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 700;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+}
+
+.card-glass {
+    background: rgba(var(--gh-element-bg-rgb), 0.85);
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(var(--bs-border-color-rgb), 0.15);
+    border-radius: 1rem;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+    transition: all 0.3s ease-in-out;
+}
+.card-glass:hover {
+    box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+    transform: translateY(-3px);
+}
+
+.list-group-item-custom {
+    background-color: transparent;
+    border-bottom: 1px solid rgba(var(--bs-border-color-rgb), 0.1);
+    padding-left: 0;
+    padding-right: 0;
+}
+.list-group-item-custom:last-child {
+    border-bottom: none;
+}
+
+.price-final {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--gh-gold);
+    text-shadow: 0 0 5px rgba(var(--gh-gold-rgb), 0.3);
+}
+
+.price-initial {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--bs-primary);
+}
+
+.payment-option-card {
+    border: 1px solid rgba(var(--bs-border-color-rgb), 0.2);
+    border-radius: 0.75rem;
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+    position: relative;
+    background-color: rgba(var(--bs-body-color-rgb), 0.02); /* Очень легкий фон, почти невидимый */
+}
+.payment-option-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+}
+
+/* ОБНОВЛЕННЫЕ ЦВЕТНЫЕ ГРАНИЦЫ */
+.payment-option-card.full_payment,
+.payment-option-card.easy_start_100 {
+    border-left: 4px solid var(--gh-gold);
+}
+.payment-option-card.mortgage,
+.payment-option-card.easy_start_mortgage {
+    border-left: 4px solid var(--bs-primary);
+}
+
+
+.additional-discount-item { cursor: pointer; transition: background-color 0.2s ease, color 0.2s ease; }
+.additional-discount-item:hover { background-color: var(--bs-tertiary-bg); }
+.additional-discount-item.active { background-color: rgba(var(--bs-success-rgb), 0.2); color: var(--bs-success); font-weight: bold; }
+[data-bs-theme="dark"] .additional-discount-item.active { background-color: rgba(var(--bs-success-rgb), 0.3); }
+
+.dropdown-menu {
+    backdrop-filter: blur(8px);
+    background-color: rgba(var(--gh-element-bg-rgb), 0.9);
+    border-color: rgba(var(--bs-border-color-rgb), 0.1);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+}
+
+.btn-additional-discounts-toggle.active {
+    background-color: var(--bs-success);
+    border-color: var(--bs-success);
+    color: white;
+}
+.btn-additional-discounts-toggle.active:hover {
+    background-color: var(--bs-success-dark);
+    border-color: var(--bs-success-dark);
+}
+
+hr.my-2 {
+    border-top: 1px dashed rgba(var(--bs-body-color-rgb), 0.2);
+}
+
+.payment-option-card .card-header {
+    background-color: transparent; /* Убираем серый фон из заголовка карточки */
+}

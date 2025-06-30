@@ -7,334 +7,263 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;700&display=swap" rel="stylesheet">
-
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        /* Базовые стили для КП */
+        /* Базовые стили для премиального вида и печати на А4 */
         body {
             font-family: 'Montserrat', sans-serif;
-            margin: 10mm;
-            font-size: 10.5pt;
-            color: #333;
-        }
-        .container {
-            max-width: 210mm;
+            margin: 0;
             padding: 0;
+            background-color: #fff;
+            font-size: 9pt;
+            color: #1a1a1a;
         }
+        .page-container {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 10mm;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* --- НАЧАЛО ИЗМЕНЕНИЙ --- */
         .header {
             text-align: center;
-            margin-bottom: 1.5rem;
-            padding-bottom: 0.7rem;
-            border-bottom: 2px solid #c4a668;
+            margin-bottom: 0.5rem; /* Уменьшаем нижний отступ */
+            padding-bottom: 0;   /* Убираем нижний паддинг */
             position: relative;
         }
-        .header .logo {
+        .section-title {
+            font-size: 12pt;
+            font-weight: 600;
+            color: #333;
+            border-bottom: 2px solid #c4a668;
+            padding-bottom: 0.4rem;
+            margin-top: 0.5rem; /* Уменьшаем верхний отступ */
+            margin-bottom: 1rem;
+        }
+        /* --- КОНЕЦ ИЗМЕНЕНИЙ --- */
+
+        .header-logo {
             position: absolute;
             top: 0;
             left: 0;
-            height: 40px;
+            height: 34px;
             width: auto;
         }
         .header h1 {
             color: #c4a668;
             font-weight: 700;
-            font-size: 19pt;
-            margin-bottom: 0.3rem;
+            font-size: 18pt;
+            margin: 0;
         }
         .header p {
-            font-size: 9pt;
+            font-size: 8.5pt;
             color: #555;
-            margin-bottom: 0.2rem;
+            margin-top: 0.2rem;
         }
-        .section-title {
-            font-size: 13pt;
-            font-weight: 700;
-            color: #495057;
-            border-bottom: 1px solid #ccc;
-            padding-bottom: 0.5rem;
-            margin-top: 2rem;
-            margin-bottom: 1.5rem;
-        }
-        .info-block, .payment-option-block {
-            background-color: #f8f9fa;
-            border: 1px solid #e9ecef;
+        .info-block {
+            background-color: #fcfcfc;
+            border: 1px solid #eee;
             border-radius: 0.4rem;
-            padding: 1.2rem;
-            margin-bottom: 1.8rem;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-            display: flex;
-            flex-direction: column;
+            padding: 0.75rem 1rem;
         }
         .info-item {
             display: flex;
             justify-content: space-between;
-            padding: 0.4rem 0;
-            border-bottom: 1px dashed #e0e0e0;
-            font-size: 10pt;
+            align-items: baseline;
+            padding: 0.5rem 0.2rem;
+            border-bottom: 1px solid #f0f0f0;
         }
         .info-item:last-child {
             border-bottom: none;
         }
         .info-label {
             font-weight: 500;
-            color: #6c757d;
-            flex-basis: 60%;
+            color: #666;
+            font-size: 9pt;
         }
         .info-value {
             font-weight: 600;
-            color: #343a40;
-            text-align: right;
-            flex-basis: 40%;
+            color: #212529;
+            font-size: 10pt;
+        }
+
+        .row > .col-6 {
+            display: flex;
+            align-items: stretch;
         }
 
         .payment-option-block {
-            border-left: 4px solid #c4a668;
-            margin-bottom: 2.2rem;
-        }
-        .payment-option-block.mortgage {
-            border-left: 4px solid #0d6efd;
-        }
-        /* Изменяем цвет заголовка 100% оплаты */
-        .payment-option-block.full-payment h3 {
-            color: #000; /* Золотой цвет для заголовка 100% оплаты */
-            border-bottom-color: #c4a668;
-        }
-        .payment-option-block h3 {
-            font-size: 15pt;
-            font-weight: 700;
-            margin-bottom: 1rem;
-            padding-bottom: 0.5rem;
-            border-bottom: 1px solid; /* Общий стиль для границы, чтобы цвет задавался выше */
+            border: 1px solid #ddd;
+            border-radius: 0.4rem;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            background-color: #fff;
         }
 
-        .payment-details-table {
-            font-size: 9.5pt;
-            margin-bottom: 0.8rem;
+        .payment-option-block.full_payment,
+        .payment-option-block.easy_start_100 {
+            border-left: 4px solid #c4a668;
         }
-        .payment-details-table td {
-            padding: 0.2rem 0.3rem;
+        .payment-option-block.mortgage,
+        .payment-option-block.easy_start_mortgage {
+            border-left: 4px solid #0d6efd;
         }
-        .payment-details-table .benefit-row {
+
+        .payment-option-block h3 {
+            font-size: 11pt;
             font-weight: 600;
-            color: #28a745;
+            margin: 0;
+            padding: 0.6rem 1rem;
+            border-bottom: 1px solid #ddd;
         }
-        .payment-details-table .price-per-sqm-row {
-            font-weight: 600;
-            color: #0d6efd;
-            border-top: 1px dashed #e0e0e0;
-            padding-top: 0.5rem;
+        .payment-option-block.full_payment h3,
+        .payment-option-block.easy_start_100 h3 {
+            background-color: #fffaf0;
+            color: #a87d44;
+        }
+        .payment-option-block.mortgage h3,
+        .payment-option-block.easy_start_mortgage h3 {
+            background-color: #f0f7ff;
+            color: #0056b3;
+        }
+
+        .card-content {
+            padding: 0.75rem;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
         }
 
         .price-summary {
-            background-color: #fff;
-            border: 1px solid #c4a668;
-            border-radius: 0.4rem;
-            padding: 1rem;
-            margin-top: 1.5rem;
             text-align: center;
-            display: flex;
-            flex-direction: column;
-            justify-content: center; /* Центрируем содержимое вертикально */
-            min-height: 120px; /* Установим минимальную высоту для единообразия */
-            flex-grow: 1; /* Чтобы price-summary мог растягиваться внутри card-body */
+            padding-top: 0.5rem;
+            margin-top: auto;
+            border-top: 1px dashed #ccc;
         }
 
-        /* Добавляем класс для центрирования содержимого внутри price-summary */
-        .price-summary-centered {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center; /* Центрируем горизонтально */
-            height: 100%; /* Занимает всю доступную высоту price-summary */
-            text-align: center;
+        .payment-details-table {
+            font-size: 8.5pt;
+        }
+        .payment-details-table td {
+            padding: 0.25rem 0.2rem;
+        }
+        .payment-details-table .price-per-sqm-row td {
+            padding-top: 0.4rem;
+            border-top: 1px solid #eee;
+            font-weight: 600;
         }
 
-        .price-summary p {
-            margin-bottom: 0.4rem;
-            font-size: 10pt;
+        .summary-label {
+            font-size: 8pt;
+            text-transform: uppercase;
+            color: #777;
+            margin-bottom: 0.1rem;
         }
-        .price-summary .final-price-label {
-            font-size: 11pt;
+        .summary-value {
+            font-size: 16pt;
             font-weight: 700;
-            color: #495057;
+            margin: 0;
+            line-height: 1.2;
         }
-        .price-summary .final-price-value {
-            font-size: 18pt;
-            font-weight: 800;
-            color: #c4a668;
-            margin-bottom: 0.8rem;
+        .summary-value.gold {
+            background: linear-gradient(to right, #DAA520, #B8860B);
+            -webkit-background-clip: text;
+            color: transparent;
         }
-        .price-summary .initial-payment-value {
-            font-size: 14pt;
-            font-weight: 700;
-            color: #0d6efd;
-        }
+        .summary-value.blue { color: #0d6efd; }
 
         .footer {
             text-align: center;
-            margin-top: 3rem;
-            padding-top: 1.5rem;
+            margin-top: auto;
+            padding-top: 1rem;
             border-top: 1px solid #ccc;
-            font-size: 8.5pt;
+            font-size: 8pt;
             color: #888;
         }
-        .footer p {
-            margin-bottom: 0.15rem;
-        }
-
-        .row {
-            --bs-gutter-y: 1.5rem;
-        }
-        .row > .col-6.d-flex {
-            margin-top: var(--bs-gutter-y);
-        }
-
-        /* Для печати */
         @media print {
-            body {
-                margin: 0;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-            .container {
-                width: 210mm;
-                height: 297mm;
-                box-sizing: border-box;
-                padding: 10mm;
-                display: flex;
-                flex-direction: column;
-            }
-            .no-print {
-                display: none !important;
-            }
-            .header, .section-title, .info-block, .payment-option-block, .footer {
-                margin-bottom: 0.3rem;
-                padding-bottom: 0.2rem;
-            }
-            .payment-option-block {
-                flex-grow: 1;
-                display: flex;
-                flex-direction: column;
-            }
-            .payment-option-block .card-body {
-                flex-grow: 1;
-                display: flex;
-                flex-direction: column;
-                justify-content: space-between;
-            }
-            .payment-option-block .price-summary {
-                margin-top: auto;
-                min-height: 100px;
-            }
-            .info-item, .payment-details-table td {
-                padding: 0.2rem 0;
-            }
-            .footer {
-                margin-top: 1rem;
-            }
+            body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .no-print { display: none !important; }
+            .page-container { min-height: 0; }
         }
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="page-container">
         <div class="no-print d-flex justify-content-end mb-3">
             <div class="form-check form-switch fs-5">
                 <input class="form-check-input" type="checkbox" id="currencySwitch">
                 <label class="form-check-label text-muted" for="currencySwitch" style="font-size: 1rem;">Показать в USD</label>
             </div>
         </div>
-
         <div class="header">
-            <img src="{{ url_for('static', filename='logo.svg') }}" alt="Golden House Logo" class="logo no-print">
+            <img src="{{ url_for('static', filename='logo_light.svg') }}" alt="Логотип" class="header-logo">
             <h1>Коммерческое предложение</h1>
-            <p>Golden House | Жилая недвижимость</p>
-            <p>Дата формирования: {{ current_date }}</p>
+            <p><strong>Golden House | Жилая недвижимость. Дата: {{ current_date }}</strong></p>
         </div>
 
-        <div class="section-title">Информация об объекте</div>
+        <div class="section-title">1. Информация об объекте</div>
         <div class="info-block">
-            <div class="info-item">
-                <span class="info-label">Жилой комплекс:</span>
-                <span class="info-value">{{ data.apartment.house.complex_name if data.apartment and data.apartment.house else 'N/A' }}</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">Номер дома:</span>
-                <span class="info-value">{{ data.apartment.house.geo_house if data.apartment and data.apartment.house else 'N/A' }}</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">Тип недвижимости:</span>
-                <span class="info-value">{{ data.apartment.estate_sell_category if data.apartment else 'N/A' }}</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">Этаж:</span>
-                <span class="info-value">{{ data.apartment.estate_floor if data.apartment else 'N/A' }}</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">Количество комнат:</span>
-                <span class="info-value">{{ data.apartment.estate_rooms if data.apartment else 'N/A' }}</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">Общая площадь:</span>
-                <span class="info-value">{{ data.apartment.estate_area if data.apartment else 'N/A' }} м²</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">Цена за м² (Прайс):</span>
-                <span class="info-value price-uzs" data-price="{{ data.apartment.estate_price_m2 if data.apartment and data.apartment.estate_price_m2 is not none else 0 }}">{{ "{:,.0f}".format(data.apartment.estate_price_m2) if data.apartment and data.apartment.estate_price_m2 is not none else 'N/A' }} UZS</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">Прайс:</span>
-                <span class="info-value price-uzs" data-price="{{ data.apartment.estate_price if data.apartment and data.apartment.estate_price is not none else 0 }}">{{ "{:,.0f}".format(data.apartment.estate_price) if data.apartment and data.apartment.estate_price is not none else 'N/A' }} UZS</span>
-            </div>
+            <div class="info-item"><span class="info-label">Жилой комплекс:</span><span class="info-value">{{ data.apartment.house.complex_name if data.apartment.house else 'N/A' }}</span></div>
+            <div class="info-item"><span class="info-label">Номер дома:</span><span class="info-value">{{ data.apartment.house.geo_house if data.apartment.house else 'N/A' }}</span></div>
+            <div class="info-item"><span class="info-label">Тип/Этаж/Комнат:</span><span class="info-value">{{ data.apartment.estate_sell_category }} / {{ data.apartment.estate_floor }} / {{ data.apartment.estate_rooms }}</span></div>
+            <div class="info-item"><span class="info-label">Общая площадь:</span><span class="info-value">{{ data.apartment.estate_area }} м²</span></div>
+            <div class="info-item"><span class="info-label">Цена за м² (Прайс):</span><span class="info-value price-uzs" data-price="{{ data.apartment.estate_price_m2 }}">{{ "{:,.0f}".format(data.apartment.estate_price_m2) }} UZS</span></div>
+            <div class="info-item"><span class="info-label">Прайс:</span><span class="info-value price-uzs" data-price="{{ data.apartment.estate_price }}">{{ "{:,.0f}".format(data.apartment.estate_price) }} UZS</span></div>
         </div>
 
-        <div class="section-title">Предлагаемые варианты оплаты</div>
+        <div class="section-title">2. Предлагаемые варианты оплаты</div>
         {% if data.pricing %}
-            <div class="row d-flex align-items-stretch">
+            <div class="row">
             {% for option in data.pricing %}
-                {% set block_class = '' %}
-                {% if option.payment_method == '100% оплата' %}{% set block_class = 'full-payment' %}
-                {% elif option.payment_method == 'Ипотека' %}{% set block_class = 'mortgage' %}
-                {% endif %}
-                <div class="col-6 d-flex">
-                    <div class="payment-option-block {{ block_class }} flex-grow-1">
+                <div class="col-6 mb-4">
+                    <div class="payment-option-block {{ option.type_key }}">
                         <h3>{{ option.payment_method }}</h3>
-                        <table class="table table-sm table-borderless payment-details-table mb-2">
-                            <tbody>
-                                <tr class="text-muted">
-                                    <td>Прайс:</td>
-                                    <td class="text-end price-uzs" data-price="{{ option.base_price }}">{{ "{:,.0f}".format(option.base_price) }} UZS</td>
-                                </tr>
-                                <tr class="text-danger">
-                                    <td>Платное бронирование:</td>
-                                    <td class="text-end price-uzs" data-price="{{ option.deduction }}">- {{ "{:,.0f}".format(option.deduction) }} UZS</td>
-                                </tr>
-                                {% set benefit_amount = option.base_price - option.final_price %}
-                                <tr class="benefit-row">
-                                    <td>Ваша выгода:</td>
-                                    <td class="text-end price-uzs" data-price="{{ benefit_amount }}">- {{ "{:,.0f}".format(benefit_amount) }} UZS</td>
-                                </tr>
-                                {% set price_per_sqm_after_discount_option = 0 %}
-                                {% if option.final_price is not none and data.apartment.estate_area and data.apartment.estate_area > 0 %}
-                                    {% set price_per_sqm_after_discount_option = option.final_price / data.apartment.estate_area %}
-                                {% endif %}
-                                <tr class="price-per-sqm-row">
-                                    <td>Цена за м² (со скидкой):</td>
-                                    <td class="text-end price-uzs" data-price="{{ price_per_sqm_after_discount_option }}">{{ "{:,.0f}".format(price_per_sqm_after_discount_option) if price_per_sqm_after_discount_option > 0 else 'N/A' }} UZS</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                        <hr>
-                        {# Блок с ценами price-summary теперь имеет класс price-summary-centered для центрирования #}
-                        <div class="price-summary">
-                            <div class="price-summary-centered"> {# Новый оберточный div для центрирования #}
-                                <p class="final-price-label">Итоговая стоимость:</p>
-                                <p class="final-price-value price-uzs" data-price="{{ option.final_price }}">{{ "{:,.0f}".format(option.final_price) }} UZS</p>
-                                {% if option.initial_payment is not none %}
-                                    <p class="initial-payment-label">Первоначальный взнос:</p>
-                                    <p class="initial-payment-value price-uzs" data-price="{{ option.initial_payment }}">{{ "{:,.0f}".format(option.initial_payment) }} UZS</p>
-                                    <p class="text-muted" style="font-size: 8pt; margin-top: 0.5rem;">
-                                        (Остаток <span class="price-uzs" data-price="{{ option.final_price - option.initial_payment }}">{{ "{:,.0f}".format(option.final_price - option.initial_payment) }}</span> UZS может быть оформлен в ипотеку)
-                                    </p>
+                        <div class="card-content">
+                            <div>
+                                <table class="table table-sm table-borderless payment-details-table">
+                                    <tbody>
+                                        <tr><td>Прайс:</td><td class="text-end price-uzs" data-price="{{ option.base_price }}">{{ "{:,.0f}".format(option.base_price) }} UZS</td></tr>
+                                        <tr class="text-danger"><td>Вычет (бронирование):</td><td class="text-end price-uzs" data-price="{{ option.deduction }}">- {{ "{:,.0f}".format(option.deduction) }} UZS</td></tr>
+                                        {% set total_benefit = (option.applied_discounts|sum(attribute='amount')) %}
+                                        {% if total_benefit > 0 %}
+                                        <tr class="text-danger">
+                                            <td>Выгода:</td>
+                                            <td class="text-end price-uzs" data-price="{{ total_benefit }}">- {{ "{:,.0f}".format(total_benefit) }} UZS</td>
+                                        </tr>
+                                        {% endif %}
+                                        {% if data.apartment.estate_area and data.apartment.estate_area > 0 %}
+                                            {% set price_per_sqm = option.final_price / data.apartment.estate_area %}
+                                            <tr class="price-per-sqm-row">
+                                                <td>Цена за м² (со скидкой):</td>
+                                                <td class="text-end price-uzs" data-price="{{ price_per_sqm }}">{{ "{:,.0f}".format(price_per_sqm) }} UZS</td>
+                                            </tr>
+                                        {% endif %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="price-summary">
+                                {% if option.type_key == 'easy_start_100' %}
+                                    <p class="summary-label">3 платежа по:</p>
+                                    <p class="summary-value gold price-uzs" data-price="{{ option.final_price / 3 }}">{{ "{:,.0f}".format(option.final_price / 3) }} UZS</p>
+                                    <p class="summary-label mt-2">Итоговая стоимость:</p>
+                                    <p class="summary-value gold price-uzs" data-price="{{ option.final_price }}">{{ "{:,.0f}".format(option.final_price) }} UZS</p>
+                                {% elif option.type_key == 'easy_start_mortgage' %}
+                                    <p class="summary-label">Первоначальный взнос (3 платежа по):</p>
+                                    <p class="summary-value blue price-uzs" data-price="{{ option.initial_payment / 3 }}">{{ "{:,.0f}".format(option.initial_payment / 3) }} UZS</p>
+                                    <p class="summary-label mt-2">Итоговая стоимость:</p>
+                                    <p class="summary-value gold price-uzs" data-price="{{ option.final_price }}">{{ "{:,.0f}".format(option.final_price) }} UZS</p>
+                                {% elif option.initial_payment is not none %}
+                                    <p class="summary-label">Первоначальный взнос:</p>
+                                    <p class="summary-value blue price-uzs" data-price="{{ option.initial_payment }}">{{ "{:,.0f}".format(option.initial_payment) }} UZS</p>
+                                    <p class="summary-label mt-2">Итоговая стоимость:</p>
+                                    <p class="summary-value gold price-uzs" data-price="{{ option.final_price }}">{{ "{:,.0f}".format(option.final_price) }} UZS</p>
+                                {% else %}
+                                    <p class="summary-label">Итоговая стоимость:</p>
+                                    <p class="summary-value gold price-uzs" data-price="{{ option.final_price }}">{{ "{:,.0f}".format(option.final_price) }} UZS</p>
                                 {% endif %}
                             </div>
                         </div>
@@ -343,47 +272,30 @@
             {% endfor %}
             </div>
         {% else %}
-            <div class="alert alert-warning">
-                Не удалось рассчитать варианты оплаты для коммерческого предложения.
-            </div>
+            <div class="alert alert-warning">Не удалось рассчитать варианты оплаты.</div>
         {% endif %}
 
         <div class="footer">
             <p>Это коммерческое предложение не является публичной офертой. Актуальность цен и условий уточняйте у менеджеров Golden House.</p>
-            <p>тел: +998 78 150 11 11 | web: goldenhouse.uz</p>
-            <p>Generated: {{ current_date }}</p>
         </div>
     </div>
-
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const USD_TO_UZS_RATE = {{ usd_to_uzs_rate }};
             const currencySwitch = document.getElementById('currencySwitch');
-            const uzsPriceElements = document.querySelectorAll('.price-uzs');
-
-            function formatCurrency(value, currency) {
-                if (currency === 'USD') {
-                    return '$' + (value / USD_TO_UZS_RATE).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-                } else {
-                    return value.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' UZS';
-                }
-            }
-
-            function updateCurrencyDisplay() {
-                const showInUSD = currencySwitch.checked;
-                const targetCurrency = showInUSD ? 'USD' : 'UZS';
-
-                uzsPriceElements.forEach(element => {
-                    const originalPriceUZS = parseFloat(element.dataset.price);
-                    if (!isNaN(originalPriceUZS)) {
-                        element.textContent = formatCurrency(originalPriceUZS, targetCurrency);
-                    }
-                });
-            }
-
             if (currencySwitch) {
-                currencySwitch.addEventListener('change', updateCurrencyDisplay);
-                updateCurrencyDisplay();
+                currencySwitch.addEventListener('change', () => {
+                    const isUsd = currencySwitch.checked;
+                    document.querySelectorAll('.price-uzs').forEach(el => {
+                        const uzsValue = parseFloat(el.dataset.price);
+                        if (isNaN(uzsValue)) return;
+                        if (isUsd) {
+                            el.textContent = '$' + (uzsValue / USD_TO_UZS_RATE).toLocaleString('en-US', {maximumFractionDigits: 0});
+                        } else {
+                            el.textContent = uzsValue.toLocaleString('ru-RU', {maximumFractionDigits: 0}) + ' UZS';
+                        }
+                    });
+                });
             }
         });
     </script>
