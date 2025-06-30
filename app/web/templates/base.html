@@ -185,8 +185,10 @@
                     <span class="navbar-toggler-icon"></span>
                 </button>
                 <div class="collapse navbar-collapse" id="mainNav">
+
                     <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                         {% if current_user.is_authenticated %}
+
                             {% if current_user.role.name in ['ADMIN', 'MANAGER'] %}
                             <li class="nav-item">
                                 <a class="nav-link {% if request.endpoint == 'web.index' %}active{% endif %}" href="{{ url_for('web.index') }}">Каталог</a>
@@ -201,25 +203,25 @@
                             </li>
 
                             {% if current_user.role.name == 'ADMIN' %}
-                            <li class="nav-item">
-                                <a class="nav-link {% if request.endpoint == 'web.upload_discounts' %}active{% endif %}" href="{{ url_for('web.upload_discounts') }}">Загрузить скидки</a>
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle {% if request.endpoint in ['web.versions_index', 'web.upload_discounts', 'web.manage_exclusions', 'web.user_management'] %}active{% endif %}" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    Администрирование
+                                </a>
+                                <ul class="dropdown-menu" aria-labelledby="adminDropdown">
+                                    <li><a class="dropdown-item" href="{{ url_for('web.versions_index') }}">Управление скидками</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('web.upload_discounts') }}">Загрузить скидки</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('web.manage_exclusions') }}">Исключения</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('web.user_management') }}">Управление пользователями</a></li>
+                                </ul>
                             </li>
-                            {% endif %}
-
-                            {% if current_user.role.name in ['ADMIN', 'MANAGER'] %}
+                            {% elif current_user.role.name == 'MANAGER' %}
                             <li class="nav-item">
                                 <a class="nav-link {% if 'versions' in request.endpoint %}active{% endif %}" href="{{ url_for('web.versions_index') }}">Управление скидками</a>
                             </li>
                             {% endif %}
-
-                            {% if current_user.role.name == 'ADMIN' %}
-                            <li class="nav-item">
-                                <a class="nav-link {% if request.endpoint == 'web.manage_exclusions' %}active{% endif %}" href="{{ url_for('web.manage_exclusions') }}">Исключения</a>
-                            </li>
-                            {% endif %}
                         {% endif %}
                     </ul>
-
                     <div class="d-flex align-items-center ms-lg-auto">
                         {% if current_user.is_authenticated %}
                             <div class="nav-item dropdown">
@@ -228,13 +230,6 @@
                                     {{ current_user.username }} ({{ current_user.role.value }})
                                 </a>
                                 <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarUserDropdown">
-                                    {% if current_user.role.name == 'ADMIN' %}
-                                    <li>
-                                        <a class="dropdown-item" href="{{ url_for('web.user_management') }}">
-                                            <i class="bi bi-people-fill me-2"></i>Управление пользователями
-                                        </a>
-                                    </li>
-                                    {% endif %}
                                     <li>
                                         <a class="dropdown-item" href="{{ url_for('web.change_password') }}">
                                             <i class="bi bi-key-fill me-2"></i>Сменить пароль
@@ -283,7 +278,7 @@
     {% block scripts %}
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-            // --- ИЗМЕНЕНИЕ: Обновленный код для переключения темы ---
+            // --- Код для переключения темы ---
             const themeSwitcherBtn = document.getElementById('theme-switcher-btn');
             const themeIcon = document.getElementById('theme-icon');
             const htmlElement = document.documentElement;
@@ -317,7 +312,7 @@
                 setTheme(newTheme);
             });
 
-            // --- ИЗМЕНЕНИЕ: Ваша конфигурация particles.js ---
+            // --- Конфигурация particles.js ---
             particlesJS('particles-js', {
                 "particles": { "number": { "value": 50, "density": { "enable": true, "value_area": 800 } }, "color": { "value": "#c4a668" }, "shape": { "type": "polygon", "stroke": { "width": 1, "color": "#c4a668" }, "polygon": { "nb_sides": 6 } }, "opacity": { "value": 0.2, "random": true, "anim": { "enable": true, "speed": 0.5, "opacity_min": 0.05, "sync": false } }, "size": { "value": 4, "random": true }, "line_linked": { "enable": true, "distance": 180, "color": "#c4a668", "opacity": 0.15, "width": 1 }, "move": { "enable": true, "speed": 0.8, "direction": "none", "random": true, "straight": false, "out_mode": "out" } },
                 "interactivity": { "detect_on": "canvas", "events": { "onhover": { "enable": true, "mode": "bubble" } }, "modes": { "bubble": { "distance": 200, "size": 6, "duration": 2, "opacity": 0.6 } } },

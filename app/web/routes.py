@@ -7,6 +7,7 @@ from flask import Blueprint, render_template, request, flash, redirect, url_for,
 from ..models.user_models import User, Role
 from flask_login import login_user, logout_user, login_required, current_user
 from ..models.exclusion_models import ExcludedSell
+from ..services import discount_service
 from ..services.selection_service import find_apartments_by_budget, get_apartment_card_data
 from ..core.extensions import db
 from .forms import UploadExcelForm, CreateUserForm, ChangePasswordForm
@@ -17,8 +18,8 @@ from ..services.discount_service import (
     process_discounts_from_excel,
     generate_discount_template_excel,
     get_discounts_with_summary,
-    create_new_version,
     create_blank_version,
+    delete_draft_version,
     activate_version,
     update_discounts_for_version, get_current_usd_rate
 )
@@ -28,6 +29,21 @@ from ..models.discount_models import Discount, DiscountVersion, ComplexComment
 web_bp = Blueprint('web', __name__, template_folder='templates')
 
 
+@web_bp.route('/versions/delete/<int:version_id>', methods=['POST'])
+@login_required
+@role_required('ADMIN')
+def delete_version(version_id):
+    try:
+        delete_draft_version(version_id)
+        flash(f"Черновик версии успешно удален.", "success")
+    except ValueError as e:
+        flash(str(e), "danger")
+    except PermissionError as e:
+        flash(str(e), "danger")
+    except Exception as e:
+        flash(f"Произошла неизвестная ошибка при удалении: {e}", "danger")
+
+    return redirect(url_for('web.versions_index'))
 
 @web_bp.route('/download-template')
 @login_required
@@ -117,7 +133,7 @@ def upload_discounts():
     return render_template('upload.html', title='Загрузка скидок', form=form)
 
 
-@web_bp.route('/discounts')
+
 @web_bp.route('/discounts')
 @login_required
 @role_required('ADMIN', 'MANAGER', 'MPP')
@@ -170,40 +186,33 @@ def view_version(version_id):
 @login_required
 @role_required('ADMIN')
 def edit_version(version_id):
-    """Страница редактирования конкретной версии."""
-    latest_version = DiscountVersion.query.order_by(DiscountVersion.version_number.desc()).first()
-    if not latest_version or version_id != latest_version.id:
-        flash("Редактировать можно только самую последнюю версию скидок.", "warning")
+    version = DiscountVersion.query.get_or_404(version_id)
+    if version.is_active:
+        flash('Активные версии нельзя редактировать. Создайте новый черновик.', 'warning')
         return redirect(url_for('web.versions_index'))
 
     version = DiscountVersion.query.get_or_404(version_id)
 
     if request.method == 'POST':
+        # Этот код будет вызван при сохранении изменений в черновике
         changes_json = request.form.get('changes_json')
         if not changes_json:
             flash("Нет данных об изменениях для сохранения.", "warning")
             return redirect(url_for('web.edit_version', version_id=version_id))
 
         try:
-            current_time_str = datetime.now().strftime('%Y-%m-%d %H:%M')
-            new_version_comment = f"Обновление от {current_time_str}"
+            # Вызываем наш обновленный сервис, который сохранит изменения в текущем черновике
+            # и перезапишет саммари.
+            result_message = update_discounts_for_version(version_id, request.form, changes_json)
 
-            new_version = create_new_version(comment=new_version_comment)
-
-            new_version.changes_summary_json = changes_json
-
-            update_discounts_for_version(new_version.id, request.form, changes_json)
-
-            email_data = activate_version(new_version.id)
-            if email_data:
-                send_email(email_data['subject'], email_data['html_body'])
-
-            flash(f"Изменения сохранены. Создана и активирована новая версия №{new_version.version_number}.", "success")
+            # Просто сообщаем, что черновик обновлен. НЕ активируем и НЕ отправляем email.
+            flash(f"Изменения в черновике версии №{version.version_number} успешно сохранены.", "success")
 
         except Exception as e:
             db.session.rollback()
             flash(f"Произошла критическая ошибка при сохранении: {e}", "danger")
 
+        # Возвращаем пользователя на страницу со списком всех версий
         return redirect(url_for('web.versions_index'))
 
     discounts = Discount.query.filter_by(version_id=version_id).order_by(Discount.complex_name, Discount.property_type,
@@ -221,29 +230,49 @@ def edit_version(version_id):
     )
 
 
-@web_bp.route('/versions/new', methods=['POST'])
+
+@web_bp.route('/versions/create-draft', methods=['POST'])
 @login_required
 @role_required('ADMIN')
-def new_discount_version():
-    """Создает новую версию вручную."""
-    comment = request.form.get('comment', 'Новая версия без комментария.')
-    new_version = create_new_version(comment)
-    flash(f"Создана новая версия №{new_version.version_number}. Теперь вы можете ее отредактировать и активировать.",
-          "success")
-    return redirect(url_for('web.edit_version', version_id=new_version.id))
+def create_draft_version():
+    active_version = DiscountVersion.query.filter_by(is_active=True).first()
+    if not active_version:
+        flash('Не найдена активная версия для создания черновика.', 'danger')
+        return redirect(url_for('web.versions_index'))
+
+    try:
+        draft_version = discount_service.clone_version_for_editing(active_version)
+        flash(f'Создан новый черновик версии №{draft_version.version_number}. Теперь вы можете внести изменения.',
+              'success')
+        return redirect(url_for('web.edit_version', version_id=draft_version.id))
+    except Exception as e:
+        flash(f'Ошибка при создании черновика: {e}', 'danger')
+        return redirect(url_for('web.versions_index'))
+
+
+web_bp.route('/versions/activate/<int:version_id>', methods=['POST'])
 
 
 @web_bp.route('/versions/activate/<int:version_id>', methods=['POST'])
 @login_required
 @role_required('ADMIN')
 def activate_discount_version(version_id):
-    """Активирует выбранную версию вручную."""
-    email_data = activate_version(version_id)
-    if email_data:
-        send_email(email_data['subject'], email_data['html_body'])
+    # Получаем новый комментарий из формы модального окна
+    activation_comment = request.form.get('comment')
+    if not activation_comment:
+        flash("Название (комментарий) для системы скидок не может быть пустым.", "warning")
+        return redirect(url_for('web.versions_index'))
 
-    version = DiscountVersion.query.get(version_id)
-    flash(f"Версия №{version.version_number} успешно активирована.", "success")
+    try:
+        email_data = activate_version(version_id, activation_comment=activation_comment)
+        if email_data:
+            send_email(email_data['subject'], email_data['html_body'])
+
+        version = DiscountVersion.query.get(version_id)
+        flash(f"Версия №{version.version_number} успешно активирована.", "success")
+    except Exception as e:
+        flash(f"Ошибка при активации: {e}", "danger")
+
     return redirect(url_for('web.versions_index'))
 
 

@@ -29,10 +29,10 @@ class DiscountVersion(db.Model):
     comment = db.Column(db.Text, nullable=True)
     is_active = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime(timezone=True), server_default=func.now())
-
+    was_ever_activated = db.Column(db.Boolean, default=False, nullable=False)
     # Поле для хранения JSON с детальными комментариями к изменениям
     changes_summary_json = db.Column(db.Text, nullable=True)
-
+    summary_sent_at = db.Column(db.DateTime(timezone=True), nullable=True)
     # Связи с другими моделями
     discounts = db.relationship('Discount', back_populates='version', cascade="all, delete-orphan")
     complex_comments = db.relationship('ComplexComment', back_populates='version', cascade="all, delete-orphan")

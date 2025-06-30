@@ -1,6 +1,6 @@
 import json
 import copy
-from datetime import date
+from datetime import date, datetime
 from sqlalchemy.orm import joinedload
 from flask import render_template_string
 import requests
@@ -11,6 +11,21 @@ from .email_service import send_email
 import pandas as pd
 import io
 
+
+def delete_draft_version(version_id: int):
+    """Удаляет версию, если она никогда не была активна."""
+    version_to_delete = DiscountVersion.query.get(version_id)
+    if not version_to_delete:
+        raise ValueError("Версия для удаления не найдена.")
+
+    # Проверяем, была ли версия когда-либо активна
+    if version_to_delete.was_ever_activated:
+        raise PermissionError("Нельзя удалить версию, которая уже была активирована.")
+
+    print(f"[DISCOUNT SERVICE] 🗑️ Удаление черновика версии №{version_to_delete.version_number} (ID: {version_id})")
+    db.session.delete(version_to_delete)
+    db.session.commit()
+    print(f"[DISCOUNT SERVICE] ✔️ Черновик успешно удален.")
 
 def get_current_usd_rate():
     """
@@ -423,63 +438,71 @@ def create_blank_version(comment: str):
     return new_version
 
 
-def create_new_version(comment: str):
-    """Создает новую версию системы скидок, копируя данные из последней существующей."""
-    print(f"\n[DISCOUNT SERVICE] 🚀 Создание новой версии с комментарием: '{comment}'")
+def clone_version_for_editing(active_version: DiscountVersion):
+    """
+    Создает полную копию активной версии в виде нового неактивного черновика.
+    Возвращает новую созданную версию.
+    """
+    if not active_version:
+        raise ValueError("Невозможно клонировать, так как нет активной версии.")
+
+    print(
+        f"\n[DISCOUNT SERVICE] 🚀 Клонирование активной версии №{active_version.version_number} для создания нового черновика.")
 
     latest_version = DiscountVersion.query.order_by(DiscountVersion.version_number.desc()).first()
+    new_version_number = latest_version.version_number + 1
 
-    new_version_number = 1
-    if latest_version:
-        new_version_number = latest_version.version_number + 1
+    # Создаем новый объект версии (черновик)
+    draft_version = DiscountVersion(
+        version_number=new_version_number,
+        comment=f"Черновик на основе v.{active_version.version_number}",
+        is_active=False
+    )
+    db.session.add(draft_version)
 
-    new_version = DiscountVersion(version_number=new_version_number, comment=comment)
-    db.session.add(new_version)
+    # Сначала нужно получить ID для draft_version
+    db.session.flush()
 
-    if latest_version:
-        discounts_to_copy = Discount.query.filter_by(version_id=latest_version.id).all()
-        print(
-            f"[DISCOUNT SERVICE] 📝 Найдено {len(discounts_to_copy)} скидок для копирования из версии №{latest_version.version_number}.")
+    # Копируем все скидки из активной версии в черновик
+    for old_discount in active_version.discounts:
+        new_discount = Discount(
+            version_id=draft_version.id,  # Явно указываем ID
+            complex_name=old_discount.complex_name,
+            property_type=old_discount.property_type,
+            payment_method=old_discount.payment_method,
+            mpp=old_discount.mpp, rop=old_discount.rop, kd=old_discount.kd, opt=old_discount.opt,
+            gd=old_discount.gd, holding=old_discount.holding, shareholder=old_discount.shareholder,
+            action=old_discount.action, cadastre_date=old_discount.cadastre_date
+        )
+        db.session.add(new_discount)
+    print(f"[DISCOUNT SERVICE] 📝 Скопировано {len(active_version.discounts)} скидок.")
 
-        for old_discount in discounts_to_copy:
-            new_discount = Discount(
-                version=new_version,
-                complex_name=old_discount.complex_name,
-                property_type=old_discount.property_type,
-                payment_method=old_discount.payment_method,
-                mpp=old_discount.mpp,
-                rop=old_discount.rop,
-                kd=old_discount.kd,
-                opt=old_discount.opt,
-                gd=old_discount.gd,
-                holding=old_discount.holding,
-                shareholder=old_discount.shareholder,
-                action=old_discount.action,
-                cadastre_date=old_discount.cadastre_date
-            )
-            db.session.add(new_discount)
-
-        # --- НОВОЕ: Копируем комментарии к ЖК ---
-        comments_to_copy = ComplexComment.query.filter_by(version_id=latest_version.id).all()
-        for old_comment in comments_to_copy:
-            new_comment = ComplexComment(
-                version=new_version,
-                complex_name=old_comment.complex_name,
-                comment=old_comment.comment
-            )
-            db.session.add(new_comment)
-        print(f"[DISCOUNT SERVICE] 📝 Скопировано {len(comments_to_copy)} комментариев к ЖК.")
+    # Копируем комментарии к ЖК
+    for old_comment in active_version.complex_comments:
+        new_comment = ComplexComment(
+            version_id=draft_version.id,  # Явно указываем ID
+            complex_name=old_comment.complex_name,
+            comment=old_comment.comment
+        )
+        db.session.add(new_comment)
+    print(f"[DISCOUNT SERVICE] 📝 Скопировано {len(active_version.complex_comments)} комментариев к ЖК.")
 
     db.session.commit()
-    print(f"[DISCOUNT SERVICE] ✔️ Успешно создана версия №{new_version_number}")
-    return new_version
+    print(
+        f"[DISCOUNT SERVICE] ✔️ Успешно создан черновик версии №{draft_version.version_number} (ID: {draft_version.id})")
+
+    return draft_version
 
 
 def update_discounts_for_version(version_id: int, form_data: dict, changes_json: str):
-    """Обновляет значения скидок по бизнес-ключу и выводит саммари."""
+    """
+    Обновляет скидки для УКАЗАННОЙ ВЕРСИИ (черновика) и ПЕРЕЗАПИСЫВАЕТ JSON-саммари.
+    """
     target_version = DiscountVersion.query.get(version_id)
     if not target_version:
         return "Ошибка: Версия не найдена."
+    if target_version.is_active:
+        return "Ошибка: Нельзя редактировать активную версию."
 
     discounts_map = {
         (d.complex_name, d.property_type.value, d.payment_method.value): d
@@ -510,17 +533,12 @@ def update_discounts_for_version(version_id: int, form_data: dict, changes_json:
 
     print(f"\n[DISCOUNT UPDATE] 💾 Сохранение изменений для версии №{target_version.version_number} (ID: {version_id})")
     try:
-        changes_data = json.loads(changes_json)
-        print("-" * 50)
-        for group_key, group_data in changes_data.items():
-            print(f"Группа: {group_data['complex']} ({group_data['propType']})")
-            print(f"  [COMMENT] 💬: {group_data.get('comment', 'Без комментария')}")
-            for mod in group_data.get('modifications', []):
-                print(
-                    f"    - Поле '{mod['fieldName']}' ({mod['paymentMethod']}): {mod['oldValue']}% → {mod['newValue']}%")
-        print("-" * 50)
-    except (json.JSONDecodeError, AttributeError):
-        print("[DISCOUNT UPDATE] ⚠️ Не удалось разобрать JSON с комментариями.")
+        # Просто сохраняем JSON как текст.
+        # Это гарантирует, что при каждом сохранении будет актуальное саммари.
+        target_version.changes_summary_json = changes_json
+        print(f"[DISCOUNT UPDATE] 💾 JSON-саммари для версии №{target_version.version_number} обновлено.")
+    except Exception as e:
+        print(f"[DISCOUNT UPDATE] ⚠️ Не удалось сохранить JSON с комментариями: {e}")
 
     if updated_fields_count > 0:
         db.session.commit()
@@ -532,43 +550,53 @@ def update_discounts_for_version(version_id: int, form_data: dict, changes_json:
         return "Изменений для сохранения не найдено."
 
 
-def activate_version(version_id: int):
-    """Активирует выбранную версию (надежный метод) и возвращает данные для email."""
-    print(f"[DISCOUNT SERVICE] 🔄 Активация версии ID: {version_id}...")
-
+def activate_version(version_id: int, activation_comment: str = None):
+    """
+    Активирует версию, обновляет ее комментарий, устанавливает флаг 'was_ever_activated'
+    и готовит данные для email.
+    """
+    # Находим целевую версию в базе данных или возбуждаем ошибку 404
     target_version = DiscountVersion.query.get(version_id)
     if not target_version:
-        print(f"[DISCOUNT SERVICE] ❌ Не найдена версия с ID: {version_id}")
-        return None
+        raise ValueError(f"Не найдена версия с ID: {version_id}")
 
+    # --- Шаг 1: Обновляем комментарий, если он был передан из модального окна ---
+    if activation_comment:
+        target_version.comment = activation_comment
+        print(
+            f"[DISCOUNT SERVICE] 💬 Комментарий для версии №{target_version.version_number} обновлен на: '{activation_comment}'")
+
+    # --- Шаг 2: Находим текущую активную версию, чтобы ее деактивировать ---
     old_active_version = DiscountVersion.query.filter_by(is_active=True).first()
-
-    if old_active_version and old_active_version.id == target_version.id:
-        print(f"[DISCOUNT SERVICE] ❕ Версия №{target_version.version_number} уже активна. Действий не требуется.")
-        return None
-
     if old_active_version:
         old_active_version.is_active = False
-        print(f"[DISCOUNT SERVICE] Деактивирована старая версия: №{old_active_version.version_number}")
 
+    # --- Шаг 3: Активируем нашу целевую версию ---
     target_version.is_active = True
-    print(f"[DISCOUNT SERVICE] Активирована новая версия: №{target_version.version_number}")
 
+    # --- Шаг 4: Устанавливаем флаг, что эта версия была активирована хотя бы раз ---
+    # Это позволит в будущем запретить ее удаление.
+    if not target_version.was_ever_activated:
+        target_version.was_ever_activated = True
+        print(f"[DISCOUNT SERVICE] 🚩 Для версии №{target_version.version_number} установлен флаг 'was_ever_activated'.")
+
+    # --- Шаг 5: Сохраняем все изменения в БД ---
     db.session.commit()
     print(f"[DISCOUNT SERVICE] ✔️ Изменения статусов версий сохранены в БД.")
 
+    # --- Шаг 6: Готовим данные для отправки email-уведомления ---
     email_data = None
     if old_active_version:
-        # --- НОВОЕ: Передаем комментарии из JSON в генератор саммари ---
+        # Загружаем JSON-саммари, если оно есть
         comments_data = json.loads(target_version.changes_summary_json) if target_version.changes_summary_json else None
+
+        # Генерируем HTML-тело письма
         summary_html = _generate_version_comparison_summary(old_active_version, target_version,
                                                             comments_data=comments_data)
-        subject = f"ApartmentFinder: Активирована новая версия скидок №{target_version.version_number}"
-        email_data = {'subject': subject, 'html_body': summary_html}
-    else:
-        subject = f"ApartmentFinder: Активирована первая версия скидок №{target_version.version_number}"
-        html_body = "Это первая активация в системе."
-        email_data = {'subject': subject, 'html_body': html_body}
 
-    # Возвращаем данные для отправки письма, а не отправляем его отсюда
+        # Формируем тему письма
+        subject = f"ApartmentFinder: Активирована новая версия скидок №{target_version.version_number}"
+
+        email_data = {'subject': subject, 'html_body': summary_html}
+
     return email_data
