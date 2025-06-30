@@ -4,11 +4,13 @@ from ..models.discount_models import PropertyType, PaymentMethod
 from datetime import datetime
 from werkzeug.utils import secure_filename
 from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app, send_file, jsonify
-
+from ..models.user_models import User, Role
+from flask_login import login_user, logout_user, login_required, current_user
 from ..models.exclusion_models import ExcludedSell
 from ..services.selection_service import find_apartments_by_budget, get_apartment_card_data
 from ..core.extensions import db
-from .forms import UploadExcelForm
+from .forms import UploadExcelForm, CreateUserForm, ChangePasswordForm
+from ..core.decorators import role_required
 from ..services.data_service import get_sells_with_house_info, get_filter_options
 from ..services.email_service import send_email
 from ..services.discount_service import (
@@ -28,6 +30,8 @@ web_bp = Blueprint('web', __name__, template_folder='templates')
 
 
 @web_bp.route('/download-template')
+@login_required
+@role_required('ADMIN')
 def download_template():
     """
     Генерирует и отдает пользователю для скачивания шаблон Excel.
@@ -42,6 +46,8 @@ def download_template():
 
 
 @web_bp.route('/')
+@login_required
+@role_required('ADMIN', 'MANAGER')
 def index():
     """
     Главная страница с таблицей и пагинацией.
@@ -58,6 +64,8 @@ def index():
 
 
 @web_bp.route('/upload-discounts', methods=['GET', 'POST'])
+@login_required
+@role_required('ADMIN')
 def upload_discounts():
     """
     Страница для загрузки файла со скидками.
@@ -110,6 +118,9 @@ def upload_discounts():
 
 
 @web_bp.route('/discounts')
+@web_bp.route('/discounts')
+@login_required
+@role_required('ADMIN', 'MANAGER', 'MPP')
 def discounts_overview():
     """
     Страница для отображения всей системы скидок.
@@ -119,6 +130,8 @@ def discounts_overview():
 
 
 @web_bp.route('/versions')
+@login_required
+@role_required('ADMIN', 'MANAGER')
 def versions_index():
     """Главная страница управления версиями."""
     versions = DiscountVersion.query.order_by(DiscountVersion.version_number.desc()).all()
@@ -137,6 +150,8 @@ def versions_index():
 
 
 @web_bp.route('/versions/view/<int:version_id>')
+@login_required
+@role_required('ADMIN', 'MANAGER')
 def view_version(version_id):
     """Страница просмотра конкретной версии в режиме 'только чтение'."""
     version = DiscountVersion.query.get_or_404(version_id)
@@ -152,6 +167,8 @@ def view_version(version_id):
 
 
 @web_bp.route('/versions/edit/<int:version_id>', methods=['GET', 'POST'])
+@login_required
+@role_required('ADMIN')
 def edit_version(version_id):
     """Страница редактирования конкретной версии."""
     latest_version = DiscountVersion.query.order_by(DiscountVersion.version_number.desc()).first()
@@ -205,6 +222,8 @@ def edit_version(version_id):
 
 
 @web_bp.route('/versions/new', methods=['POST'])
+@login_required
+@role_required('ADMIN')
 def new_discount_version():
     """Создает новую версию вручную."""
     comment = request.form.get('comment', 'Новая версия без комментария.')
@@ -215,6 +234,8 @@ def new_discount_version():
 
 
 @web_bp.route('/versions/activate/<int:version_id>', methods=['POST'])
+@login_required
+@role_required('ADMIN')
 def activate_discount_version(version_id):
     """Активирует выбранную версию вручную."""
     email_data = activate_version(version_id)
@@ -226,7 +247,57 @@ def activate_discount_version(version_id):
     return redirect(url_for('web.versions_index'))
 
 
+@web_bp.route('/users/delete/<int:user_id>', methods=['POST'])
+@login_required
+@role_required('ADMIN')
+def delete_user(user_id):
+    if user_id == current_user.id:
+        flash('Вы не можете удалить свою учетную запись.', 'danger')
+        return redirect(url_for('web.user_management'))
+
+    user_to_delete = User.query.get_or_404(user_id)
+    db.session.delete(user_to_delete)
+    db.session.commit()
+    flash(f'Пользователь {user_to_delete.username} удален.', 'success')
+    return redirect(url_for('web.user_management'))
+
+
+@web_bp.route('/change-password', methods=['GET', 'POST'])
+@login_required
+def change_password():
+    form = ChangePasswordForm()
+    if form.validate_on_submit():
+        if not current_user.check_password(form.current_password.data):
+            flash('Введен неверный текущий пароль.', 'danger')
+        else:
+            current_user.set_password(form.new_password.data)
+            db.session.commit()
+            flash('Ваш пароль успешно изменен.', 'success')
+            return redirect(url_for('web.selection'))
+
+    return render_template('change_password.html', title="Смена пароля", form=form)
+
+@web_bp.route('/users', methods=['GET', 'POST'])
+@login_required
+@role_required('ADMIN')
+def user_management():
+    form = CreateUserForm()
+    if form.validate_on_submit():
+        user = User(
+            username=form.username.data,
+            role=form.role.data
+        )
+        user.set_password(form.password.data)
+        db.session.add(user)
+        db.session.commit()
+        flash(f'Пользователь {user.username} успешно создан.', 'success')
+        return redirect(url_for('web.user_management'))
+
+    users = User.query.order_by(User.id).all()
+    return render_template('user_management.html', title="Управление пользователями", users=users, form=form)
 @web_bp.route('/versions/comment/save', methods=['POST'])
+@login_required
+@role_required('ADMIN')
 def save_complex_comment():
     """Сохраняет комментарий к ЖК через AJAX."""
     data = request.get_json()
@@ -249,6 +320,8 @@ def save_complex_comment():
 
 
 @web_bp.route('/selection', methods=['GET', 'POST'])
+@login_required
+@role_required('ADMIN', 'MANAGER', 'MPP')
 def selection():
     """Страница для подбора квартир по бюджету."""
     results = None
@@ -289,6 +362,8 @@ def selection():
 
 
 @web_bp.route('/apartment/<int:sell_id>')
+@login_required
+@role_required('ADMIN', 'MANAGER', 'MPP')
 def apartment_details(sell_id):
     """
     Страница с детальной информацией о конкретной квартире.
@@ -306,6 +381,8 @@ def apartment_details(sell_id):
 
 
 @web_bp.route('/commercial-offer/<int:sell_id>')
+@login_required
+@role_required('ADMIN', 'MANAGER', 'MPP')
 def generate_commercial_offer(sell_id):
     """
     Генерирует КП. Пересчитывает все цены на сервере на основе выбранных скидок.
@@ -394,6 +471,8 @@ def generate_commercial_offer(sell_id):
 
 
 @web_bp.route('/exclusions', methods=['GET', 'POST'])
+@login_required
+@role_required('ADMIN')
 def manage_exclusions():
     if request.method == 'POST':
         action = request.form.get('action')
@@ -435,3 +514,29 @@ def manage_exclusions():
     # GET-запрос: отображаем список исключений
     excluded_sells = ExcludedSell.query.order_by(ExcludedSell.created_at.desc()).all()
     return render_template('manage_exclusions.html', excluded_sells=excluded_sells, title="Управление исключениями")
+@web_bp.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('web.selection')) # Если уже вошел, перенаправляем
+
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        user = User.query.filter_by(username=username).first()
+        if user and user.check_password(password):
+            login_user(user)
+            # Перенаправление на страницу, которую пользователь пытался открыть
+            next_page = request.args.get('next')
+            return redirect(next_page or url_for('web.selection'))
+        else:
+            flash('Неверный логин или пароль.', 'danger')
+
+    return render_template('login.html', title='Вход в систему')
+
+# НОВЫЙ РОУТ для выхода
+@web_bp.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    flash('Вы успешно вышли из системы.', 'success')
+    return redirect(url_for('web.login'))

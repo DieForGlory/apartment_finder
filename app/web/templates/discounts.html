@@ -95,11 +95,13 @@
                                 <div class="col-lg-8">
                                     <div class="row align-items-center text-center">
                                         <div class="col-4">
-                                            {% if data.summary.avg_remainder_price_sqm > 0 %}
-                                                <div class="fw-bold fs-5" style="color: var(--gh-gold);">${{ "{:,.0f}".format(data.summary.avg_remainder_price_sqm) }}</div>
-                                                <small class="text-muted" style="font-size: 0.7rem;">ср. цена дна за м²</small>
-                                            {% else %}
-                                                <div class="fw-bold fs-6 text-warning" style="height: 35px; display: flex; align-items-center; justify-content: center;">Квартиры<br>распроданы</div>
+                                            {% if current_user.role.name in ['ADMIN', 'MANAGER'] %}
+                                                {% if data.summary.avg_remainder_price_sqm > 0 %}
+                                                    <div class="fw-bold fs-5" style="color: var(--gh-gold);">${{ "{:,.0f}".format(data.summary.avg_remainder_price_sqm) }}</div>
+                                                    <small class="text-muted" style="font-size: 0.7rem;">ср. цена дна за м²</small>
+                                                {% else %}
+                                                    <div class="fw-bold fs-6 text-warning" style="height: 35px; display: flex; align-items-center; justify-content: center;">Квартиры<br>распроданы</div>
+                                                {% endif %}
                                             {% endif %}
                                         </div>
                                         <div class="col-3">
@@ -166,7 +168,6 @@
                                             <th>ОПТ</th>
                                             <th>ГД</th>
                                             <th>Холдинг</th>
-                                            <th>Акционер</th>
                                             <th>Акция</th>
                                         </tr>
                                     </thead>
@@ -188,7 +189,6 @@
                                                 <td>{% if discount.opt > 0 %}{{ "%.1f"|format(discount.opt * 100) }}%{% else %}—{% endif %}</td>
                                                 <td>{% if discount.gd > 0 %}{{ "%.1f"|format(discount.gd * 100) }}%{% else %}—{% endif %}</td>
                                                 <td>{% if discount.holding > 0 %}{{ "%.1f"|format(discount.holding * 100) }}%{% else %}—{% endif %}</td>
-                                                <td>{% if discount.shareholder > 0 %}{{ "%.1f"|format(discount.shareholder * 100) }}%{% else %}—{% endif %}</td>
                                                 <td>{% if discount.action > 0 %}{{ "%.1f"|format(discount.action * 100) }}%{% else %}—{% endif %}</td>
                                             </tr>
                                             {% endif %}

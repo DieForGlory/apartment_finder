@@ -192,48 +192,36 @@ def get_discounts_with_summary():
     """
     Получает данные для страницы "Система скидок", включая комментарии к ЖК.
     """
-    print("\n" + "=" * 80)
-    print("[DISCOUNT SERVICE - SUMMARY] НАЧАЛО РАСЧЕТА ДЛЯ СИСТЕМЫ СКИДОК")
 
     active_version = DiscountVersion.query.filter_by(is_active=True).first()
     if not active_version:
-        print("[DISCOUNT SERVICE - SUMMARY] ❌ Нет активной версии скидок.")
-        print("=" * 80 + "\n")
         return {}
-    print(f"[DISCOUNT SERVICE - SUMMARY] Активная версия: №{active_version.version_number}")
 
     all_discounts = active_version.discounts
-    print(f"[DISCOUNT SERVICE - SUMMARY] Найдено скидок в активной версии: {len(all_discounts)}")
 
     comments = ComplexComment.query.filter_by(version_id=active_version.id).all()
     comments_map = {c.complex_name: c.comment for c in comments}
 
     if not all_discounts:
-        print("[DISCOUNT SERVICE - SUMMARY] ❕ В активной версии нет данных по скидкам.")
-        print("=" * 80 + "\n")
         return {}
 
     discounts_map = {}
     for d in all_discounts:
         discounts_map.setdefault(d.complex_name, []).append(d)
-    print(f"[DISCOUNT SERVICE - SUMMARY] ЖК со скидками: {len(discounts_map)}")
 
     all_sells = EstateSell.query.options(joinedload(EstateSell.house)).all()
     sells_by_complex = {}
     for s in all_sells:
         if s.house:
             sells_by_complex.setdefault(s.house.complex_name, []).append(s)
-    print(f"[DISCOUNT SERVICE - SUMMARY] Объектов EstateSell всего: {len(all_sells)}")
 
     final_data = {}
     valid_statuses = ["Маркетинговый резерв", "Подбор"]
     tag_fields = {'kd': 'КД', 'opt': 'ОПТ', 'gd': 'ГД', 'holding': 'Холдинг', 'shareholder': 'Акционер'}
 
     all_complex_names = sorted(list(discounts_map.keys()))
-    print(f"[DISCOUNT SERVICE - SUMMARY] Обработка {len(all_complex_names)} уникальных ЖК.")
 
     for complex_name in all_complex_names:
-        print(f"\n[DISCOUNT SERVICE - SUMMARY] --- Обработка ЖК: {complex_name} ---")
         summary = {"sum_100_payment": 0, "sum_mortgage": 0, "months_to_cadastre": None, "avg_remainder_price_sqm": 0,
                    "available_tags": set(), "max_action_discount": 0.0}
 
@@ -250,8 +238,7 @@ def get_discounts_with_summary():
                                   d.property_type == PropertyType.FLAT and d.payment_method == PaymentMethod.FULL_PAYMENT),
                                  None)
 
-        print(
-            f"[DISCOUNT SERVICE - SUMMARY] Базовая скидка 100% (Квартира): {'Найдена' if base_discount_100 else 'НЕ НАЙДЕНА'}")
+
 
         if base_discount_100:
             summary["sum_100_payment"] = (base_discount_100.mpp or 0) + (base_discount_100.rop or 0)
@@ -264,8 +251,7 @@ def get_discounts_with_summary():
         base_discount_mortgage = next((d for d in discounts_in_complex if
                                        d.property_type == PropertyType.FLAT and d.payment_method == PaymentMethod.MORTGAGE),
                                       None)
-        print(
-            f"[DISCOUNT SERVICE - SUMMARY] Базовая скидка Ипотека (Квартира): {'Найдена' if base_discount_mortgage else 'НЕ НАЙДЕНА'}")
+
 
         if base_discount_mortgage:
             summary["sum_mortgage"] = (base_discount_mortgage.mpp or 0) + (base_discount_mortgage.rop or 0)
@@ -276,18 +262,12 @@ def get_discounts_with_summary():
                                   (base_discount_100.rop or 0) + \
                                   (base_discount_100.kd or 0) + \
                                   (base_discount_100.action or 0)
-        print(f"[DISCOUNT SERVICE - SUMMARY] Общая ставка дисконта для дна (100%): {total_discount_rate * 100:.2f}%")
 
         remainder_prices_per_sqm = []
         sells_in_complex = sells_by_complex.get(complex_name, [])
-        print(f"[DISCOUNT SERVICE - SUMMARY] Объектов EstateSell в ЖК '{complex_name}': {len(sells_in_complex)}")
 
         processed_sells_count = 0
         for sell in sells_in_complex:
-            # Отладочный вывод для каждого объекта EstateSell
-            print(
-                f"  - Проверка Sell ID: {sell.id}, Status: '{sell.estate_sell_status_name}', Category: '{sell.estate_sell_category}', Price: {sell.estate_price}, Area: {sell.estate_area}")
-
             # Проверка условий фильтрации
             is_valid_status = sell.estate_sell_status_name in valid_statuses
             is_flat_category = sell.estate_sell_category == PropertyType.FLAT.value  # Важно: PropertyType.FLAT.value должно быть "Квартира"
@@ -300,28 +280,14 @@ def get_discounts_with_summary():
                     final_price = price_after_deduction * (1 - total_discount_rate)
                     if sell.estate_area and sell.estate_area > 0:
                         remainder_prices_per_sqm.append(final_price / sell.estate_area)
-                        print(
-                            f"    ✔️ Sell ID {sell.id} прошел фильтры. Цена после вычета: {price_after_deduction:,.0f}, Итоговая цена: {final_price:,.0f}, Цена за м²: {final_price / sell.estate_area:,.0f}")
                         processed_sells_count += 1
-                    else:
-                        print(f"    - Sell ID {sell.id} не прошел: Площадь 0 или None.")
-                else:
-                    print(f"    - Sell ID {sell.id} не прошел: Цена после вычета <= 0 ({price_after_deduction:,.0f}).")
-            else:
-                print(
-                    f"    - Sell ID {sell.id} не прошел фильтры: Статус: {is_valid_status}, Категория: {is_flat_category}, Цена: {is_valid_price}, Площадь: {is_valid_area}")
-
-        print(
-            f"[DISCOUNT SERVICE - SUMMARY] Найдено подходящих объектов EstateSell для расчета дна: {processed_sells_count}")
 
         if remainder_prices_per_sqm:
             avg_price_per_sqm = sum(remainder_prices_per_sqm) / len(remainder_prices_per_sqm)
             avg_price_per_sqm_usd = avg_price_per_sqm / 12500.0  # Используем фиксированный курс для отображения
             summary["avg_remainder_price_sqm"] = avg_price_per_sqm_usd
-            print(f"[DISCOUNT SERVICE - SUMMARY] Рассчитана средняя цена дна: ${avg_price_per_sqm_usd:,.0f}")
         else:
             summary["avg_remainder_price_sqm"] = 0  # Убедимся, что явно 0, если нет данных
-            print("[DISCOUNT SERVICE - SUMMARY] Нет подходящих объектов для расчета средней цены дна. Установлено 0.")
 
         for discount in discounts_in_complex:
             if discount.action > summary["max_action_discount"]:
@@ -331,9 +297,6 @@ def get_discounts_with_summary():
                     summary["available_tags"].add(tag_name)
 
         final_data[complex_name] = {"summary": summary, "details": details_by_prop_type}
-
-    print("[DISCOUNT SERVICE - SUMMARY] ЗАВЕРШЕНИЕ РАСЧЕТА ДЛЯ СИСТЕМЫ СКИДОК")
-    print("=" * 80 + "\n")
     return final_data
 
 

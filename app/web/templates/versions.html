@@ -37,7 +37,7 @@
                 </td>
                 <td class="text-end">
                     <div class="btn-group" role="group">
-                        {% if v.id == latest_version_id %}
+                        {% if current_user.role.name == 'ADMIN' and v.id == latest_version_id %}
                             <a href="{{ url_for('web.edit_version', version_id=v.id) }}" class="btn btn-outline-primary btn-sm">
                                 <i class="bi bi-pencil"></i> Редактировать
                             </a>
@@ -47,7 +47,7 @@
                             </a>
                         {% endif %}
 
-                        {% if v.id != active_version_id %}
+                        {% if current_user.role.name == 'ADMIN' and v.id != active_version_id %}
                             <form action="{{ url_for('web.activate_discount_version', version_id=v.id) }}" method="POST" class="ms-2">
                                 <button type="submit" class="btn btn-outline-success btn-sm">Активировать</button>
                             </form>

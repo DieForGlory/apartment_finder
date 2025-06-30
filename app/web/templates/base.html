@@ -170,13 +170,14 @@
         .badge.bg-info-subtle { background-color: rgba(var(--bs-info-rgb), 0.15) !important; color: var(--bs-info) !important; border-color: rgba(var(--bs-info-rgb), 0.2) !important; }
         .badge.bg-primary-subtle { background-color: rgba(var(--bs-primary-rgb), 0.15) !important; color: var(--bs-primary) !important; border-color: rgba(var(--bs-primary-rgb), 0.2) !important; }
     </style>
+    {% block styles %}{% endblock %}
 </head>
 <body class="d-flex flex-column h-100">
     <div id="particles-js"></div>
     <header class="header sticky-top border-bottom">
         <nav class="navbar navbar-expand-lg">
             <div class="container">
-                <a class="navbar-brand fw-bold" href="{{ url_for('web.index') }}" style="color: var(--gh-gold);">
+                <a class="navbar-brand fw-bold" href="{{ url_for('web.selection') }}" style="color: var(--gh-gold);">
                     <i class="bi bi-building-check"></i>
                     ApartmentFinder
                 </a>
@@ -185,38 +186,94 @@
                 </button>
                 <div class="collapse navbar-collapse" id="mainNav">
                     <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint == 'web.index' %}active{% endif %}" href="{{ url_for('web.index') }}">Каталог</a>
-                        </li>
+                        {% if current_user.is_authenticated %}
+                            {% if current_user.role.name in ['ADMIN', 'MANAGER'] %}
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.endpoint == 'web.index' %}active{% endif %}" href="{{ url_for('web.index') }}">Каталог</a>
+                            </li>
+                            {% endif %}
 
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint == 'web.selection' %}active{% endif %}" href="{{ url_for('web.selection') }}">Подбор по бюджету</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint == 'web.discounts_overview' %}active{% endif %}" href="{{ url_for('web.discounts_overview') }}">Система скидок</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint == 'web.upload_discounts' %}active{% endif %}" href="{{ url_for('web.upload_discounts') }}">Загрузить скидки</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if 'versions' in request.endpoint %}active{% endif %}" href="{{ url_for('web.versions_index') }}">Управление скидками</a>
-                        </li>
-                        <li class="nav-item"> {# НОВАЯ ССЫЛКА #}
-                            <a class="nav-link {% if request.endpoint == 'web.manage_exclusions' %}active{% endif %}" href="{{ url_for('web.manage_exclusions') }}">Исключения</a>
-                        </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.endpoint == 'web.selection' %}active{% endif %}" href="{{ url_for('web.selection') }}">Подбор по бюджету</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.endpoint == 'web.discounts_overview' %}active{% endif %}" href="{{ url_for('web.discounts_overview') }}">Система скидок</a>
+                            </li>
+
+                            {% if current_user.role.name == 'ADMIN' %}
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.endpoint == 'web.upload_discounts' %}active{% endif %}" href="{{ url_for('web.upload_discounts') }}">Загрузить скидки</a>
+                            </li>
+                            {% endif %}
+
+                            {% if current_user.role.name in ['ADMIN', 'MANAGER'] %}
+                            <li class="nav-item">
+                                <a class="nav-link {% if 'versions' in request.endpoint %}active{% endif %}" href="{{ url_for('web.versions_index') }}">Управление скидками</a>
+                            </li>
+                            {% endif %}
+
+                            {% if current_user.role.name == 'ADMIN' %}
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.endpoint == 'web.manage_exclusions' %}active{% endif %}" href="{{ url_for('web.manage_exclusions') }}">Исключения</a>
+                            </li>
+                            {% endif %}
+                        {% endif %}
                     </ul>
-                    <div class="theme-switcher-container ms-lg-auto">
-                        <button id="theme-switcher-btn" class="btn btn-outline-secondary btn-sm">
-                            <i class="bi" id="theme-icon"></i>
-                        </button>
+
+                    <div class="d-flex align-items-center ms-lg-auto">
+                        {% if current_user.is_authenticated %}
+                            <div class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" id="navbarUserDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="bi bi-person-circle me-1"></i>
+                                    {{ current_user.username }} ({{ current_user.role.value }})
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarUserDropdown">
+                                    {% if current_user.role.name == 'ADMIN' %}
+                                    <li>
+                                        <a class="dropdown-item" href="{{ url_for('web.user_management') }}">
+                                            <i class="bi bi-people-fill me-2"></i>Управление пользователями
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    <li>
+                                        <a class="dropdown-item" href="{{ url_for('web.change_password') }}">
+                                            <i class="bi bi-key-fill me-2"></i>Сменить пароль
+                                        </a>
+                                    </li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li>
+                                        <a class="dropdown-item text-danger" href="{{ url_for('web.logout') }}">
+                                            <i class="bi bi-box-arrow-right me-2"></i>Выйти
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                        {% endif %}
+
+                        <div class="theme-switcher-container ms-2">
+                            <button id="theme-switcher-btn" class="btn btn-outline-secondary btn-sm">
+                                <i class="bi" id="theme-icon"></i>
+                            </button>
+                        </div>
                     </div>
+
                 </div>
             </div>
         </nav>
         {% block subnav %}{% endblock %}
     </header>
 
-    <main class="container my-4">
+    <main class="container my-5">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
         {% block content %}{% endblock %}
     </main>
 
