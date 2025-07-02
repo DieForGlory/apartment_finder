@@ -96,9 +96,12 @@
 .details-table-container {
     overflow-x: auto;
 }
+.details-table .group-divider {
+    border-right: 2px solid var(--bs-border-color);
+}
 .details-table {
-    font-size: 0.9rem;
-    min-width: 1200px;
+    min-width: 0;
+    font-size: 0.875rem; /* Слегка уменьшаем шрифт */
 }
 .details-table thead th {
     text-align: center;
@@ -106,9 +109,7 @@
     background-color: var(--bs-tertiary-bg);
 }
 .details-table th, .details-table td {
-    white-space: nowrap;
-    text-align: right;
-    padding: .5rem;
+    padding: .6rem .5rem;
 }
 .details-table td:first-child, .details-table th:first-child {
     text-align: left;
@@ -133,4 +134,130 @@
     font-weight: 600;
     border-radius: .375rem;
     color: var(--bs-emphasis-color);
+}
+.kpi-card {
+    background-color: var(--bs-tertiary-bg);
+    border: 1px solid var(--bs-border-color-translucent);
+    border-radius: .75rem;
+    padding: 1.25rem;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.kpi-label {
+    font-size: 0.9rem;
+    color: var(--bs-secondary-color);
+    margin-bottom: 0.5rem;
+}
+
+.kpi-value {
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: var(--bs-body-color);
+    line-height: 1.2;
+}
+
+.kpi-sub-value {
+    font-size: 0.9rem;
+    color: var(--bs-secondary-color);
+    margin-bottom: 1rem;
+}
+
+.progress-bar-kpi {
+    width: 100%;
+    background-color: var(--bs-secondary-bg);
+    border-radius: .375rem;
+    overflow: hidden;
+    height: 1.5rem;
+    position: relative;
+    margin-top: auto; /* Прижимает прогресс-бар к низу карточки */
+}
+
+/* Новая современная таблица */
+.modern-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.modern-table thead th {
+    background-color: var(--bs-tertiary-bg);
+    border-bottom: 2px solid var(--bs-border-color);
+    padding: 1rem;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.9rem;
+    position: sticky; /* Липкая шапка */
+    top: 0;
+    z-index: 10;
+}
+
+.modern-table thead th[data-sortable] {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.modern-table thead th[data-sortable]:hover {
+    background-color: var(--bs-secondary-bg);
+}
+
+.modern-table tbody tr {
+    border-bottom: 1px solid var(--bs-border-color-translucent);
+    transition: background-color 0.2s ease;
+}
+
+.modern-table tbody tr:last-child {
+    border-bottom: none;
+}
+
+.modern-table tbody tr:hover {
+    background-color: var(--bs-tertiary-bg);
+}
+
+.modern-table td {
+    padding: 1rem;
+    vertical-align: middle;
+}
+
+.project-link {
+    font-weight: 600;
+    color: var(--bs-body-color);
+    text-decoration: none;
+}
+.project-link:hover {
+    color: var(--bs-primary);
+}
+
+/* Прогресс-бар внутри таблицы */
+.progress-bar-in-table {
+    width: 100%;
+    min-width: 120px;
+    background-color: var(--bs-secondary-bg);
+    border-radius: .375rem;
+    overflow: hidden;
+    height: 1.75rem;
+    position: relative;
+}
+
+/* Общий стиль для всех прогресс-баров */
+.progress-bar-fill {
+    height: 100%;
+    border-radius: .375rem;
+    transition: width 0.5s ease-in-out;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #fff;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+}
+
+.bg-success-custom { background-color: #198754; }
+.bg-warning-custom { background-color: #ffc107; }
+.bg-danger-custom { background-color: #dc3545; }
+.details-table thead abbr {
+    text-decoration: none; /* Убираем стандартное подчеркивание */
+    border-bottom: 1px dotted; /* Добавляем точечное подчеркивание */
+    cursor: help; /* Показываем курсор-подсказку */
 }

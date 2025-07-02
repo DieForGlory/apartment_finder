@@ -22,20 +22,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 if(currencyLabel) currencyLabel.textContent = 'UZS';
                 displayValue = uzsValue.toLocaleString('ru-RU', { maximumFractionDigits: 0 });
             }
-
-            if (el.classList.contains('metric-value') || el.classList.contains('metric-sub-value')) {
-                const prefix = el.textContent.includes('План:') ? 'План: ' : '';
-                displayValue = prefix + displayValue;
-            }
-
-            el.textContent = displayValue;
+             el.textContent = displayValue;
         });
     }
 
     function restoreState() {
         const savedCurrencyIsUSD = localStorage.getItem(STORAGE_KEYS.currency);
-        if (savedCurrencyIsUSD === 'true') {
-            if(currencyToggle) currencyToggle.checked = true;
+        if (savedCurrencyIsUSD === 'true' && currencyToggle) {
+            currencyToggle.checked = true;
         }
         updateCurrency(currencyToggle ? currencyToggle.checked : false);
 
@@ -49,7 +43,73 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    if(currencyToggle) {
+    // --- НОВАЯ ЛОГИКА СОРТИРОВКИ ТАБЛИЦЫ ---
+    function sortTable(table, column, asc = true) {
+        const dirModifier = asc ? 1 : -1;
+        const tBody = table.tBodies[0];
+        const rows = Array.from(tBody.querySelectorAll("tr"));
+
+        const isNumeric = table.querySelector(`th:nth-child(${column + 1})`).dataset.type === 'numeric';
+
+        const sortedRows = rows.sort((a, b) => {
+            const aColText = a.querySelector(`td:nth-child(${column + 1})`).textContent.trim();
+            const bColText = b.querySelector(`td:nth-child(${column + 1})`).textContent.trim();
+
+            if (isNumeric) {
+                const aVal = parseFloat(aColText.replace(/[^0-9.-]+/g,""));
+                const bVal = parseFloat(bColText.replace(/[^0-9.-]+/g,""));
+                return (aVal - bVal) * dirModifier;
+            }
+
+            return aColText.localeCompare(bColText, 'ru', { sensitivity: 'base' }) * dirModifier;
+        });
+
+        while (tBody.firstChild) {
+            tBody.removeChild(tBody.firstChild);
+        }
+
+        tBody.append(...sortedRows);
+
+        table.querySelectorAll("th").forEach(th => th.classList.remove("th-asc", "th-desc"));
+        table.querySelector(`th:nth-child(${column + 1})`).classList.toggle("th-asc", asc);
+        table.querySelector(`th:nth-child(${column + 1})`).classList.toggle("th-desc", !asc);
+    }
+
+    document.querySelectorAll("#summaryTable th[data-sortable]").forEach(headerCell => {
+        headerCell.addEventListener("click", () => {
+            const tableElement = headerCell.parentElement.parentElement.parentElement;
+            const headerIndex = Array.prototype.indexOf.call(headerCell.parentElement.children, headerCell);
+            const currentIsAsc = headerCell.classList.contains("th-asc");
+            sortTable(tableElement, headerIndex, !currentIsAsc);
+        });
+    });
+
+
+    // --- НОВАЯ ЛОГИКА ПОИСКА В ТАБЛИЦЕ ---
+    const searchInput = document.getElementById('projectSearchInput');
+    const tableBody = document.getElementById('summaryTableBody');
+    if (searchInput && tableBody) {
+        const allRows = Array.from(tableBody.querySelectorAll('tr'));
+
+        searchInput.addEventListener('input', function() {
+            const searchTerm = searchInput.value.toLowerCase().trim();
+
+            allRows.forEach(row => {
+                const projectNameEl = row.querySelector('.project-link');
+                if (projectNameEl) {
+                    const projectName = projectNameEl.textContent.toLowerCase();
+                    if (projectName.includes(searchTerm)) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                }
+            });
+        });
+    }
+
+    // Инициализация при загрузке
+    if (currencyToggle) {
         currencyToggle.addEventListener('change', function() {
             localStorage.setItem(STORAGE_KEYS.currency, this.checked);
             updateCurrency(this.checked);
@@ -63,29 +123,5 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Логика поиска по проектам
-    const searchInput = document.getElementById('projectSearchInput');
-    const projectsList = document.getElementById('projects-list');
-    if (searchInput && projectsList) {
-        const allProjectCards = projectsList.querySelectorAll('.project-card');
-
-        searchInput.addEventListener('input', function() {
-            const searchTerm = searchInput.value.toLowerCase().trim();
-
-            allProjectCards.forEach(card => {
-                const projectNameEl = card.querySelector('.project-name a');
-                if (projectNameEl) {
-                    const projectName = projectNameEl.textContent.toLowerCase();
-                    if (projectName.includes(searchTerm)) {
-                        card.style.display = '';
-                    } else {
-                        card.style.display = 'none';
-                    }
-                }
-            });
-        });
-    }
-
-    // Инициализация
     restoreState();
 });

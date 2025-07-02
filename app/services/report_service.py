@@ -347,13 +347,39 @@ def get_project_dashboard_data(complex_name: str, property_type: str = None):
     for row in income_query.group_by('month').all():
         fact_income_by_month[row.month - 1] = row.total or 0
     yearly_plan_fact['fact_income'] = fact_income_by_month
+    recent_deals = db.session.query(
+        EstateDeal.id,
+        EstateDeal.deal_sum,
+        EstateSell.estate_sell_category.label('property_type'),
+        func.coalesce(EstateDeal.agreement_date, EstateDeal.preliminary_date).label('deal_date')
+    ).join(EstateSell).join(EstateHouse).filter(
+        EstateHouse.complex_name == complex_name,
+        EstateDeal.deal_status_name.in_(sold_statuses)
+    ).order_by(
+        func.coalesce(EstateDeal.agreement_date, EstateDeal.preliminary_date).desc()
+    ).limit(15).all()
 
-    # Сборка финального ответа
+    remainders_chart_data = {
+        "labels": [],
+        "data": []
+    }
+    if remainders_by_type:
+        remainders_chart_data["labels"] = list(remainders_by_type.keys())
+        remainders_chart_data["data"] = [v['count'] for v in remainders_by_type.values()]
+
+    # --- Сборка финального ответа ---
     dashboard_data = {
         "complex_name": complex_name,
-        "kpi": {"total_deals_volume": total_deals_volume, "total_income": total_income,
-                "remainders_by_type": remainders_by_type},
-        "charts": {"plan_fact_dynamics_yearly": yearly_plan_fact}
+        "kpi": {
+            "total_deals_volume": total_deals_volume,
+            "total_income": total_income,
+            "remainders_by_type": remainders_by_type
+        },
+        "charts": {
+            "plan_fact_dynamics_yearly": yearly_plan_fact,
+            "remainders_chart_data": remainders_chart_data  # <--- Добавляем данные для новой диаграммы
+        },
+        "recent_deals": recent_deals
     }
     return dashboard_data
 

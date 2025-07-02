@@ -1,6 +1,7 @@
+/* --- Стили для карточек KPI --- */
 .kpi-card {
-    background-color: var(--gh-element-bg);
-    border: 1px solid var(--bs-border-color);
+    background-color: var(--bs-tertiary-bg);
+    border: 1px solid var(--bs-border-color-translucent);
     border-radius: .75rem;
     padding: 1.5rem;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -9,36 +10,47 @@
     flex-direction: column;
     justify-content: center;
 }
+
 .kpi-card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.05);
 }
+
 .kpi-value {
-    font-size: 2rem;
+    font-size: 2.25rem;
     font-weight: 700;
-    color: var(--gh-header-color);
+    color: var(--bs-body-color);
 }
+
 .kpi-label {
     font-size: 0.9rem;
     font-weight: 500;
     color: var(--bs-secondary-color);
+    margin-bottom: 0.25rem;
+}
+
+.kpi-sub-value {
+    font-size: 1rem;
+    color: var(--bs-tertiary-color);
     margin-top: 0.25rem;
 }
-.kpi-sub-value {
-    font-size: 0.8rem;
-    color: var(--bs-tertiary-color);
+
+
+/* --- Стили для контейнеров графиков и диаграмм (ФИНАЛЬНАЯ ВЕРСИЯ) --- */
+
+/* 1. Делаем карточку внутри НЕактивной вкладки ПОЛНОСТЬЮ невидимой */
+.tab-pane:not(.active) .card {
+    display: none;
 }
+
+/* 2. Задаем высоту для контейнеров графиков, когда они видимы */
 .plan-fact-chart-container {
     height: 400px;
 }
-.chart-container {
-    height: 350px;
-}
-.prop-type-filter {
-    display: flex;
-    gap: 0.5rem; /* Расстояние между кнопками */
-}
 
-.prop-type-filter .btn {
-    font-weight: 500;
+.donut-chart-container {
+    position: relative;
+    height: 350px;
+    max-width: 400px;
+    margin: auto;
 }

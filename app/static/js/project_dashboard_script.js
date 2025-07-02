@@ -103,9 +103,56 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Initial chart render
-    renderPlanFactChart(document.getElementById('currencyToggle')?.checked);
+      function renderRemaindersChart() {
+        const remaindersData = chartData.remainders_chart_data;
+        if (!remaindersData || !remaindersData.data.length) {
+            // Можно показать сообщение, если данных нет
+            const container = document.getElementById('remaindersChart')?.parentElement;
+            if(container) container.innerHTML = '<div class="alert alert-secondary text-center">Нет данных для построения диаграммы остатков.</div>';
+            return;
+        }
 
-    // Add listener to the currency toggle
+        const ctx = document.getElementById('remaindersChart');
+        if(!ctx) return;
+
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: remaindersData.labels,
+                datasets: [{
+                    label: 'Кол-во остатков, шт.',
+                    data: remaindersData.data,
+                    backgroundColor: [
+                        'rgba(255, 99, 132, 0.7)',
+                        'rgba(54, 162, 235, 0.7)',
+                        'rgba(255, 206, 86, 0.7)',
+                        'rgba(75, 192, 192, 0.7)',
+                        'rgba(153, 102, 255, 0.7)',
+                    ],
+                    borderColor: 'var(--bs-tertiary-bg)',
+                    borderWidth: 3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                    },
+                    title: {
+                        display: false
+                    }
+                }
+            }
+        });
+    }
+
+    // Инициализация графиков
+    renderPlanFactChart(document.getElementById('currencyToggle')?.checked);
+    renderRemaindersChart(); // <--- Вызываем новую функцию
+
+    // Слушатель на переключатель валют (остается без изменений)
     const currencyToggle = document.getElementById('currencyToggle');
     if (currencyToggle) {
         currencyToggle.addEventListener('change', function() {
