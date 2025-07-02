@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="mb-4">Настройки сложных калькуляторов</h1>
+
+<div class="card card-glass">
+    <div class="card-body">
+        <form method="POST">
+            {{ form.hidden_tag() }}
+            <div class="mb-3">
+                {{ form.time_value_rate_annual.label(class="form-label") }}
+                {{ form.time_value_rate_annual(class="form-control") }}
+            </div>
+            <hr>
+            <h5 class="mt-4">Калькулятор рассрочки</h5>
+            <div class="mb-3">
+                {{ form.standard_installment_whitelist.label(class="form-label") }}
+                {{ form.standard_installment_whitelist(class="form-control", rows=4, placeholder="Например: 12345, 67890, 54321") }}
+            </div>
+            <hr>
+            <h5 class="mt-4">Калькулятор рассрочки на ПВ + Ипотека</h5>
+            <div class="mb-3">
+                {{ form.dp_installment_max_term.label(class="form-label") }}
+                {{ form.dp_installment_max_term(class="form-control") }}
+            </div>
+            <div class="mb-3">
+                {{ form.dp_installment_whitelist.label(class="form-label") }}
+                {{ form.dp_installment_whitelist(class="form-control", rows=4, placeholder="Например: 12345, 67890, 54321") }}
+            </div>
+            {{ form.submit(class="btn btn-warning mt-3") }}
+        </form>
+    </div>
+</div>
+{% endblock %}

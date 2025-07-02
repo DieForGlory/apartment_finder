@@ -9,7 +9,6 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        /* Базовые стили для премиального вида и печати на А4 */
         body {
             font-family: 'Montserrat', sans-serif;
             margin: 0;
@@ -26,12 +25,10 @@
             display: flex;
             flex-direction: column;
         }
-
-        /* --- НАЧАЛО ИЗМЕНЕНИЙ --- */
         .header {
             text-align: center;
-            margin-bottom: 0.5rem; /* Уменьшаем нижний отступ */
-            padding-bottom: 0;   /* Убираем нижний паддинг */
+            margin-bottom: 0.5rem;
+            padding-bottom: 0;
             position: relative;
         }
         .section-title {
@@ -40,11 +37,9 @@
             color: #333;
             border-bottom: 2px solid #c4a668;
             padding-bottom: 0.4rem;
-            margin-top: 0.5rem; /* Уменьшаем верхний отступ */
+            margin-top: 0.5rem;
             margin-bottom: 1rem;
         }
-        /* --- КОНЕЦ ИЗМЕНЕНИЙ --- */
-
         .header-logo {
             position: absolute;
             top: 0;
@@ -89,12 +84,10 @@
             color: #212529;
             font-size: 10pt;
         }
-
         .row > .col-6 {
             display: flex;
             align-items: stretch;
         }
-
         .payment-option-block {
             border: 1px solid #ddd;
             border-radius: 0.4rem;
@@ -103,7 +96,6 @@
             flex-direction: column;
             background-color: #fff;
         }
-
         .payment-option-block.full_payment,
         .payment-option-block.easy_start_100 {
             border-left: 4px solid #c4a668;
@@ -112,7 +104,6 @@
         .payment-option-block.easy_start_mortgage {
             border-left: 4px solid #0d6efd;
         }
-
         .payment-option-block h3 {
             font-size: 11pt;
             font-weight: 600;
@@ -130,21 +121,18 @@
             background-color: #f0f7ff;
             color: #0056b3;
         }
-
         .card-content {
             padding: 0.75rem;
             flex-grow: 1;
             display: flex;
             flex-direction: column;
         }
-
         .price-summary {
             text-align: center;
             padding-top: 0.5rem;
             margin-top: auto;
             border-top: 1px dashed #ccc;
         }
-
         .payment-details-table {
             font-size: 8.5pt;
         }
@@ -156,7 +144,6 @@
             border-top: 1px solid #eee;
             font-weight: 600;
         }
-
         .summary-label {
             font-size: 8pt;
             text-transform: uppercase;
@@ -175,7 +162,6 @@
             color: transparent;
         }
         .summary-value.blue { color: #0d6efd; }
-
         .footer {
             text-align: center;
             margin-top: auto;
@@ -187,17 +173,22 @@
         @media print {
             body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .no-print { display: none !important; }
-            .page-container { min-height: 0; }
+            .page-container { min-height: 0; box-shadow: none; border: none; }
+            .hide-for-print { display: none !important; }
         }
     </style>
 </head>
 <body>
-    <div class="page-container">
-        <div class="no-print d-flex justify-content-end mb-3">
+    <div class="page-container shadow-lg">
+        <div class="no-print d-flex justify-content-between mb-3">
             <div class="form-check form-switch fs-5">
                 <input class="form-check-input" type="checkbox" id="currencySwitch">
                 <label class="form-check-label text-muted" for="currencySwitch" style="font-size: 1rem;">Показать в USD</label>
             </div>
+            <button class="btn btn-secondary" type="button" data-bs-toggle="modal" data-bs-target="#printChoiceModal">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-printer-fill" viewBox="0 0 16 16"><path d="M5 1a2 2 0 0 0-2 2v2H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1v1a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-1h1a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1V3a2 2 0 0 0-2-2zM4 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2H4zM12 7H4a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1m-1 4H5a.5.5 0 0 1 0-1h6a.5.5 0 0 1 0 1m-1-2H6a.5.5 0 0 1 0-1h4a.5.5 0 0 1 0 1"/></svg>
+                Печать
+            </button>
         </div>
         <div class="header">
             <img src="{{ url_for('static', filename='logo_light.svg') }}" alt="Логотип" class="header-logo">
@@ -217,10 +208,11 @@
 
         <div class="section-title">2. Предлагаемые варианты оплаты</div>
         {% if data.pricing %}
-            <div class="row">
+            <div class="row {% if data.pricing|length == 1 %}justify-content-center{% endif %}">
             {% for option in data.pricing %}
-                <div class="col-6 mb-4">
-                    <div class="payment-option-block {{ option.type_key }}">
+                {% set col_class = 'col-8' if data.pricing|length == 1 else 'col-6' %}
+                <div class="{{ col_class }} mb-4 payment-block" data-type-key="{{ option.type_key }}">
+                <div class="payment-option-block {{ option.type_key }}">
                         <h3>{{ option.payment_method }}</h3>
                         <div class="card-content">
                             <div>
@@ -279,6 +271,26 @@
             <p>Это коммерческое предложение не является публичной офертой. Актуальность цен и условий уточняйте у менеджеров Golden House.</p>
         </div>
     </div>
+
+    <div class="modal fade" id="printChoiceModal" tabindex="-1" aria-labelledby="printChoiceModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="printChoiceModalLabel">Выберите вариант печати</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p>Какой набор опций вы хотите включить в печатную версию?</p>
+            <div class="d-grid gap-2">
+                <button type="button" class="btn btn-primary" id="printVariant1Btn">Вариант 1 (только 100% и Ипотека)</button>
+                <button type="button" class="btn btn-secondary" id="printComboBtn">Вариант Комбо (Все опции)</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const USD_TO_UZS_RATE = {{ usd_to_uzs_rate }};
@@ -297,6 +309,35 @@
                     });
                 });
             }
+
+            const printModalInstance = new bootstrap.Modal(document.getElementById('printChoiceModal'));
+            const paymentBlocks = document.querySelectorAll('.payment-block');
+
+            function showAllBlocks() {
+                paymentBlocks.forEach(block => {
+                    block.classList.remove('hide-for-print');
+                });
+            }
+
+            document.getElementById('printVariant1Btn').addEventListener('click', () => {
+                showAllBlocks();
+                paymentBlocks.forEach(block => {
+                    const typeKey = block.dataset.typeKey;
+                    if (typeKey !== 'full_payment' && typeKey !== 'mortgage') {
+                        block.classList.add('hide-for-print');
+                    }
+                });
+                printModalInstance.hide();
+                setTimeout(() => window.print(), 200);
+            });
+
+            document.getElementById('printComboBtn').addEventListener('click', () => {
+                showAllBlocks();
+                printModalInstance.hide();
+                setTimeout(() => window.print(), 200);
+            });
+
+            window.onafterprint = showAllBlocks;
         });
     </script>
 </body>

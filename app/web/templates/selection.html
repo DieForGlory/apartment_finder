@@ -2,7 +2,22 @@
 
 {% block content %}
 <h1 class="mb-4">Система подбора квартир по бюджету</h1>
-
+<div class="card card-glass mb-4">
+    <div class="card-body">
+        <form action="{{ url_for('main.search_by_id') }}" method="POST" class="row g-3 align-items-center">
+            <div class="col-auto">
+                <label for="search_id" class="visually-hidden">ID Объекта</label>
+                <input type="number" class="form-control" id="search_id" name="search_id" placeholder="Введите ID объекта...">
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-secondary">
+                    <i class="bi bi-search"></i> Найти
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+<div class="card card-glass">
 {# Форма с фильтрами остается без изменений #}
 <div class="card mb-4 card-glass"> {# Добавляем card-glass для стиля #}
     <div class="card-body">

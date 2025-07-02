@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .table-header-group { background-color: #e9ecef; }
+    [data-bs-theme="dark"] .table-header-group { background-color: #32383e; }
+    .table-responsive { overflow-x: auto; }
+    .table th, .table td { white-space: nowrap; text-align: right; }
+    .table th:first-child, .table td:first-child { text-align: left; position: sticky; left: 0; background: var(--gh-element-bg); }
+    .table thead th { vertical-align: middle; }
+    .percent-bar { display: inline-block; padding: .25em .4em; font-size: 75%; font-weight: 700; line-height: 1; text-align: center; white-space: nowrap; vertical-align: baseline; border-radius: .375rem; color: #000; }
+</style>
+
+<h1 class="mb-4">Сводный план-фактный отчет</h1>
+
+<div class="card card-glass p-3 mb-4">
+    <div class="d-flex justify-content-between align-items-center">
+        <form method="GET" action="{{ url_for('report.plan_fact_report') }}" class="flex-grow-1">
+             <div class="row g-3 align-items-end">
+                <div class="col-md-3"><label for="year" class="form-label">Год</label><select name="year" id="year" class="form-select">{% for y in years %}<option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>{% endfor %}</select></div>
+                <div class="col-md-3"><label for="month" class="form-label">Месяц</label><select name="month" id="month" class="form-select">{% for m in months %}<option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ '%02d'|format(m) }}</option>{% endfor %}</select></div>
+                <div class="col-md-4"><label for="property_type" class="form-label">Тип недвижимости</label><select name="property_type" id="property_type" class="form-select">{% for pt in property_types %}<option value="{{ pt.value }}" {% if pt.value == selected_prop_type %}selected{% endif %}>{{ pt.value }}</option>{% endfor %}</select></div>
+                <div class="col-md-2"><button type="submit" class="btn btn-primary w-100">Показать</button></div>
+            </div>
+        </form>
+        <div class="ms-4">
+            <label class="form-label">Валюта</label>
+            <div class="form-check form-switch fs-4"><input class="form-check-input" type="checkbox" role="switch" id="currencyToggle"><label class="form-check-label" for="currencyToggle" id="currencyLabel">UZS</label></div>
+        </div>
+    </div>
+</div>
+
+<div class="card card-glass">
+<div class="card-body table-responsive">
+<table class="table table-hover table-bordered table-sm">
+    <thead class="align-middle">
+        <tr class="table-header-group">
+            <th rowspan="2" style="min-width: 200px;">Проекты</th>
+            <th colspan="4">Кол-во заключенных договоров, шт</th>
+            <th colspan="4">Сумма контрактации заключенных договоров</th>
+            <th colspan="4">Сумма общих поступлений</th>
+        </tr>
+        <tr class="table-header-group">
+            <th>План</th><th>Факт</th><th>% факт</th><th>% прогноз</th>
+            <th>План</th><th>Факт</th><th>% факт</th><th>% прогноз</th>
+            <th>План</th><th>Факт</th><th>% факт</th><th>Ожидаемые поступления</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in data %}
+            {% if row.plan_units > 0 or row.fact_units > 0 or row.plan_volume > 0 or row.fact_volume > 0 or row.plan_income > 0 or row.fact_income > 0 %}
+            <tr>
+                <td style="font-weight: 500;">{{ row.complex_name }}</td>
+                <td>{{ row.plan_units }}</td><td>{{ row.fact_units }}</td>
+                <td><span class="percent-bar" style="background-color: #f8d7da; width: 100px;">{{ "%.0f"|format(row.percent_fact_units) }}%</span></td>
+                <td><span class="percent-bar" style="background-color: #d1ecf1; width: 100px;">{{ "%.0f"|format(row.forecast_units) }}%</span></td>
+                <td class="currency-value" data-uzs-value="{{ row.plan_volume }}">{{ "{:,.0f}".format(row.plan_volume) }}</td>
+                <td class="currency-value" data-uzs-value="{{ row.fact_volume }}">{{ "{:,.0f}".format(row.fact_volume) }}</td>
+                <td><span class="percent-bar" style="background-color: #f8d7da; width: 100px;">{{ "%.0f"|format(row.percent_fact_volume) }}%</span></td>
+                <td><span class="percent-bar" style="background-color: #d1ecf1; width: 100px;">{{ "%.0f"|format(row.forecast_volume) }}%</span></td>
+                <td class="currency-value" data-uzs-value="{{ row.plan_income }}">{{ "{:,.0f}".format(row.plan_income) }}</td>
+                <td class="currency-value" data-uzs-value="{{ row.fact_income }}">{{ "{:,.0f}".format(row.fact_income) }}</td>
+                <td><span class="percent-bar" style="background-color: #f8d7da; width: 100px;">{{ "%.0f"|format(row.percent_fact_income) }}%</span></td>
+                <td class="currency-value" data-uzs-value="{{ row.expected_income }}">{{ "{:,.0f}".format(row.expected_income) }}</td>
+            </tr>
+            {% endif %}
+        {% endfor %}
+        <tr class="table-light fw-bold">
+            <td>Итого</td>
+            <td>{{ totals.plan_units }}</td><td>{{ totals.fact_units }}</td>
+            <td><span class="percent-bar" style="background-color: #f8d7da; width: 100px;">{{ "%.0f"|format(totals.percent_fact_units) }}%</span></td>
+            <td><span class="percent-bar" style="background-color: #d1ecf1; width: 100px;">{{ "%.0f"|format(totals.forecast_units) }}%</span></td>
+            <td class="currency-value" data-uzs-value="{{ totals.plan_volume }}">{{ "{:,.0f}".format(totals.plan_volume) }}</td>
+            <td class="currency-value" data-uzs-value="{{ totals.fact_volume }}">{{ "{:,.0f}".format(totals.fact_volume) }}</td>
+            <td><span class="percent-bar" style="background-color: #f8d7da; width: 100px;">{{ "%.0f"|format(totals.percent_fact_volume) }}%</span></td>
+            <td><span class="percent-bar" style="background-color: #d1ecf1; width: 100px;">{{ "%.0f"|format(totals.forecast_volume) }}%</span></td>
+            <td class="currency-value" data-uzs-value="{{ totals.plan_income }}">{{ "{:,.0f}".format(totals.plan_income) }}</td>
+            <td class="currency-value" data-uzs-value="{{ totals.fact_income }}">{{ "{:,.0f}".format(totals.fact_income) }}</td>
+            <td><span class="percent-bar" style="background-color: #f8d7da; width: 100px;">{{ "%.0f"|format(totals.percent_fact_income) }}%</span></td>
+            <td class="currency-value" data-uzs-value="{{ totals.expected_income }}">{{ "{:,.0f}".format(totals.expected_income) }}</td>
+        </tr>
+    </tbody>
+</table>
+</div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const currencyToggle = document.getElementById('currencyToggle');
+    const currencyLabel = document.getElementById('currencyLabel');
+    const usdRate = {{ usd_to_uzs_rate or 12650 }};
+
+    function updateCurrency(isUsd) {
+        document.querySelectorAll('.currency-value').forEach(el => {
+            const uzsValue = parseFloat(el.dataset.uzsValue);
+            if (isNaN(uzsValue)) return;
+
+            let displayValue;
+            if (isUsd) {
+                currencyLabel.textContent = 'USD';
+                displayValue = '$' + (uzsValue / usdRate).toLocaleString('en-US', { maximumFractionDigits: 0 });
+            } else {
+                currencyLabel.textContent = 'UZS';
+                displayValue = uzsValue.toLocaleString('ru-RU', { maximumFractionDigits: 0 });
+            }
+            el.textContent = displayValue;
+        });
+    }
+
+    currencyToggle.addEventListener('change', function() {
+        updateCurrency(this.checked);
+    });
+
+    // Initial state
+    updateCurrency(currencyToggle.checked);
+});
+</script>
+{% endblock %}

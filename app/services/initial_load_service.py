@@ -4,10 +4,11 @@ from sqlalchemy.orm import sessionmaker
 from flask import current_app
 
 from ..core.extensions import db
-from ..models.estate_models import EstateHouse, EstateSell
+from ..models.estate_models import EstateHouse, EstateSell, EstateDeal
 from ..models.discount_models import DiscountVersion, Discount # Ensure Discount is imported if needed for clearing
 from ..models.exclusion_models import ExcludedSell # Ensure ExcludedSell is imported if needed for clearing
 from .discount_service import process_discounts_from_excel
+from ..models.finance_models import FinanceOperation
 
 CURRENT_DIR = os.path.dirname(__file__)
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, '..', '..'))
@@ -16,11 +17,10 @@ DISCOUNTS_EXCEL_PATH = os.path.join(PROJECT_ROOT, 'data_sources', 'discounts_tem
 
 def _migrate_mysql_estate_data_to_sqlite():
     """
-    Подключается к MySQL, извлекает данные по недвижимости (дома, квартиры)
+    Подключается к MySQL, извлекает данные (дома, квартиры, СДЕЛКИ)
     и перезаписывает их в SQLite.
-    НЕ затрагивает таблицы скидок или исключений.
     """
-    print("[MIGRATE] 🔄 Начало миграции данных недвижимости из MySQL в SQLite...")
+    print("[MIGRATE] 🔄 Начало миграции данных из MySQL в SQLite...")
 
     mysql_uri = current_app.config['SOURCE_MYSQL_URI']
     mysql_engine = create_engine(mysql_uri)
@@ -28,17 +28,20 @@ def _migrate_mysql_estate_data_to_sqlite():
     mysql_session = MySQLSession()
 
     try:
-        # Очищаем только данные по недвижимости в SQLite перед новой миграцией
-        print("[MIGRATE] 🧹 Очистка существующих данных по недвижимости в SQLite (EstateHouse, EstateSell)...")
+        # Очищаем данные в SQLite перед новой миграцией
+        print("[MIGRATE] 🧹 Очистка существующих данных в SQLite (EstateDeal, EstateSell, EstateHouse)...")
+        db.session.query(EstateDeal).delete()  # <-- ДОБАВЛЕНО: Очистка сделок
         db.session.query(EstateSell).delete()
         db.session.query(EstateHouse).delete()
-        db.session.commit() # Commit the deletion
-        print("[MIGRATE] ✔️ Данные по недвижимости очищены.")
+        db.session.query(FinanceOperation).delete()
+        db.session.commit()
+        print("[MIGRATE] ✔️ Данные по недвижимости и сделкам очищены.")
 
         # 1. Миграция таблицы estate_houses
         print("[MIGRATE] 🏡 Загрузка данных из таблицы 'estate_houses'...")
         mysql_houses = mysql_session.query(EstateHouse).filter(EstateHouse.complex_name.isnot(None)).all()
         for house in mysql_houses:
+            # ... (код без изменений)
             new_house = EstateHouse(
                 id=house.id,
                 complex_name=house.complex_name,
@@ -58,10 +61,12 @@ def _migrate_mysql_estate_data_to_sqlite():
             'storageroom': 'Кладовое помещение',
         }
         for sell in mysql_sells:
+            # ... (код без изменений)
             new_sell = EstateSell(
                 id=sell.id,
                 house_id=sell.house_id,
-                estate_sell_category=ESTATE_SELL_CATEGORY_MAPPING.get(sell.estate_sell_category, sell.estate_sell_category),
+                estate_sell_category=ESTATE_SELL_CATEGORY_MAPPING.get(sell.estate_sell_category,
+                                                                      sell.estate_sell_category),
                 estate_floor=sell.estate_floor,
                 estate_rooms=sell.estate_rooms,
                 estate_price_m2=sell.estate_price_m2,
@@ -72,12 +77,48 @@ def _migrate_mysql_estate_data_to_sqlite():
             db.session.add(new_sell)
         print(f"[MIGRATE] ✔️ Найдено и подготовлено к записи объектов продажи: {len(mysql_sells)}")
 
-        db.session.commit() # Commit the new data
-        print("[MIGRATE] ✔️ Данные недвижимости успешно сохранены.")
+        # --- НАЧАЛО НОВОГО БЛОКА: Миграция таблицы estate_deals ---
+        print("[MIGRATE] 🤝 Загрузка данных из таблицы 'estate_deals'...")
+        mysql_deals = mysql_session.query(EstateDeal).all()
+
+        # Используем тот же маппинг, что и для estate_sells, если названия типов совпадают
+        DEAL_PROPERTY_TYPE_MAPPING = {
+            'flat': 'Квартира',
+            'comm': 'Коммерческое помещение',
+            'garage': 'Парковка',
+            'storageroom': 'Кладовое помещение',
+        }
+
+        for deal in mysql_deals:
+            new_deal = EstateDeal(
+                id=deal.id,
+                estate_sell_id=deal.estate_sell_id,  # Просто копируем ID
+                deal_status_name=deal.deal_status_name,
+                agreement_date=deal.agreement_date,
+                preliminary_date=deal.preliminary_date,
+                deal_sum = deal.deal_sum
+            )
+            db.session.add(new_deal)
+        print(f"[MIGRATE] ✔️ Найдено и подготовлено к записи сделок: {len(mysql_deals)}")
+        # --- КОНЕЦ НОВОГО БЛОКА ---
+        print("[MIGRATE] 💰 Загрузка данных из таблицы 'finances'...")
+        mysql_finances = mysql_session.query(FinanceOperation).all()
+        for fin_op in mysql_finances:
+            new_fin_op = FinanceOperation(
+                id=fin_op.id,
+                estate_sell_id=fin_op.estate_sell_id,
+                summa=fin_op.summa,
+                status_name=fin_op.status_name,
+                date_added=fin_op.date_added
+            )
+            db.session.add(new_fin_op)
+        print(f"[MIGRATE] ✔️ Найдено и подготовлено к записи фин. операций: {len(mysql_finances)}")
+        db.session.commit()
+        print("[MIGRATE] ✔️ Все данные успешно сохранены в SQLite.")
 
     except Exception as e:
-        print(f"[MIGRATE] ❌ ОШИБКА во время миграции данных недвижимости: {e}")
-        db.session.rollback() # Rollback on error
+        print(f"[MIGRATE] ❌ ОШИБКА во время миграции: {e}")
+        db.session.rollback()
         raise e
     finally:
         mysql_session.close()

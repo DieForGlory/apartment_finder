@@ -37,6 +37,22 @@ class DiscountVersion(db.Model):
     discounts = db.relationship('Discount', back_populates='version', cascade="all, delete-orphan")
     complex_comments = db.relationship('ComplexComment', back_populates='version', cascade="all, delete-orphan")
 
+class SalesPlan(db.Model):
+    """Модель для хранения плановых показателей по продажам."""
+    __tablename__ = 'sales_plans'
+    __bind_key__ = 'discounts' # Храним планы в той же БД, что и скидки
+
+    id = db.Column(db.Integer, primary_key=True)
+    complex_name = db.Column(db.String(255), nullable=False, index=True)
+    property_type = db.Column(db.String(100), nullable=False)
+    year = db.Column(db.Integer, nullable=False)
+    month = db.Column(db.Integer, nullable=False)
+    plan_units = db.Column(db.Integer, nullable=False, default=0) # План в штуках
+    plan_volume = db.Column(db.Float, nullable=False, default=0.0)
+    plan_income = db.Column(db.Float, nullable=False, default=0.0)  # План по поступлениям в UZS
+    __table_args__ = (
+        db.UniqueConstraint('year', 'month', 'complex_name', 'property_type', name='_plan_period_complex_prop_uc'),
+    )
 
 class Discount(db.Model):
     __tablename__ = 'discounts'
@@ -81,3 +97,20 @@ class ComplexComment(db.Model):
     __table_args__ = (
         db.UniqueConstraint('version_id', 'complex_name', name='_version_complex_uc'),
     )
+
+
+class CalculatorSettings(db.Model):
+    """Модель для хранения глобальных настроек калькуляторов."""
+    __tablename__ = 'calculator_settings'
+    __bind_key__ = 'discounts'
+
+    id = db.Column(db.Integer, primary_key=True)
+    # Списки ID квартир, для которых доступен калькулятор (через запятую)
+    standard_installment_whitelist = db.Column(db.Text, nullable=True)
+    dp_installment_whitelist = db.Column(db.Text, nullable=True)
+
+    # Максимальный срок для рассрочки на ПВ
+    dp_installment_max_term = db.Column(db.Integer, default=6)
+
+    # Годовая ставка для расчета коэффициента "денег во времени"
+    time_value_rate_annual = db.Column(db.Float, default=16.5)

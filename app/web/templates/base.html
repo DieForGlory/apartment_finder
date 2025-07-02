@@ -1,6 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru" data-bs-theme="light">
-<head>
+<html lang="ru" data-bs-theme="light"> <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Система подбора квартир{% endblock %}</title>
@@ -10,6 +9,20 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+    <script>
+        (function() {
+            const getStoredTheme = () => localStorage.getItem('theme');
+            const getPreferredTheme = () => {
+                const storedTheme = getStoredTheme();
+                if (storedTheme) {
+                    return storedTheme;
+                }
+                return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            };
+            document.documentElement.setAttribute('data-bs-theme', getPreferredTheme());
+        })();
+    </script>
 
     <style>
         /* :::::: ПЕРЕМЕННЫЕ И ЦВЕТОВАЯ СХЕМА :::::: */
@@ -31,7 +44,6 @@
         }
 
         [data-bs-theme="dark"] {
-            /* --- ИЗМЕНЕНИЕ: Сплошной черный фон --- */
             --bs-body-bg: #000000;
             --bs-body-color: #dee2e6;
             --gh-element-bg: #212529;
@@ -39,14 +51,14 @@
             --bs-border-color: #495057;
             --gh-header-color: #ffffff;
             --gh-link-color: #adb5bd;
-            --gh-card-shadow: rgba(0,0,0,0.3); /* Более заметная тень для темной темы */
+            --gh-card-shadow: rgba(0,0,0,0.3);
         }
 
         body {
             font-family: 'Montserrat', sans-serif;
             background: var(--bs-body-bg);
             color: var(--bs-body-color);
-            transition: background-color 0.3s ease, color 0.3s ease; /* Плавный переход для темы */
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
 
         #particles-js {
@@ -55,37 +67,37 @@
             height: 100%;
             top: 0;
             left: 0;
-            z-index: -1; /* Отправляем на задний план */
-            pointer-events: none; /* Игнорируем события мыши */
+            z-index: -1;
+            pointer-events: none;
         }
 
         .header {
             background-color: rgba(var(--gh-element-bg-rgb), 0.8);
             backdrop-filter: blur(10px);
-            box-shadow: 0 2px 10px var(--gh-card-shadow); /* Добавляем тень к шапке */
+            box-shadow: 0 2px 10px var(--gh-card-shadow);
         }
 
         .nav-link {
             font-weight: 500;
             color: var(--gh-link-color);
-            transition: color 0.2s ease, transform 0.2s ease; /* Переход для ссылок */
+            transition: color 0.2s ease, transform 0.2s ease;
         }
         .nav-link.active, .nav-link:hover {
             color: var(--gh-gold) !important;
-            transform: translateY(-2px); /* Легкий эффект при наведении */
+            transform: translateY(-2px);
         }
         .nav-link:focus {
-            outline: 2px solid rgba(var(--gh-gold-rgb), 0.5); /* Видимый фокус */
+            outline: 2px solid rgba(var(--gh-gold-rgb), 0.5);
             outline-offset: 2px;
         }
 
         .accordion-item {
             background-color: var(--gh-element-bg);
-            border-color: var(--bs-border-color); /* Бордюр аккордеона */
+            border-color: var(--bs-border-color);
             transition: background-color 0.3s ease, border-color 0.3s ease;
         }
         .accordion-button {
-            color: var(--bs-body-color); /* Цвет текста кнопки аккордеона */
+            color: var(--bs-body-color);
             background-color: var(--gh-element-bg);
             transition: color 0.3s ease, background-color 0.3s ease;
         }
@@ -99,12 +111,11 @@
             border-color: rgba(var(--gh-gold-rgb), 0.5);
         }
 
-        /* Общие стили для кнопок и форм */
         .btn {
             transition: all 0.2s ease-in-out;
         }
         .btn-outline-secondary, .btn-outline-success, .btn-outline-primary, .btn-warning {
-            border-width: 2px; /* Чуть более толстая рамка для кнопок */
+            border-width: 2px;
         }
         .btn-outline-secondary:hover {
             background-color: var(--gh-gold);
@@ -121,7 +132,7 @@
         .form-control:focus, .form-select:focus {
             border-color: var(--gh-gold);
             box-shadow: 0 0 0 .25rem rgba(var(--gh-gold-rgb), 0.25);
-            background-color: var(--gh-element-bg); /* Сохраняем фон при фокусе */
+            background-color: var(--gh-element-bg);
             color: var(--bs-body-color);
         }
 
@@ -131,13 +142,12 @@
             --bs-table-border-color: var(--bs-border-color);
         }
         .table-striped tbody tr:nth-of-type(odd) {
-            background-color: rgba(var(--bs-body-color-rgb), 0.05); /* Легкий фон для чередующихся строк */
+            background-color: rgba(var(--bs-body-color-rgb), 0.05);
         }
         .table-hover tbody tr:hover {
-            background-color: rgba(var(--gh-gold-rgb), 0.1); /* Эффект при наведении на строки */
+            background-color: rgba(var(--gh-gold-rgb), 0.1);
         }
 
-        /* Улучшение для карточек в selection.html и apartment_details.html */
         .card {
             background-color: var(--gh-element-bg);
             border-color: var(--bs-border-color);
@@ -145,7 +155,6 @@
             transition: all 0.3s ease;
         }
 
-        /* Стили для модальных окон */
         .modal-content {
             background-color: var(--gh-element-bg);
             color: var(--bs-body-color);
@@ -159,7 +168,6 @@
             border-top-color: var(--bs-border-color);
         }
 
-        /* Дополнительные стили для баджей */
         .badge {
             font-weight: 600;
             padding: 0.4em 0.7em;
@@ -185,39 +193,33 @@
                     <span class="navbar-toggler-icon"></span>
                 </button>
                 <div class="collapse navbar-collapse" id="mainNav">
-
                     <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                         {% if current_user.is_authenticated %}
-
-                            {% if current_user.role.name in ['ADMIN', 'MANAGER'] %}
-                            <li class="nav-item">
-                                <a class="nav-link {% if request.endpoint == 'main.index' %}active{% endif %}" href="{{ url_for('main.index') }}">Каталог</a>
-                            </li>
-                            {% endif %}
-
                             <li class="nav-item">
                                 <a class="nav-link {% if request.endpoint == 'main.selection' %}active{% endif %}" href="{{ url_for('main.selection') }}">Подбор по бюджету</a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link {% if request.endpoint == 'discount.discounts_overview' %}active{% endif %}" href="{{ url_for('discount.discounts_overview') }}">Система скидок</a>
                             </li>
-
-                            {% if current_user.role.name == 'ADMIN' %}
+                            {% if current_user.role.name in ['ADMIN', 'MANAGER'] %}
                             <li class="nav-item dropdown">
-                                <a class="nav-link dropdown-toggle {% if request.endpoint in ['discount.versions_index', 'discount.upload_discounts', 'main.manage_exclusions', 'auth.user_management'] %}active{% endif %}" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <a class="nav-link dropdown-toggle {% if request.endpoint in ['discount.versions_index', 'report.plan_fact_report', 'report.upload_plan', 'discount.upload_discounts', 'main.manage_exclusions', 'auth.user_management', 'settings.manage_settings'] %}active{% endif %}" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                     Администрирование
                                 </a>
                                 <ul class="dropdown-menu" aria-labelledby="adminDropdown">
-                                    <li><a class="dropdown-item" href="{{ url_for('discount.versions_index') }}">Управление скидками</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('discount.upload_discounts') }}">Загрузить скидки</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('main.manage_exclusions') }}">Исключения</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('discount.versions_index') }}"><i class="bi bi-git me-2"></i>Управление скидками</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('report.plan_fact_report') }}"><i class="bi bi-clipboard-data me-2"></i>План-факт отчет</a></li>
+                                    {% if current_user.role.name == 'ADMIN' %}
                                     <li><hr class="dropdown-divider"></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('auth.user_management') }}">Управление пользователями</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('report.upload_plan') }}"><i class="bi bi-cloud-upload me-2"></i>Загрузить план</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('discount.upload_discounts') }}"><i class="bi bi-cloud-arrow-up me-2"></i>Загрузить скидки</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('main.manage_exclusions') }}"><i class="bi bi-slash-circle me-2"></i>Исключения</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('auth.user_management') }}"><i class="bi bi-people me-2"></i>Пользователи</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('settings.manage_settings') }}"><i class="bi bi-gear-wide-connected me-2"></i>Настройки калькуляторов</a></li>
+                                    {% endif %}
                                 </ul>
-                            </li>
-                            {% elif current_user.role.name == 'MANAGER' %}
-                            <li class="nav-item">
-                                <a class="nav-link {% if 'versions' in request.endpoint %}active{% endif %}" href="{{ url_for('discount.versions_index') }}">Управление скидками</a>
                             </li>
                             {% endif %}
                         {% endif %}
@@ -230,28 +232,16 @@
                                     {{ current_user.username }} ({{ current_user.role.value }})
                                 </a>
                                 <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarUserDropdown">
-                                    <li>
-                                        <a class="dropdown-item" href="{{ url_for('auth.change_password') }}">
-                                            <i class="bi bi-key-fill me-2"></i>Сменить пароль
-                                        </a>
-                                    </li>
+                                    <li><a class="dropdown-item" href="{{ url_for('auth.change_password') }}"><i class="bi bi-key-fill me-2"></i>Сменить пароль</a></li>
                                     <li><hr class="dropdown-divider"></li>
-                                    <li>
-                                        <a class="dropdown-item text-danger" href="{{ url_for('auth.logout') }}">
-                                            <i class="bi bi-box-arrow-right me-2"></i>Выйти
-                                        </a>
-                                    </li>
+                                    <li><a class="dropdown-item text-danger" href="{{ url_for('auth.logout') }}"><i class="bi bi-box-arrow-right me-2"></i>Выйти</a></li>
                                 </ul>
                             </div>
                         {% endif %}
-
                         <div class="theme-switcher-container ms-2">
-                            <button id="theme-switcher-btn" class="btn btn-outline-secondary btn-sm">
-                                <i class="bi" id="theme-icon"></i>
-                            </button>
+                            <button id="theme-switcher-btn" class="btn btn-outline-secondary btn-sm"><i class="bi" id="theme-icon"></i></button>
                         </div>
                     </div>
-
                 </div>
             </div>
         </nav>
@@ -277,42 +267,37 @@
 
     {% block scripts %}
     <script>
+        // ИСПРАВЛЕНИЕ: Этот скрипт теперь отвечает только за интерактивность, а не за начальную установку темы
         document.addEventListener('DOMContentLoaded', function () {
-            // --- Код для переключения темы ---
             const themeSwitcherBtn = document.getElementById('theme-switcher-btn');
             const themeIcon = document.getElementById('theme-icon');
-            const htmlElement = document.documentElement;
 
-            const getStoredTheme = () => localStorage.getItem('theme');
+            const getStoredTheme = () => localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
             const setStoredTheme = theme => localStorage.setItem('theme', theme);
 
-            const getPreferredTheme = () => {
-                const storedTheme = getStoredTheme();
-                if (storedTheme) return storedTheme;
-                return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-            };
-
-            const setTheme = (theme) => {
-                htmlElement.setAttribute('data-bs-theme', theme);
+            // Функция для обновления иконки кнопки
+            const updateIcon = (theme) => {
+                themeIcon.className = 'bi'; // Сбрасываем классы
                 if (theme === 'dark') {
-                    themeIcon.classList.remove('bi-moon-stars-fill');
                     themeIcon.classList.add('bi-sun-fill');
                 } else {
-                    themeIcon.classList.remove('bi-sun-fill');
                     themeIcon.classList.add('bi-moon-stars-fill');
                 }
             };
 
-            setTheme(getPreferredTheme());
+            // Устанавливаем правильную иконку при загрузке
+            updateIcon(getStoredTheme());
 
+            // Обработчик клика для смены темы
             themeSwitcherBtn.addEventListener('click', () => {
-                const currentTheme = getPreferredTheme();
+                const currentTheme = getStoredTheme();
                 const newTheme = currentTheme === 'light' ? 'dark' : 'light';
                 setStoredTheme(newTheme);
-                setTheme(newTheme);
+                document.documentElement.setAttribute('data-bs-theme', newTheme);
+                updateIcon(newTheme);
             });
 
-            // --- Конфигурация particles.js ---
+            // --- Конфигурация particles.js (без изменений) ---
             particlesJS('particles-js', {
                 "particles": { "number": { "value": 50, "density": { "enable": true, "value_area": 800 } }, "color": { "value": "#c4a668" }, "shape": { "type": "polygon", "stroke": { "width": 1, "color": "#c4a668" }, "polygon": { "nb_sides": 6 } }, "opacity": { "value": 0.2, "random": true, "anim": { "enable": true, "speed": 0.5, "opacity_min": 0.05, "sync": false } }, "size": { "value": 4, "random": true }, "line_linked": { "enable": true, "distance": 180, "color": "#c4a668", "opacity": 0.15, "width": 1 }, "move": { "enable": true, "speed": 0.8, "direction": "none", "random": true, "straight": false, "out_mode": "out" } },
                 "interactivity": { "detect_on": "canvas", "events": { "onhover": { "enable": true, "mode": "bubble" } }, "modes": { "bubble": { "distance": 200, "size": 6, "duration": 2, "opacity": 0.6 } } },

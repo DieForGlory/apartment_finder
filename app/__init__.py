@@ -37,12 +37,15 @@ def create_app(config_class=DevelopmentConfig):
     from .web.main_routes import main_bp
     from .web.auth_routes import auth_bp
     from .web.discount_routes import discount_bp
-
-    # 2. Регистрируем их в приложении
+    from .web.report_routes import report_bp
+    from .web.complex_calc_routes import complex_calc_bp
+    from .web.settings_routes import settings_bp
+    app.register_blueprint(report_bp, url_prefix='/reports')
     app.register_blueprint(main_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(discount_bp)
-
+    app.register_blueprint(complex_calc_bp)
+    app.register_blueprint(settings_bp)
     return app
 
 # НОВОЕ: функция для загрузки пользователя из сессии

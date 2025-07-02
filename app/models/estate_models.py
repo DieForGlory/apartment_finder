@@ -1,6 +1,20 @@
 from app.core.extensions import db
 
 
+class EstateDeal(db.Model):
+    __tablename__ = 'estate_deals'
+    id = db.Column(db.Integer, primary_key=True)
+
+    # ИЗМЕНЕНИЕ: Заменяем house_id и property_type на estate_sell_id
+    estate_sell_id = db.Column(db.Integer, db.ForeignKey('estate_sells.id'), nullable=False)
+
+    deal_status_name = db.Column(db.String(100))
+    agreement_date = db.Column(db.Date, nullable=True)
+    preliminary_date = db.Column(db.Date, nullable=True)
+    deal_sum = db.Column(db.Float, nullable=True)
+    # ИЗМЕНЕНИЕ: Добавляем связь с EstateSell, чтобы легко получать всю информацию
+    sell = db.relationship('EstateSell')
+
 class EstateHouse(db.Model):
     __tablename__ = 'estate_houses'
     __table_args__ = {'extend_existing': True}
@@ -30,5 +44,6 @@ class EstateSell(db.Model):
 
     # --- НОВОЕ ПОЛЕ ---
     estate_area = db.Column(db.Float, nullable=True)  # Площадь объекта
-
+    finance_operations = db.relationship('FinanceOperation', back_populates='sell', cascade="all, delete-orphan")
     house = db.relationship('EstateHouse', back_populates='sells')
+    deals = db.relationship('EstateDeal', back_populates='sell', cascade="all, delete-orphan")

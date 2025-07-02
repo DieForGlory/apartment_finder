@@ -73,7 +73,7 @@
                 {% set base_payment_method = '100% оплата' if '100' in option.type_key or 'full_payment' in option.type_key else 'Ипотека' %}
                 {% set current_discount_object = all_discounts_for_property_type | selectattr('complex_name', 'eq', complex_name_for_filter) | selectattr('payment_method', 'eq', base_payment_method) | first %}
                 {% if current_discount_object %}
-                    {% for field_name, display_name in [('kd', 'КД'), ('opt', 'ОПТ'), ('gd', 'ГД'), ('holding', 'Холдинг'), ('shareholder', 'Акционер'), ('action', 'Акция')] %}
+                    {% for field_name, display_name in [('kd', 'КД'), ('opt', 'ОПТ'), ('gd', 'ГД'), ('holding', 'Холдинg'), ('shareholder', 'Акционер'), ('action', 'Акция')] %}
                         {% if not (field_name == 'kd' and 'easy_start' in option.type_key) %}
                             {% if current_discount_object[field_name] is defined and current_discount_object[field_name] > 0 %}
                             <li><a class="dropdown-item additional-discount-item" href="#" data-discount-type="{{ field_name }}" data-max-percent="{{ "%.1f"|format(current_discount_object[field_name] * 100) }}">{{ display_name }} (макс. {{ "%.1f"|format(current_discount_object[field_name] * 100) }}%)</a></li>
@@ -97,7 +97,9 @@
         {% if data.apartment and data.apartment.id is not none %}
         <button id="printKpBtn" class="btn btn-primary" data-sell-id="{{ data.apartment.id }}"><i class="bi bi-printer me-1"></i> Распечатать КП</button>
         {% else %}
-        <button type="button" class="btn btn-secondary disabled" title="ID объекта недоступен для КП"><i class="bi bi-printer me-1"></i> Распечатать КП</button>
+        <button type="button" class="btn btn-success no-print" data-bs-toggle="modal" data-bs-target="#printChoiceModal">
+            <i class="fas fa-print"></i> Печать КП
+        </button>
         {% endif %}
     </div>
 </div>
@@ -115,7 +117,14 @@
                 <li class="list-group-item-custom d-flex justify-content-between align-items-center"><span class="text-muted"><i class="bi bi-building-fill-check me-2"></i>Тип объекта</span><strong>{{ data.apartment.estate_sell_category if data.apartment else 'N/A' }}</strong></li>
                 <li class="list-group-item-custom d-flex justify-content-between align-items-center"><span class="text-muted"><i class="bi bi-tag me-2"></i>Базовая цена</span><strong>{{ "{:,.0f}".format(data.apartment.estate_price) if data.apartment and data.apartment.estate_price is not none else 'N/A' }} UZS</strong></li>
             </ul>
-        </div>
+
+            <div class="d-grid mt-4">
+                <a href="{{ url_for('complex_calc.show_page', sell_id=data.apartment.id) }}" class="btn btn-outline-warning btn-lg">
+                    <i class="bi bi-calculator-fill me-2"></i>
+                    Сложные расчёты
+                </a>
+            </div>
+            </div>
     </div>
 
     <div class="col-lg-7">

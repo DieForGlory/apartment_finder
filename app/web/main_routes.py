@@ -4,15 +4,33 @@ from flask import Blueprint, render_template, request, flash, redirect, url_for,
 from flask_login import login_required
 from ..models.discount_models import PropertyType, PaymentMethod
 from ..models.exclusion_models import ExcludedSell
+from ..services import selection_service
 from ..services.selection_service import find_apartments_by_budget, get_apartment_card_data
 from ..services.data_service import get_sells_with_house_info, get_filter_options
 from ..services.discount_service import get_current_usd_rate
 from ..core.extensions import db
 from ..core.decorators import role_required
-
+from flask import request, redirect, url_for, flash
 main_bp = Blueprint('main', __name__, template_folder='templates')
 
-
+@main_bp.route('/search-by-id', methods=['POST'])
+@login_required
+def search_by_id():
+    """
+    Принимает ID из формы поиска и перенаправляет на карточку объекта.
+    """
+    sell_id = request.form.get('search_id')
+    if sell_id:
+        # Проверяем, что введено число
+        try:
+            int(sell_id)
+            return redirect(url_for('main.apartment_details', sell_id=sell_id))
+        except ValueError:
+            flash('Пожалуйста, введите корректный числовой ID.', 'warning')
+            return redirect(url_for('main.selection'))
+    else:
+        flash('Вы не ввели ID для поиска.', 'info')
+        return redirect(url_for('main.selection'))
 @main_bp.route('/')
 @login_required
 @role_required('ADMIN', 'MANAGER',"MPP")
@@ -200,3 +218,5 @@ def manage_exclusions():
 
     excluded_sells = ExcludedSell.query.order_by(ExcludedSell.created_at.desc()).all()
     return render_template('manage_exclusions.html', excluded_sells=excluded_sells, title="Управление исключениями")
+
+
