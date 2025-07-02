@@ -1,16 +1,11 @@
 {% extends "base.html" %}
 
-{% block content %}
-<style>
-    .table-header-group { background-color: #e9ecef; }
-    [data-bs-theme="dark"] .table-header-group { background-color: #32383e; }
-    .table-responsive { overflow-x: auto; }
-    .table th, .table td { white-space: nowrap; text-align: right; }
-    .table th:first-child, .table td:first-child { text-align: left; position: sticky; left: 0; background: var(--gh-element-bg); }
-    .table thead th { vertical-align: middle; }
-    .percent-bar { display: inline-block; padding: .25em .4em; font-size: 75%; font-weight: 700; line-height: 1; text-align: center; white-space: nowrap; vertical-align: baseline; border-radius: .375rem; color: #000; }
-</style>
+{% block styles %}
+    {{ super() }}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/report_style.css') }}">
+{% endblock %}
 
+{% block content %}
 <h1 class="mb-4">Сводный план-фактный отчет</h1>
 
 <div class="card card-glass p-3 mb-4">
@@ -30,93 +25,186 @@
     </div>
 </div>
 
-<div class="card card-glass">
-<div class="card-body table-responsive">
-<table class="table table-hover table-bordered table-sm">
-    <thead class="align-middle">
-        <tr class="table-header-group">
-            <th rowspan="2" style="min-width: 200px;">Проекты</th>
-            <th colspan="4">Кол-во заключенных договоров, шт</th>
-            <th colspan="4">Сумма контрактации заключенных договоров</th>
-            <th colspan="4">Сумма общих поступлений</th>
-        </tr>
-        <tr class="table-header-group">
-            <th>План</th><th>Факт</th><th>% факт</th><th>% прогноз</th>
-            <th>План</th><th>Факт</th><th>% факт</th><th>% прогноз</th>
-            <th>План</th><th>Факт</th><th>% факт</th><th>Ожидаемые поступления</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for row in data %}
-            {% if row.plan_units > 0 or row.fact_units > 0 or row.plan_volume > 0 or row.fact_volume > 0 or row.plan_income > 0 or row.fact_income > 0 %}
-            <tr>
-                <td style="font-weight: 500;">{{ row.complex_name }}</td>
-                <td>{{ row.plan_units }}</td><td>{{ row.fact_units }}</td>
-                <td><span class="percent-bar" style="background-color: #f8d7da; width: 100px;">{{ "%.0f"|format(row.percent_fact_units) }}%</span></td>
-                <td><span class="percent-bar" style="background-color: #d1ecf1; width: 100px;">{{ "%.0f"|format(row.forecast_units) }}%</span></td>
-                <td class="currency-value" data-uzs-value="{{ row.plan_volume }}">{{ "{:,.0f}".format(row.plan_volume) }}</td>
-                <td class="currency-value" data-uzs-value="{{ row.fact_volume }}">{{ "{:,.0f}".format(row.fact_volume) }}</td>
-                <td><span class="percent-bar" style="background-color: #f8d7da; width: 100px;">{{ "%.0f"|format(row.percent_fact_volume) }}%</span></td>
-                <td><span class="percent-bar" style="background-color: #d1ecf1; width: 100px;">{{ "%.0f"|format(row.forecast_volume) }}%</span></td>
-                <td class="currency-value" data-uzs-value="{{ row.plan_income }}">{{ "{:,.0f}".format(row.plan_income) }}</td>
-                <td class="currency-value" data-uzs-value="{{ row.fact_income }}">{{ "{:,.0f}".format(row.fact_income) }}</td>
-                <td><span class="percent-bar" style="background-color: #f8d7da; width: 100px;">{{ "%.0f"|format(row.percent_fact_income) }}%</span></td>
-                <td class="currency-value" data-uzs-value="{{ row.expected_income }}">{{ "{:,.0f}".format(row.expected_income) }}</td>
-            </tr>
-            {% endif %}
-        {% endfor %}
-        <tr class="table-light fw-bold">
-            <td>Итого</td>
-            <td>{{ totals.plan_units }}</td><td>{{ totals.fact_units }}</td>
-            <td><span class="percent-bar" style="background-color: #f8d7da; width: 100px;">{{ "%.0f"|format(totals.percent_fact_units) }}%</span></td>
-            <td><span class="percent-bar" style="background-color: #d1ecf1; width: 100px;">{{ "%.0f"|format(totals.forecast_units) }}%</span></td>
-            <td class="currency-value" data-uzs-value="{{ totals.plan_volume }}">{{ "{:,.0f}".format(totals.plan_volume) }}</td>
-            <td class="currency-value" data-uzs-value="{{ totals.fact_volume }}">{{ "{:,.0f}".format(totals.fact_volume) }}</td>
-            <td><span class="percent-bar" style="background-color: #f8d7da; width: 100px;">{{ "%.0f"|format(totals.percent_fact_volume) }}%</span></td>
-            <td><span class="percent-bar" style="background-color: #d1ecf1; width: 100px;">{{ "%.0f"|format(totals.forecast_volume) }}%</span></td>
-            <td class="currency-value" data-uzs-value="{{ totals.plan_income }}">{{ "{:,.0f}".format(totals.plan_income) }}</td>
-            <td class="currency-value" data-uzs-value="{{ totals.fact_income }}">{{ "{:,.0f}".format(totals.fact_income) }}</td>
-            <td><span class="percent-bar" style="background-color: #f8d7da; width: 100px;">{{ "%.0f"|format(totals.percent_fact_income) }}%</span></td>
-            <td class="currency-value" data-uzs-value="{{ totals.expected_income }}">{{ "{:,.0f}".format(totals.expected_income) }}</td>
-        </tr>
-    </tbody>
-</table>
-</div>
+<ul class="nav nav-tabs mb-4" id="reportTab" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link active" id="summary-tab" data-bs-toggle="tab" data-bs-target="#summary-pane" type="button" role="tab">Сводка</button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="details-tab" data-bs-toggle="tab" data-bs-target="#details-pane" type="button" role="tab">Детальный отчет</button>
+  </li>
+</ul>
+
+<div class="tab-content" id="reportTabContent">
+
+  <div class="tab-pane fade show active" id="summary-pane" role="tabpanel">
+
+    <div class="mb-4">
+        <input type="text" id="projectSearchInput" class="form-control form-control-lg" placeholder="🔎 Поиск по названию проекта...">
+    </div>
+
+    <div class="report-card summary-card">
+        <div class="report-card-header"><h5 class="mb-0">Итого ({{ selected_prop_type }})</h5></div>
+        <div class="report-card-body metric-grid">
+            <div class="metric-item">
+                <span class="metric-label">Контрактация</span>
+                <span class="metric-value currency-value" data-uzs-value="{{ totals.fact_volume }}">{{ "{:,.0f}".format(totals.fact_volume) }}</span>
+                <span class="metric-sub-value currency-value" data-uzs-value="{{ totals.plan_volume }}">План: {{ "{:,.0f}".format(totals.plan_volume) }}</span>
+                <div class="progress-bar-container">
+                    {% set p_vol = totals.percent_fact_volume %}
+                    <div class="progress-bar-fill {% if p_vol >= 95 %}bg-success-custom{% elif p_vol >= 75 %}bg-warning-custom{% else %}bg-danger-custom{% endif %}" style="width: {{ p_vol }}%;">{{ "%.0f"|format(p_vol) }}%</div>
+                </div>
+            </div>
+            <div class="metric-item">
+                <span class="metric-label">Поступления</span>
+                <span class="metric-value currency-value" data-uzs-value="{{ totals.fact_income }}">{{ "{:,.0f}".format(totals.fact_income) }}</span>
+                 <span class="metric-sub-value currency-value" data-uzs-value="{{ totals.plan_income }}">План: {{ "{:,.0f}".format(totals.plan_income) }}</span>
+                <div class="progress-bar-container">
+                    {% set p_inc = totals.percent_fact_income %}
+                    <div class="progress-bar-fill {% if p_inc >= 95 %}bg-success-custom{% elif p_inc >= 75 %}bg-warning-custom{% else %}bg-danger-custom{% endif %}" style="width: {{ p_inc }}%;">{{ "%.0f"|format(p_inc) }}%</div>
+                </div>
+            </div>
+             <div class="metric-item">
+                <span class="metric-label">Продано, шт.</span>
+                <span class="metric-value">{{ totals.fact_units }}</span>
+                <span class="metric-sub-value">План: {{ totals.plan_units }}</span>
+                <div class="progress-bar-container">
+                    {% set p_units = totals.percent_fact_units %}
+                    <div class="progress-bar-fill {% if p_units >= 95 %}bg-success-custom{% elif p_units >= 75 %}bg-warning-custom{% else %}bg-danger-custom{% endif %}" style="width: {{ p_units }}%;">{{ "%.0f"|format(p_units) }}%</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="projects-list">
+    {% for row in data %}
+      {% if row.plan_units > 0 or row.fact_units > 0 or row.plan_volume > 0 or row.fact_volume > 0 or row.plan_income > 0 or row.fact_income > 0 %}
+      <div class="report-card project-card">
+        <div class="report-card-header">
+            <span class="project-name">
+                <a href="{{ url_for('report.project_dashboard', complex_name=row.complex_name) }}">{{ row.complex_name }}</a>
+            </span>
+        </div>
+        <div class="report-card-body metric-grid">
+           <div class="metric-item">
+                <span class="metric-label">Контрактация</span>
+                <span class="metric-value currency-value" data-uzs-value="{{ row.fact_volume }}">{{ "{:,.0f}".format(row.fact_volume) }}</span>
+                <span class="metric-sub-value currency-value" data-uzs-value="{{ row.plan_volume }}">План: {{ "{:,.0f}".format(row.plan_volume) }}</span>
+                <div class="progress-bar-container">
+                    {% set p_vol = row.percent_fact_volume %}
+                    <div class="progress-bar-fill {% if p_vol >= 95 %}bg-success-custom{% elif p_vol >= 75 %}bg-warning-custom{% else %}bg-danger-custom{% endif %}" style="width: {{ p_vol }}%;">{{ "%.0f"|format(p_vol) }}%</div>
+                </div>
+            </div>
+            <div class="metric-item">
+                <span class="metric-label">Поступления</span>
+                <span class="metric-value currency-value" data-uzs-value="{{ row.fact_income }}">{{ "{:,.0f}".format(row.fact_income) }}</span>
+                <span class="metric-sub-value currency-value" data-uzs-value="{{ row.plan_income }}">План: {{ "{:,.0f}".format(row.plan_income) }}</span>
+                 <div class="progress-bar-container">
+                    {% set p_inc = row.percent_fact_income %}
+                    <div class="progress-bar-fill {% if p_inc >= 95 %}bg-success-custom{% elif p_inc >= 75 %}bg-warning-custom{% else %}bg-danger-custom{% endif %}" style="width: {{ p_inc }}%;">{{ "%.0f"|format(p_inc) }}%</div>
+                </div>
+            </div>
+             <div class="metric-item">
+                <span class="metric-label">Продано, шт.</span>
+                <span class="metric-value">{{ row.fact_units }}</span>
+                <span class="metric-sub-value">План: {{ row.plan_units }}</span>
+                 <div class="progress-bar-container">
+                    {% set p_units = row.percent_fact_units %}
+                    <div class="progress-bar-fill {% if p_units >= 95 %}bg-success-custom{% elif p_units >= 75 %}bg-warning-custom{% else %}bg-danger-custom{% endif %}" style="width: {{ p_units }}%;">{{ "%.0f"|format(p_units) }}%</div>
+                </div>
+            </div>
+        </div>
+      </div>
+      {% endif %}
+    {% endfor %}
+    </div>
+  </div>
+
+  <div class="tab-pane fade" id="details-pane" role="tabpanel">
+    <div class="card card-glass">
+        <div class="card-body details-table-container">
+            <table class="table table-hover details-table">
+                <thead>
+                    <tr>
+                        <th rowspan="2">Проекты ({{ selected_prop_type }})</th>
+                        <th colspan="4" class="group-header">Кол-во, шт.</th>
+                        <th colspan="4" class="group-header">Контрактация</th>
+                        <th colspan="4" class="group-header">Поступления</th>
+                    </tr>
+                    <tr>
+                        <th>План</th><th>Факт</th><th>% факт</th><th>% прогноз</th>
+                        <th>План</th><th>Факт</th><th>% факт</th><th>% прогноз</th>
+                        <th>План</th><th>Факт</th><th>% факт</th><th>Ожидаемые</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in data %}
+                        {% if row.plan_units > 0 or row.fact_units > 0 or row.plan_volume > 0 or row.fact_volume > 0 or row.plan_income > 0 or row.fact_income > 0 %}
+                        <tr>
+                            <td><a href="{{ url_for('report.project_dashboard', complex_name=row.complex_name) }}">{{ row.complex_name }}</a></td>
+                            <td>{{ row.plan_units }}</td><td>{{ row.fact_units }}</td>
+                            <td><span class="percent-bar {% if row.percent_fact_units >= 95 %}high-perf{% elif row.percent_fact_units >= 75 %}good-perf{% else %}low-perf{% endif %}">{{ "%.0f"|format(row.percent_fact_units) }}%</span></td>
+                            <td><span class="percent-bar forecast-perf">{{ "%.0f"|format(row.forecast_units) }}%</span></td>
+                            <td class="currency-value" data-uzs-value="{{ row.plan_volume }}">{{ "{:,.0f}".format(row.plan_volume) }}</td>
+                            <td class="currency-value" data-uzs-value="{{ row.fact_volume }}">{{ "{:,.0f}".format(row.fact_volume) }}</td>
+                            <td><span class="percent-bar {% if row.percent_fact_volume >= 95 %}high-perf{% elif row.percent_fact_volume >= 75 %}good-perf{% else %}low-perf{% endif %}">{{ "%.0f"|format(row.percent_fact_volume) }}%</span></td>
+                            <td><span class="percent-bar forecast-perf">{{ "%.0f"|format(row.forecast_volume) }}%</span></td>
+                            <td class="currency-value" data-uzs-value="{{ row.plan_income }}">{{ "{:,.0f}".format(row.plan_income) }}</td>
+                            <td class="currency-value" data-uzs-value="{{ row.fact_income }}">{{ "{:,.0f}".format(row.fact_income) }}</td>
+                            <td><span class="percent-bar {% if row.percent_fact_income >= 95 %}high-perf{% elif row.percent_fact_income >= 75 %}good-perf{% else %}low-perf{% endif %}">{{ "%.0f"|format(row.percent_fact_income) }}%</span></td>
+                            <td class="currency-value" data-uzs-value="{{ row.expected_income }}">{{ "{:,.0f}".format(row.expected_income) }}</td>
+                        </tr>
+                        {% endif %}
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td>Итого ({{ selected_prop_type }})</td>
+                        <td>{{ totals.plan_units }}</td><td>{{ totals.fact_units }}</td>
+                        <td><span class="percent-bar {% if totals.percent_fact_units >= 95 %}high-perf{% elif totals.percent_fact_units >= 75 %}good-perf{% else %}low-perf{% endif %}">{{ "%.0f"|format(totals.percent_fact_units) }}%</span></td>
+                        <td><span class="percent-bar forecast-perf">{{ "%.0f"|format(totals.forecast_units) }}%</span></td>
+                        <td class="currency-value" data-uzs-value="{{ totals.plan_volume }}">{{ "{:,.0f}".format(totals.plan_volume) }}</td>
+                        <td class="currency-value" data-uzs-value="{{ totals.fact_volume }}">{{ "{:,.0f}".format(totals.fact_volume) }}</td>
+                        <td><span class="percent-bar {% if totals.percent_fact_volume >= 95 %}high-perf{% elif totals.percent_fact_volume >= 75 %}good-perf{% else %}low-perf{% endif %}">{{ "%.0f"|format(totals.percent_fact_volume) }}%</span></td>
+                        <td><span class="percent-bar forecast-perf">{{ "%.0f"|format(totals.forecast_volume) }}%</span></td>
+                        <td class="currency-value" data-uzs-value="{{ totals.plan_income }}">{{ "{:,.0f}".format(totals.plan_income) }}</td>
+                        <td class="currency-value" data-uzs-value="{{ totals.fact_income }}">{{ "{:,.0f}".format(totals.fact_income) }}</td>
+                        <td><span class="percent-bar {% if totals.percent_fact_income >= 95 %}high-perf{% elif totals.percent_fact_income >= 75 %}good-perf{% else %}low-perf{% endif %}">{{ "%.0f"|format(totals.percent_fact_income) }}%</span></td>
+                        <td class="currency-value" data-uzs-value="{{ totals.expected_income }}">{{ "{:,.0f}".format(totals.expected_income) }}</td>
+                    </tr>
+                    {% for summary_row in summary_data %}
+                        {% if summary_row.property_type != selected_prop_type %}
+                        <tr>
+                            <td>Итого ({{ summary_row.property_type }})</td>
+                            <td>{{ summary_row.total_plan_units }}</td><td>{{ summary_row.total_fact_units }}</td>
+                            <td><span class="percent-bar {% if summary_row.percent_fact_units >= 95 %}high-perf{% elif summary_row.percent_fact_units >= 75 %}good-perf{% else %}low-perf{% endif %}">{{ "%.0f"|format(summary_row.percent_fact_units) }}%</span></td>
+                            <td><span class="percent-bar forecast-perf">{{ "%.0f"|format(summary_row.forecast_units) }}%</span></td>
+                            <td class="currency-value" data-uzs-value="{{ summary_row.total_plan_volume }}">{{ "{:,.0f}".format(summary_row.total_plan_volume) }}</td>
+                            <td class="currency-value" data-uzs-value="{{ summary_row.total_fact_volume }}">{{ "{:,.0f}".format(summary_row.total_fact_volume) }}</td>
+                            <td><span class="percent-bar {% if summary_row.percent_fact_volume >= 95 %}high-perf{% elif summary_row.percent_fact_volume >= 75 %}good-perf{% else %}low-perf{% endif %}">{{ "%.0f"|format(summary_row.percent_fact_volume) }}%</span></td>
+                            <td><span class="percent-bar forecast-perf">{{ "%.0f"|format(summary_row.forecast_volume) }}%</span></td>
+                            <td class="currency-value" data-uzs-value="{{ summary_row.total_plan_income }}">{{ "{:,.0f}".format(summary_row.total_plan_income) }}</td>
+                            <td class="currency-value" data-uzs-value="{{ summary_row.total_fact_income }}">{{ "{:,.0f}".format(summary_row.total_fact_income) }}</td>
+                            <td><span class="percent-bar {% if summary_row.percent_fact_income >= 95 %}high-perf{% elif summary_row.percent_fact_income >= 75 %}good-perf{% else %}low-perf{% endif %}">{{ "%.0f"|format(summary_row.percent_fact_income) }}%</span></td>
+                            <td class="currency-value" data-uzs-value="{{ summary_row.total_expected_income }}">{{ "{:,.0f}".format(summary_row.total_expected_income) }}</td>
+                        </tr>
+                        {% endif %}
+                    {% endfor %}
+                </tfoot>
+            </table>
+        </div>
+    </div>
+  </div>
+
 </div>
 
 {% endblock %}
 
+
 {% block scripts %}
-{{ super() }}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const currencyToggle = document.getElementById('currencyToggle');
-    const currencyLabel = document.getElementById('currencyLabel');
-    const usdRate = {{ usd_to_uzs_rate or 12650 }};
-
-    function updateCurrency(isUsd) {
-        document.querySelectorAll('.currency-value').forEach(el => {
-            const uzsValue = parseFloat(el.dataset.uzsValue);
-            if (isNaN(uzsValue)) return;
-
-            let displayValue;
-            if (isUsd) {
-                currencyLabel.textContent = 'USD';
-                displayValue = '$' + (uzsValue / usdRate).toLocaleString('en-US', { maximumFractionDigits: 0 });
-            } else {
-                currencyLabel.textContent = 'UZS';
-                displayValue = uzsValue.toLocaleString('ru-RU', { maximumFractionDigits: 0 });
-            }
-            el.textContent = displayValue;
-        });
-    }
-
-    currencyToggle.addEventListener('change', function() {
-        updateCurrency(this.checked);
-    });
-
-    // Initial state
-    updateCurrency(currencyToggle.checked);
-});
-</script>
+    {{ super() }}
+    <script>
+        // Передаем курс в data-атрибут body, чтобы скрипт мог его прочитать
+        document.body.dataset.usdRate = "{{ usd_to_uzs_rate or 12650 }}";
+    </script>
+    <script src="{{ url_for('static', filename='js/report_script.js') }}"></script>
 {% endblock %}

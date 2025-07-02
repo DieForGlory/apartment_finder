@@ -1,7 +1,7 @@
 # app/web/report_routes.py
 import os
 from werkzeug.utils import secure_filename
-from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app
+from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app, abort
 from flask_login import login_required
 from app.core.decorators import role_required
 from app.services import report_service
@@ -10,13 +10,15 @@ from app.web.forms import UploadPlanForm
 from app.models.discount_models import PropertyType
 from datetime import date
 from flask import send_file
+import json
+
 report_bp = Blueprint('report', __name__, template_folder='templates')
+
 
 @report_bp.route('/download-plan-template')
 @login_required
 @role_required('ADMIN')
 def download_plan_template():
-    """Отдает пользователю сгенерированный Excel-шаблон для планов."""
     excel_stream = report_service.generate_plan_template_excel()
     return send_file(
         excel_stream,
@@ -35,16 +37,14 @@ def plan_fact_report():
     month = request.args.get('month', today.month, type=int)
     prop_type = request.args.get('property_type', PropertyType.FLAT.value)
 
-    # Получаем данные для основного отчета (как и раньше)
     usd_rate = get_current_usd_rate() or 12650
-    # ИЗМЕНЕНИЕ: Получаем данные для итоговой сводки
     summary_data = report_service.get_monthly_summary_by_property_type(year, month)
     report_data, totals = report_service.generate_plan_fact_report(year, month, prop_type)
     return render_template('plan_fact_report.html',
                            title="План-фактный отчет",
                            data=report_data,
                            summary_data=summary_data,
-                           totals=totals, # <-- Передаем новые данные в шаблон
+                           totals=totals,
                            years=[today.year - 1, today.year, today.year + 1],
                            months=range(1, 13),
                            property_types=list(PropertyType),
@@ -78,3 +78,33 @@ def upload_plan():
         return redirect(url_for('report.upload_plan'))
 
     return render_template('upload_plan.html', title="Загрузка плана", form=form)
+
+
+@report_bp.route('/project-dashboard/<path:complex_name>')
+@login_required
+@role_required('ADMIN', 'MANAGER')
+def project_dashboard(complex_name):
+    # 1. Получаем тип недвижимости из URL
+    selected_prop_type = request.args.get('property_type', None)
+
+    # 2. Вызываем сервис ОДИН РАЗ с учётом фильтра
+    data = report_service.get_project_dashboard_data(complex_name, selected_prop_type)
+
+    if not data:
+        abort(404)
+
+    # 3. Готовим данные для шаблона, используя одну и ту же переменную 'data'
+    property_types = [pt.value for pt in PropertyType]
+    charts_json = json.dumps(data.get('charts', {}))
+    usd_rate = get_current_usd_rate() or current_app.config.get('USD_TO_UZS_RATE', 12650.0)
+
+    # 4. Передаем в шаблон правильные данные
+    return render_template(
+        'project_dashboard.html',
+        title=f"Аналитика по проекту {complex_name}",
+        data=data,
+        charts_json=charts_json,
+        property_types=property_types,
+        selected_prop_type=selected_prop_type,
+        usd_to_uzs_rate=usd_rate
+    )

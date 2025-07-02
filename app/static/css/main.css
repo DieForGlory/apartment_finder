@@ -96,34 +96,23 @@ body {
     border-width: 2px; /* Фиксированная толщина рамки */
     border-style: solid;
     font-weight: 500;
+    /* Убираем border-width из transition и добавляем box-shadow для плавной анимации */
     transition: border-color 0.5s ease, box-shadow 0.5s ease, color 0.5s ease, background-color 0.5s ease;
 }
 
 /* 2. ОБЩИЙ ЭФФЕКТ ПРИ НАВЕДЕНИИ */
 .btn:hover, .btn:focus {
+    /* border-width больше не меняем, чтобы избежать "прыжков" элемента */
     border-color: var(--gh-gold); /* Основная рамка становится золотой */
+    /* Добавляем внешнюю тень, имитирующую утолщение рамки на 1px, и общее свечение. Это анимируется плавно. */
     box-shadow: 0 0 0 1px var(--gh-gold), 0 0 20px rgba(var(--gh-gold-rgb), 0.5);
     outline: none; /* Убираем стандартный outline при фокусе */
 }
 
 /* 3. АДАПТАЦИЯ СТАНДАРТНЫХ КНОПОК BOOTSTRAP */
 
-/* Кнопка с основной заливкой (.btn-primary) */
-.btn-primary {
-    background-color: var(--gh-gold);
-    border-color: var(--gh-gold);
-    color: #fff; /* Белый текст для лучшей читаемости на золотом фоне */
-}
-.btn-primary:hover, .btn-primary:focus {
-    background-color: var(--gh-dark-gold);
-    border-color: var(--gh-dark-gold); /* Рамка тоже темнеет */
-    color: #fff;
-    box-shadow: 0 0 0 1px var(--gh-dark-gold), 0 0 20px rgba(var(--gh-gold-rgb), 0.5);
-}
-
-
-/* Остальные кнопки с заливкой (success, danger и т.д.) */
-.btn-success, .btn-danger, .btn-warning, .btn-info, .btn-dark {
+/* Кнопки с заливкой (primary, success, danger и т.д.) */
+.btn-primary, .btn-success, .btn-danger, .btn-warning, .btn-info, .btn-dark {
     border-color: transparent; /* В обычном состоянии рамка незаметна */
 }
 
@@ -151,6 +140,7 @@ body {
 .btn-golden-outline:hover {
     color: var(--gh-dark-gold);
     background-color: rgba(var(--gh-gold-rgb), 0.1);
+    /* Стили border-color и box-shadow наследуются от .btn:hover */
 }
 
 

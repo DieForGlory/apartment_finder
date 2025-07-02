@@ -6,7 +6,7 @@
     <div>
         {% if current_user.role.name == 'ADMIN' %}
         <form action="{{ url_for('discount.create_draft_version') }}" method="POST">
-             <button type="submit" class="btn btn-warning">
+             <button type="submit" class="btn btn-golden-outline w-100">
                 <i class="bi bi-pencil-square"></i> Создать черновик
             </button>
         </form>
