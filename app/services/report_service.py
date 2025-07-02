@@ -366,20 +366,78 @@ def get_project_dashboard_data(complex_name: str, property_type: str = None):
     if remainders_by_type:
         remainders_chart_data["labels"] = list(remainders_by_type.keys())
         remainders_chart_data["data"] = [v['count'] for v in remainders_by_type.values()]
+    sales_analysis = {
+        "by_floor": {},
+        "by_rooms": {},
+        "by_area": {}
+    }
 
+    type_to_analyze = property_type if property_type else 'Квартира'
+
+    # --- ОТЛАДКА 1: Проверяем, какой тип анализируем ---
+    print(f"\n--- DEBUG: Тип для анализа спроса: '{type_to_analyze}' ---")
+
+    if type_to_analyze == 'Квартира':
+        print("--- DEBUG: Условие (type_to_analyze == 'Квартира') выполнено. Запускаем запросы. ---\n")
+
+        base_query = db.session.query(EstateSell).join(EstateDeal).join(EstateHouse).filter(
+            EstateHouse.complex_name == complex_name,
+            EstateDeal.deal_status_name.in_(sold_statuses),
+            EstateSell.estate_sell_category == type_to_analyze
+        )
+
+        # --- ОТЛАДКА 2: Проверяем, сколько всего продано квартир ---
+        print(f"--- DEBUG: Найдено проданных квартир (base_query.count()): {base_query.count()} ---\n")
+
+        # 1. Анализ по этажам
+        floor_data = base_query.with_entities(EstateSell.estate_floor, func.count(EstateSell.id)).group_by(
+            EstateSell.estate_floor).order_by(EstateSell.estate_floor).all()
+        print(f"--- DEBUG: Сырые данные по ЭТАЖАМ: {floor_data} ---")
+        if floor_data:
+            sales_analysis['by_floor']['labels'] = [f"{row[0]} этаж" for row in floor_data if row[0] is not None]
+            sales_analysis['by_floor']['data'] = [row[1] for row in floor_data if row[0] is not None]
+
+        # 2. Анализ по комнатности
+        rooms_data = base_query.filter(EstateSell.estate_rooms.isnot(None)).with_entities(EstateSell.estate_rooms,
+                                                                                          func.count(
+                                                                                              EstateSell.id)).group_by(
+            EstateSell.estate_rooms).order_by(EstateSell.estate_rooms).all()
+        print(f"--- DEBUG: Сырые данные по КОМНАТНОСТИ: {rooms_data} ---")
+        if rooms_data:
+            sales_analysis['by_rooms']['labels'] = [f"{int(row[0])}-комн." for row in rooms_data if row[0] is not None]
+            sales_analysis['by_rooms']['data'] = [row[1] for row in rooms_data if row[0] is not None]
+
+        # 3. Анализ по площадям
+        area_case = case(
+            (EstateSell.estate_area < 40, "до 40 м²"),
+            (EstateSell.estate_area.between(40, 50), "40-50 м²"),
+            (EstateSell.estate_area.between(50, 60), "50-60 м²"),
+            (EstateSell.estate_area.between(60, 75), "60-75 м²"),
+            (EstateSell.estate_area.between(75, 90), "75-90 м²"),
+            (EstateSell.estate_area >= 90, "90+ м²"),
+        )
+        area_data = base_query.filter(EstateSell.estate_area.isnot(None)).with_entities(area_case, func.count(
+            EstateSell.id)).group_by(area_case).order_by(area_case).all()
+        print(f"--- DEBUG: Сырые данные по ПЛОЩАДЯМ: {area_data} ---")
+        if area_data:
+            sales_analysis['by_area']['labels'] = [row[0] for row in area_data if row[0] is not None]
+            sales_analysis['by_area']['data'] = [row[1] for row in area_data if row[0] is not None]
+
+        print(f"\n--- DEBUG: Финальный словарь sales_analysis: {sales_analysis} ---\n")
+    else:
+        print("--- DEBUG: Условие (type_to_analyze == 'Квартира') НЕ выполнено. Анализ пропущен. ---")
     # --- Сборка финального ответа ---
     dashboard_data = {
         "complex_name": complex_name,
-        "kpi": {
-            "total_deals_volume": total_deals_volume,
-            "total_income": total_income,
-            "remainders_by_type": remainders_by_type
-        },
+        "kpi": {"total_deals_volume": total_deals_volume, "total_income": total_income,
+                "remainders_by_type": remainders_by_type},
         "charts": {
             "plan_fact_dynamics_yearly": yearly_plan_fact,
-            "remainders_chart_data": remainders_chart_data  # <--- Добавляем данные для новой диаграммы
+            "remainders_chart_data": remainders_chart_data,
+            # Я также исправил здесь ошибку, где передавались не те данные
+            "sales_analysis": sales_analysis  # <--- ПРАВИЛЬНОЕ МЕСТО
         },
-        "recent_deals": recent_deals
+        "recent_deals": recent_deals,
     }
     return dashboard_data
 

@@ -147,10 +147,48 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     }
+    function renderAnalysisChart(canvasId, chartData, chartLabel) {
+        if (!chartData || !chartData.data || !chartData.data.length) {
+            const container = document.getElementById(canvasId)?.parentElement;
+            if (container) container.innerHTML = '<div class="alert alert-secondary text-center">Нет данных для анализа.</div>';
+            return;
+        }
+        const ctx = document.getElementById(canvasId);
+        if (!ctx) return;
+
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: chartData.labels,
+                datasets: [{
+                    label: chartLabel,
+                    data: chartData.data,
+                    backgroundColor: 'rgba(75, 192, 192, 0.7)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+    }
 
     // Инициализация графиков
     renderPlanFactChart(document.getElementById('currencyToggle')?.checked);
     renderRemaindersChart(); // <--- Вызываем новую функцию
+    if(charts_json_data.sales_analysis) {
+        renderAnalysisChart('floorChart', charts_json_data.sales_analysis.by_floor, 'Продано квартир, шт.');
+        renderAnalysisChart('roomsChart', charts_json_data.sales_analysis.by_rooms, 'Продано квартир, шт.');
+        renderAnalysisChart('areaChart', charts_json_data.sales_analysis.by_area, 'Продано квартир, шт.');
+    }
 
     // Слушатель на переключатель валют (остается без изменений)
     const currencyToggle = document.getElementById('currencyToggle');

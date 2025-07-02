@@ -67,17 +67,11 @@
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="deals-tab" data-bs-toggle="tab" data-bs-target="#deals-pane" type="button" role="tab">Последние сделки</button>
   </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="analysis-tab" data-bs-toggle="tab" data-bs-target="#analysis-pane" type="button" role="tab">Анализ спроса</button>
+  </li>
 </ul>
- <div class="tab-pane fade" id="remainders-pane" role="tabpanel">
-     <div class="card card-glass h-100">
-        <div class="card-body">
-            <h5 class="card-title mb-3">Структура непроданных юнитов (шт.)</h5>
-            <div class="donut-chart-container">
-                <canvas id="remaindersChart"></canvas>
-            </div>
-        </div>
-    </div>
-  </div>
+
 <div class="tab-content" id="projectDashboardTabContent">
   <div class="tab-pane fade show active" id="dynamics-pane" role="tabpanel">
     <div class="card card-glass h-100">
@@ -93,6 +87,17 @@
             </div>
             <div class="plan-fact-chart-container">
                 <canvas id="planFactChart"></canvas>
+            </div>
+        </div>
+    </div>
+  </div>
+
+  <div class="tab-pane fade" id="remainders-pane" role="tabpanel">
+     <div class="card card-glass h-100">
+        <div class="card-body">
+            <h5 class="card-title mb-3">Структура непроданных юнитов (шт.)</h5>
+            <div class="donut-chart-container">
+                <canvas id="remaindersChart"></canvas>
             </div>
         </div>
     </div>
@@ -128,6 +133,42 @@
         </div>
     </div>
   </div>
+
+  <div class="tab-pane fade" id="analysis-pane" role="tabpanel">
+    <div class="row g-4">
+      <div class="col-lg-4">
+        <div class="card card-glass h-100">
+          <div class="card-body">
+            <h5 class="card-title mb-3">Продажи по этажам</h5>
+            <div class="chart-container">
+              <canvas id="floorChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="card card-glass h-100">
+          <div class="card-body">
+            <h5 class="card-title mb-3">Продажи по комнатности</h5>
+            <div class="chart-container">
+              <canvas id="roomsChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="card card-glass h-100">
+          <div class="card-body">
+            <h5 class="card-title mb-3">Продажи по площадям</h5>
+            <div class="chart-container">
+              <canvas id="areaChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 {% endblock %}
