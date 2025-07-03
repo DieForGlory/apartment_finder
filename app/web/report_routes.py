@@ -108,3 +108,31 @@ def project_dashboard(complex_name):
         selected_prop_type=selected_prop_type,
         usd_to_uzs_rate=usd_rate
     )
+@report_bp.route('/export-plan-fact')
+@login_required
+@role_required('ADMIN', 'MANAGER')
+def export_plan_fact():
+    """
+    Обрабатывает запрос на экспорт план-фактного отчета в Excel.
+    """
+    today = date.today()
+    # Получаем те же параметры, что и для отображения отчета
+    year = request.args.get('year', today.year, type=int)
+    month = request.args.get('month', today.month, type=int)
+    prop_type = request.args.get('property_type', PropertyType.FLAT.value)
+
+    # Вызываем сервис для генерации файла
+    excel_stream = report_service.generate_plan_fact_excel(year, month, prop_type)
+
+    if excel_stream is None:
+        flash("Нет данных для экспорта.", "warning")
+        return redirect(url_for('report.plan_fact_report'))
+
+    # Формируем имя файла и отправляем его пользователю
+    filename = f"plan_fact_report_{prop_type}_{month:02d}_{year}.xlsx"
+    return send_file(
+        excel_stream,
+        download_name=filename,
+        as_attachment=True,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )

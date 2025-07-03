@@ -441,6 +441,57 @@ def get_project_dashboard_data(complex_name: str, property_type: str = None):
     }
     return dashboard_data
 
+
+def generate_plan_fact_excel(year: int, month: int, property_type: str):
+    """
+    Генерирует Excel-файл с детальным план-фактным отчетом (ИСПРАВЛЕННАЯ ВЕРСИЯ).
+    """
+    report_data, totals = generate_plan_fact_report(year, month, property_type)
+
+    if not report_data:
+        return None
+
+    # 1. Создаем основной DataFrame
+    df = pd.DataFrame(report_data)
+
+    # 2. Создаем DataFrame для итогов
+    totals_df = pd.DataFrame([totals])
+
+    # 3. Определяем нужные колонки в правильном порядке (с системными именами)
+    ordered_columns = [
+        'complex_name',
+        'plan_units', 'fact_units', 'percent_fact_units', 'forecast_units',
+        'plan_volume', 'fact_volume', 'percent_fact_volume', 'forecast_volume',
+        'plan_income', 'fact_income', 'percent_fact_income', 'expected_income'
+    ]
+
+    # Определяем красивые русские названия для них
+    renamed_columns = [
+        'Проект',
+        'План, шт', 'Факт, шт', '% Факт, шт', '% Прогноз, шт',
+        'План контрактации', 'Факт контрактации', '% Факт контр.', '% Прогноз контр.',
+        'План поступлений', 'Факт поступлений', '% Факт поступл.', 'Ожидаемые поступл.'
+    ]
+
+    # 4. Выбираем нужные колонки из обоих DataFrame
+    df = df[ordered_columns]
+    totals_df = totals_df[[col for col in ordered_columns if col != 'complex_name']]  # Все, кроме названия проекта
+    totals_df.insert(0, 'complex_name', f'Итого ({property_type})')
+
+    # 5. Объединяем основной DataFrame и строку итогов
+    final_df = pd.concat([df, totals_df], ignore_index=True)
+
+    # 6. ТЕПЕРЬ переименовываем колонки в финальном DataFrame
+    final_df.columns = renamed_columns
+
+    # 7. Сохраняем в Excel
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        final_df.to_excel(writer, index=False, sheet_name=f'План-факт {month:02d}-{year}')
+
+    output.seek(0)
+    return output
+
 def _get_yearly_fact_metrics_for_complex(year: int, complex_name: str, property_type: str = None):
     """
     Эталонная функция для расчета годовых фактических метрик (объем и поступления)

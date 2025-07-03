@@ -10,7 +10,9 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="mb-0">Сводный план-фактный отчет</h1>
     <div>
-        <a href="#" class="btn btn-outline-success"><i class="bi bi-file-earmark-excel me-2"></i>Экспорт</a>
+        <a href="{{ url_for('report.export_plan_fact', year=selected_year, month=selected_month, property_type=selected_prop_type) }}" class="btn btn-outline-success">
+            <i class="bi bi-file-earmark-excel me-2"></i>Экспорт
+        </a>
     </div>
 </div>
 
