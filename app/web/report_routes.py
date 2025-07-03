@@ -11,6 +11,8 @@ from app.models.discount_models import PropertyType
 from datetime import date
 from flask import send_file
 import json
+from app.services import report_service, currency_service
+from app.models.finance_models import CurrencySettings
 
 report_bp = Blueprint('report', __name__, template_folder='templates')
 
@@ -37,7 +39,7 @@ def plan_fact_report():
     month = request.args.get('month', today.month, type=int)
     prop_type = request.args.get('property_type', PropertyType.FLAT.value)
 
-    usd_rate = get_current_usd_rate() or 12650
+    usd_rate = currency_service.get_current_effective_rate()
     summary_data = report_service.get_monthly_summary_by_property_type(year, month)
     report_data, totals = report_service.generate_plan_fact_report(year, month, prop_type)
     return render_template('plan_fact_report.html',
@@ -96,7 +98,7 @@ def project_dashboard(complex_name):
     # 3. Готовим данные для шаблона, используя одну и ту же переменную 'data'
     property_types = [pt.value for pt in PropertyType]
     charts_json = json.dumps(data.get('charts', {}))
-    usd_rate = get_current_usd_rate() or current_app.config.get('USD_TO_UZS_RATE', 12650.0)
+    usd_rate = currency_service.get_current_effective_rate()
 
     # 4. Передаем в шаблон правильные данные
     return render_template(
@@ -108,6 +110,34 @@ def project_dashboard(complex_name):
         selected_prop_type=selected_prop_type,
         usd_to_uzs_rate=usd_rate
     )
+
+@report_bp.route('/currency-settings', methods=['GET', 'POST'])
+@login_required
+@role_required('ADMIN')
+def currency_settings():
+    if request.method == 'POST':
+        # Обработка форм
+        if 'set_source' in request.form:
+            source = request.form.get('rate_source')
+            currency_service.set_rate_source(source)
+            flash(f"Источник курса изменен на '{source}'.", "success")
+
+        if 'set_manual_rate' in request.form:
+            try:
+                rate = float(request.form.get('manual_rate'))
+                currency_service.set_manual_rate(rate)
+                flash(f"Ручной курс успешно установлен: {rate}.", "success")
+            except (ValueError, TypeError):
+                flash("Неверное значение для ручного курса.", "danger")
+
+        return redirect(url_for('report.currency_settings'))
+
+    settings = currency_service._get_settings() # Используем внутреннюю функцию для получения данных
+    return render_template('currency_settings.html', settings=settings, title="Настройки курса валют")
+
+
+
+
 @report_bp.route('/export-plan-fact')
 @login_required
 @role_required('ADMIN', 'MANAGER')

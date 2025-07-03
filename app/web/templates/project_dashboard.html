@@ -65,10 +65,16 @@
     <button class="nav-link" id="remainders-tab" data-bs-toggle="tab" data-bs-target="#remainders-pane" type="button" role="tab">Структура остатков</button>
   </li>
   <li class="nav-item" role="presentation">
+    <button class="nav-link" id="analysis-tab" data-bs-toggle="tab" data-bs-target="#analysis-pane" type="button" role="tab">Анализ спроса</button>
+  </li>
+  <li class="nav-item" role="presentation">
+     <button class="nav-link" id="pricing-tab" data-bs-toggle="tab" data-bs-target="#pricing-pane" type="button" role="tab">Анализ цен</button>
+  </li>
+  <li class="nav-item" role="presentation">
     <button class="nav-link" id="deals-tab" data-bs-toggle="tab" data-bs-target="#deals-pane" type="button" role="tab">Последние сделки</button>
   </li>
   <li class="nav-item" role="presentation">
-    <button class="nav-link" id="analysis-tab" data-bs-toggle="tab" data-bs-target="#analysis-pane" type="button" role="tab">Анализ спроса</button>
+    <button class="nav-link" id="houses-tab" data-bs-toggle="tab" data-bs-target="#houses-pane" type="button" role="tab">По домам</button>
   </li>
 </ul>
 
@@ -85,7 +91,7 @@
                     {% endfor %}
                 </div>
             </div>
-            <div class="plan-fact-chart-container">
+            <div class="dashboard-chart-container">
                 <canvas id="planFactChart"></canvas>
             </div>
         </div>
@@ -96,8 +102,54 @@
      <div class="card card-glass h-100">
         <div class="card-body">
             <h5 class="card-title mb-3">Структура непроданных юнитов (шт.)</h5>
-            <div class="donut-chart-container">
+            <div class="dashboard-chart-container" style="height: 350px;">
                 <canvas id="remaindersChart"></canvas>
+            </div>
+        </div>
+    </div>
+  </div>
+
+  <div class="tab-pane fade" id="analysis-pane" role="tabpanel">
+    <div class="row g-4">
+      <div class="col-lg-4">
+        <div class="card card-glass h-100">
+          <div class="card-body d-flex flex-column">
+            <h5 class="card-title mb-3">Продажи по этажам</h5>
+            <div class="dashboard-chart-container flex-grow-1">
+              <canvas id="floorChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="card card-glass h-100">
+          <div class="card-body d-flex flex-column">
+            <h5 class="card-title mb-3">Продажи по комнатности</h5>
+            <div class="dashboard-chart-container flex-grow-1">
+              <canvas id="roomsChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="card card-glass h-100">
+          <div class="card-body d-flex flex-column">
+            <h5 class="card-title mb-3">Продажи по площадям</h5>
+            <div class="dashboard-chart-container flex-grow-1">
+              <canvas id="areaChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-pane fade" id="pricing-pane" role="tabpanel">
+    <div class="card card-glass h-100">
+        <div class="card-body">
+            <h5 class="card-title mb-3">Динамика средней цены продажи, UZS/м²</h5>
+            <div class="dashboard-chart-container">
+                <canvas id="priceDynamicsChart"></canvas>
             </div>
         </div>
     </div>
@@ -134,40 +186,47 @@
     </div>
   </div>
 
-  <div class="tab-pane fade" id="analysis-pane" role="tabpanel">
-    <div class="row g-4">
-      <div class="col-lg-4">
-        <div class="card card-glass h-100">
-          <div class="card-body">
-            <h5 class="card-title mb-3">Продажи по этажам</h5>
-            <div class="chart-container">
-              <canvas id="floorChart"></canvas>
+  <div class="tab-pane fade" id="houses-pane" role="tabpanel">
+        <div class="accordion" id="housesAccordion">
+          {% for house in data.houses_data %}
+            <div class="accordion-item">
+              <h2 class="accordion-header" id="heading-{{ loop.index }}">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ loop.index }}">
+                  {{ house.house_name }}
+                </button>
+              </h2>
+              <div id="collapse-{{ loop.index }}" class="accordion-collapse collapse" data-bs-parent="#housesAccordion">
+                <div class="accordion-body">
+                  <table class="table house-details-table">
+                    <thead>
+                      <tr>
+                        <th>Тип недвижимости</th>
+                        <th class="text-center">Осталось, шт.</th>
+                        <th class="text-center">Всего, шт.</th>
+                        <th class="text-end">Сред. цена/м² (дно)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                    {% for prop_type, details in house.property_types_data.items() %}
+                      <tr>
+                        <td class="fw-bold">{{ prop_type }}</td>
+                        <td class="text-center fs-5 fw-bold">{{ details.remaining_count }}</td>
+                        <td class="text-center text-muted">{{ details.total_count }}</td>
+                        <td class="text-end fs-5 fw-bold currency-value" data-uzs-value="{{ details.avg_price_per_sqm }}">{{ "{:,.0f}".format(details.avg_price_per_sqm) }}</td>
+                      </tr>
+                    {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
-          </div>
+          {% else %}
+            <div class="col-12">
+                <div class="alert alert-secondary text-center">Нет данных по отдельным домам в этом комплексе.</div>
+            </div>
+          {% endfor %}
         </div>
       </div>
-      <div class="col-lg-4">
-        <div class="card card-glass h-100">
-          <div class="card-body">
-            <h5 class="card-title mb-3">Продажи по комнатности</h5>
-            <div class="chart-container">
-              <canvas id="roomsChart"></canvas>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="col-lg-4">
-        <div class="card card-glass h-100">
-          <div class="card-body">
-            <h5 class="card-title mb-3">Продажи по площадям</h5>
-            <div class="chart-container">
-              <canvas id="areaChart"></canvas>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
 
 </div>
 

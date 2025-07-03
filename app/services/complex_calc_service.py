@@ -2,7 +2,7 @@ from datetime import date
 from dateutil.relativedelta import relativedelta
 import numpy_financial as npf
 from flask import current_app
-from app.services import selection_service, settings_service
+from app.services import selection_service, settings_service, currency_service
 from app.models.discount_models import PaymentMethod
 from app.services.discount_service import get_current_usd_rate
 
@@ -120,7 +120,7 @@ def calculate_dp_installment_plan(sell_id: int, term_months: int, dp_amount: flo
 
     price_after_discounts = price_for_calc * (1 - total_discount_rate)
 
-    usd_rate = get_current_usd_rate() or 12650
+    usd_rate = get_current_usd_rate() or currency_service.get_current_effective_rate()
 
     if dp_type == 'percent':
         dp_uzs = price_after_discounts * (dp_amount / 100)

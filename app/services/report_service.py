@@ -250,7 +250,84 @@ def get_plan_volume_data(year: int, month: int, property_type: str):
 def get_project_dashboard_data(complex_name: str, property_type: str = None):
     today = date.today()
     sold_statuses = ["Сделка в работе", "Сделка проведена"]
+    houses_in_complex = EstateHouse.query.filter_by(complex_name=complex_name).order_by(EstateHouse.name).all()
+    houses_data = []
 
+    active_version = DiscountVersion.query.filter_by(is_active=True).first()
+
+    for house in houses_in_complex:
+        house_details = {
+            "house_name": house.name,
+            "property_types_data": {}
+        }
+
+        # Для каждого дома и каждого типа недвижимости считаем свои показатели
+        for prop_type_enum in PropertyType:
+            prop_type_value = prop_type_enum.value
+
+            # 1. Всего юнитов данного типа в доме
+            total_units = db.session.query(func.count(EstateSell.id)).filter(
+                EstateSell.house_id == house.id,
+                EstateSell.estate_sell_category == prop_type_value
+            ).scalar()
+
+            # Пропускаем тип, если его нет в этом доме
+            if total_units == 0:
+                continue
+
+            # 2. Продано юнитов данного типа в доме
+            sold_units = db.session.query(func.count(EstateDeal.id)).join(EstateSell).filter(
+                EstateSell.house_id == house.id,
+                EstateSell.estate_sell_category == prop_type_value,
+                EstateDeal.deal_status_name.in_(sold_statuses)
+            ).scalar()
+
+            remaining_count = total_units - sold_units
+
+            # 3. Расчет средней цены "дна" для ОСТАТКОВ
+            avg_price_per_sqm = 0
+            if remaining_count > 0:
+                # Берем логику расчета скидок
+                total_discount_rate = 0
+                if active_version:
+                    discount = Discount.query.filter_by(
+                        version_id=active_version.id, complex_name=complex_name,
+                        property_type=prop_type_enum, payment_method=PaymentMethod.FULL_PAYMENT
+                    ).first()
+                    if discount:
+                        total_discount_rate = (discount.mpp or 0) + (discount.rop or 0) + (discount.kd or 0)
+
+                unsold_units = EstateSell.query.filter(
+                    EstateSell.house_id == house.id,
+                    EstateSell.estate_sell_category == prop_type_value,
+                    EstateSell.estate_sell_status_name.in_(["Подбор", "Маркетинговый резерв"])
+                ).all()
+
+                prices_per_sqm_list = []
+                deduction_amount = 3_000_000 if prop_type_enum == PropertyType.FLAT else 0
+
+                for sell in unsold_units:
+                    if sell.estate_price and sell.estate_price > deduction_amount and sell.estate_area and sell.estate_area > 0:
+                        # Рассчитываем цену дна для ОДНОЙ квартиры
+                        price_after_deduction = sell.estate_price - deduction_amount
+                        final_price = price_after_deduction * (1 - total_discount_rate)
+                        price_per_sqm = final_price / sell.estate_area
+                        prices_per_sqm_list.append(price_per_sqm)
+
+                # Находим среднее арифметическое всех полученных цен
+                if prices_per_sqm_list:
+                    avg_price_per_sqm = sum(prices_per_sqm_list) / len(prices_per_sqm_list)
+
+            # 4. Сохраняем все метрики
+            house_details["property_types_data"][prop_type_value] = {
+                "total_count": total_units,
+                "remaining_count": remaining_count,
+                "avg_price_per_sqm": avg_price_per_sqm
+            }
+
+        # Добавляем данные по дому в общий список, если по нему есть хоть какая-то информация
+        if house_details["property_types_data"]:
+            houses_data.append(house_details)
     # --- KPI ЗА ВСЕ ВРЕМЯ ---
     total_deals_volume = db.session.query(func.sum(EstateDeal.deal_sum)).join(EstateSell).join(EstateHouse).filter(
         EstateHouse.complex_name == complex_name,
@@ -434,10 +511,11 @@ def get_project_dashboard_data(complex_name: str, property_type: str = None):
         "charts": {
             "plan_fact_dynamics_yearly": yearly_plan_fact,
             "remainders_chart_data": remainders_chart_data,
-            # Я также исправил здесь ошибку, где передавались не те данные
-            "sales_analysis": sales_analysis  # <--- ПРАВИЛЬНОЕ МЕСТО
+            "sales_analysis": sales_analysis, # <--- ПРАВИЛЬНОЕ МЕСТО
+            "price_dynamics": get_price_dynamics_data(complex_name, property_type)
         },
         "recent_deals": recent_deals,
+        "houses_data": houses_data,
     }
     return dashboard_data
 
@@ -537,3 +615,66 @@ def _get_yearly_fact_metrics_for_complex(year: int, complex_name: str, property_
         fact_income_by_month[row.month - 1] = row.total or 0
 
     return {'volume': fact_volume_by_month, 'income': fact_income_by_month}
+
+
+def get_price_dynamics_data(complex_name: str, property_type: str = None):
+    """
+    Рассчитывает динамику средней фактической цены продажи за м² по месяцам.
+    """
+    # ========================= PRINT 1: Проверяем входящие параметры =========================
+    print(f"\n--- [DEBUG] Вызов get_price_dynamics_data ---")
+    print(f"[DEBUG] complex_name: '{complex_name}'")
+    print(f"[DEBUG] property_type: '{property_type}'")
+    # ======================================================================================
+
+    effective_date = func.coalesce(EstateDeal.agreement_date, EstateDeal.preliminary_date)
+
+    query = db.session.query(
+        extract('year', effective_date).label('deal_year'),
+        extract('month', effective_date).label('deal_month'),
+        (EstateDeal.deal_sum / EstateSell.estate_area).label('price_per_sqm')
+    ).join(EstateSell, EstateDeal.estate_sell_id == EstateSell.id) \
+        .join(EstateHouse, EstateSell.house_id == EstateHouse.id) \
+        .filter(
+        effective_date.isnot(None),
+        EstateHouse.complex_name == complex_name,
+        EstateDeal.deal_status_name.in_(["Сделка в работе", "Сделка проведена"]),
+        EstateSell.estate_area.isnot(None),
+        EstateSell.estate_area > 0,
+        EstateDeal.deal_sum.isnot(None),
+        EstateDeal.deal_sum > 0
+    )
+
+    if property_type:
+        query = query.filter(EstateSell.estate_sell_category == property_type)
+
+    subquery = query.subquery()
+    monthly_avg_query = db.session.query(
+        subquery.c.deal_year,
+        subquery.c.deal_month,
+        func.avg(subquery.c.price_per_sqm).label('avg_price')
+    ).group_by(subquery.c.deal_year, subquery.c.deal_month) \
+        .order_by(subquery.c.deal_year, subquery.c.deal_month)
+
+    # ========================= PRINT 2: Смотрим на сгенерированный SQL =======================
+    # Это покажет финальный SQL-запрос, который уходит в базу данных
+    print(f"[DEBUG] Сгенерированный SQL: {monthly_avg_query.statement.compile(compile_kwargs={'literal_binds': True})}")
+    # =======================================================================================
+
+    results = monthly_avg_query.all()
+
+    # ========================= PRINT 3: Проверяем результат из БД ============================
+    print(f"[DEBUG] Результат из БД (сырой): {results}")
+    print(f"[DEBUG] Найдено строк: {len(results)}")
+    print(f"--- [DEBUG] Конец get_price_dynamics_data ---\n")
+    # =======================================================================================
+
+    price_dynamics = {
+        "labels": [],
+        "data": []
+    }
+    for row in results:
+        price_dynamics["labels"].append(f"{int(row.deal_month):02d}.{int(row.deal_year)}")
+        price_dynamics["data"].append(row.avg_price)
+
+    return price_dynamics
