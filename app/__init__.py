@@ -7,14 +7,26 @@ from .core.config import DevelopmentConfig
 from .core.extensions import db
 from .models import user_models
 from flask_apscheduler import APScheduler
-
+import json
+from datetime import date, datetime
 # Создаем экземпляр LoginManager
 login_manager = LoginManager()
 login_manager.login_view = 'auth.login'
 login_manager.login_message = "Пожалуйста, войдите в систему для доступа к этой странице."
 login_manager.login_message_category = "info"
 
-
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        try:
+            if isinstance(obj, (date, datetime)):
+                return obj.isoformat()
+            iterable = iter(obj)
+        except TypeError:
+            pass
+        else:
+            return list(iterable)
+        return json.JSONEncoder.default(self, obj)
+login_manager = LoginManager()
 def create_app(config_class=DevelopmentConfig):
     """
     Фабрика для создания и конфигурации экземпляра приложения Flask.
@@ -61,7 +73,7 @@ def create_app(config_class=DevelopmentConfig):
     app.register_blueprint(discount_bp)
     app.register_blueprint(complex_calc_bp)
     app.register_blueprint(settings_bp)
-
+    app.json_encoder = CustomJSONEncoder
     return app
 
 

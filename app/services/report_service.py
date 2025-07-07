@@ -678,3 +678,48 @@ def get_price_dynamics_data(complex_name: str, property_type: str = None):
         price_dynamics["data"].append(row.avg_price)
 
     return price_dynamics
+
+
+def calculate_grand_totals(year, month):
+    """
+    Рассчитывает общие итоговые показатели по всем типам недвижимости.
+    """
+    # Эта функция уже считает итоги по каждому типу, мы их просто сложим
+    summary_by_type = get_monthly_summary_by_property_type(year, month)
+
+    if not summary_by_type:
+        return {}
+
+    grand_totals = {
+        'plan_units': sum(item.get('total_plan_units', 0) for item in summary_by_type),
+        'fact_units': sum(item.get('total_fact_units', 0) for item in summary_by_type),
+        'plan_volume': sum(item.get('total_plan_volume', 0) for item in summary_by_type),
+        'fact_volume': sum(item.get('total_fact_volume', 0) for item in summary_by_type),
+        'plan_income': sum(item.get('total_plan_income', 0) for item in summary_by_type),
+        'fact_income': sum(item.get('total_fact_income', 0) for item in summary_by_type),
+        'expected_income': sum(item.get('total_expected_income', 0) for item in summary_by_type),
+    }
+
+    # Пересчитываем проценты и прогнозы для итоговой строки
+    today = date.today()
+    workdays_in_month = np.busday_count(f'{year}-{month:02d}-01',
+                                        f'{year}-{month + 1:02d}-01' if month < 12 else f'{year + 1}-01-01')
+    passed_workdays = np.busday_count(f'{year}-{month:02d}-01',
+                                      today) if today.month == month and today.year == year else workdays_in_month
+    passed_workdays = max(1, passed_workdays)
+
+    grand_totals['percent_fact_units'] = (grand_totals['fact_units'] / grand_totals['plan_units'] * 100) if \
+    grand_totals['plan_units'] > 0 else 0
+    grand_totals['forecast_units'] = ((grand_totals['fact_units'] / passed_workdays) * workdays_in_month / grand_totals[
+        'plan_units'] * 100) if grand_totals['plan_units'] > 0 else 0
+
+    grand_totals['percent_fact_volume'] = (grand_totals['fact_volume'] / grand_totals['plan_volume'] * 100) if \
+    grand_totals['plan_volume'] > 0 else 0
+    grand_totals['forecast_volume'] = (
+                (grand_totals['fact_volume'] / passed_workdays) * workdays_in_month / grand_totals[
+            'plan_volume'] * 100) if grand_totals['plan_volume'] > 0 else 0
+
+    grand_totals['percent_fact_income'] = (grand_totals['fact_income'] / grand_totals['plan_income'] * 100) if \
+    grand_totals['plan_income'] > 0 else 0
+
+    return grand_totals

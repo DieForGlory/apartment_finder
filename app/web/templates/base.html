@@ -59,6 +59,7 @@
                                 <ul class="dropdown-menu" aria-labelledby="adminDropdown">
                                     <li><a class="dropdown-item" href="{{ url_for('discount.versions_index') }}"><i class="bi bi-git me-2"></i>Управление скидками</a></li>
                                     <li><a class="dropdown-item" href="{{ url_for('report.plan_fact_report') }}"><i class="bi bi-clipboard-data me-2"></i>План-факт отчет</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('report.inventory_summary') }}"><i class="bi bi-box-seam me-2"></i>Сводка по остаткам</a></li>
                                     {% if current_user.role.name == 'ADMIN' %}
                                     <li><hr class="dropdown-divider"></li>
                                     <li><a class="dropdown-item" href="{{ url_for('report.upload_plan') }}"><i class="bi bi-cloud-upload me-2"></i>Загрузить план</a></li>

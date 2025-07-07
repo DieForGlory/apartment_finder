@@ -25,7 +25,7 @@ def _get_settings():
 def _update_cbu_rate_logic():
     """Основная логика обновления, вынесенная в отдельную функцию."""
     try:
-        response = requests.get(CBU_API_URL, timeout=10)
+        response = requests.get(CBU_API_URL, timeout=10, verify=False)
         response.raise_for_status()
         data = response.json()
 

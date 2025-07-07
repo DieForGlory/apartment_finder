@@ -20,12 +20,13 @@ def calculate_installment():
     """Обрабатывает AJAX-запрос для расчета рассрочки."""
     data = request.get_json()
     try:
-        sell_id = data.get('sell_id')
+        sell_id = int(data.get('sell_id'))
         term = int(data.get('term'))
         # Собираем доп. скидки из запроса
+        start_date = data.get('start_date')  # Получаем дату (может быть None)
         additional_discounts = {k: v for k, v in data.get('additional_discounts', {}).items() if v > 0}
 
-        result = complex_calc_service.calculate_installment_plan(sell_id, term, additional_discounts)
+        result = complex_calc_service.calculate_installment_plan(sell_id, term, additional_discounts, start_date)
         return jsonify(success=True, data=result)
     except (ValueError, TypeError) as e:
         return jsonify(success=False, error=str(e)), 400
@@ -40,12 +41,14 @@ def calculate_dp_installment():
     """Обрабатывает AJAX-запрос для расчета рассрочки на ПВ."""
     data = request.get_json()
     try:
+        start_date = data.get('start_date')
         result = complex_calc_service.calculate_dp_installment_plan(
-            sell_id=data.get('sell_id'),
+            sell_id=int(data.get('sell_id')),
             term_months=int(data.get('term')),
             dp_amount=float(data.get('dp_amount')),
             dp_type=data.get('dp_type'),
-            additional_discounts={k: v for k, v in data.get('additional_discounts', {}).items() if v > 0}
+            additional_discounts={k: v for k, v in data.get('additional_discounts', {}).items() if v > 0},
+            start_date = start_date
         )
         return jsonify(success=True, data=result)
     except (ValueError, TypeError) as e:

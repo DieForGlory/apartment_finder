@@ -69,10 +69,14 @@
                 <div class="row">
                     <div class="col-md-5">
                         <h5 class="card-title">Параметры расчёта</h5>
-                        <form id="installment-form">
+                        <form id="installment-form" data-action="{{ url_for('complex_calc.calculate_installment') }}">
                             <div class="mb-3">
                                 <label for="term" class="form-label">Срок рассрочки (мес)</label>
                                 <input type="number" class="form-control" id="term" name="term" required min="1">
+                            </div>
+                            <div class="mb-3">
+                                <label for="first_payment_date" class="form-label">Первая дата платежа</label>
+                                <input type="date" class="form-control" id="first_payment_date" name="first_payment_date">
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">Дополнительные скидки (%):</label>
@@ -103,23 +107,29 @@
                                     <tr class="border-top mt-2"><td class="pt-3">Ежемесячный платёж:</td><td class="pt-3 text-end fw-bold fs-5" id="res-monthly-payment">...</td></tr>
                                 </tbody>
                             </table>
+                            <button id="print-kp-installment" class="btn btn-primary mt-3 d-none w-100">
+                                <i class="bi bi-printer me-1"></i> Распечатать КП по рассрочке
+                            </button>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-
     <div class="tab-pane fade" id="pills-dp-installment" role="tabpanel" aria-labelledby="pills-dp-installment-tab">
         <div class="card card-glass">
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-5">
                         <h5 class="card-title">Рассрочка на ПВ (до 6 мес)</h5>
-                        <form id="dp-installment-form">
+                        <form id="dp-installment-form" data-action="{{ url_for('complex_calc.calculate_dp_installment') }}">
                             <div class="mb-3">
                                 <label for="dp-term" class="form-label">Срок рассрочки на ПВ (1-6 мес)</label>
                                 <input type="number" class="form-control" id="dp-term" name="dp-term" required min="1" max="6" value="6">
+                            </div>
+                            <div class="mb-3">
+                                <label for="dp_first_payment_date" class="form-label">Первая дата платежа по ПВ</label>
+                                <input type="date" class="form-control" id="dp_first_payment_date" name="dp_first_payment_date">
                             </div>
                             <label for="dp-amount" class="form-label">Первоначальный взнос</label>
                             <div class="input-group mb-3">
@@ -159,13 +169,15 @@
                                     <tr class="border-top mt-2"><td class="pt-3">Итоговая стоимость договора:</td><td class="pt-3 text-end fw-bold fs-5 text-success" id="dp-res-contract">...</td></tr>
                                 </tbody>
                             </table>
+                             <button id="print-kp-dp-installment" class="btn btn-primary mt-3 d-none w-100">
+                                <i class="bi bi-printer me-1"></i> Распечатать КП по рассрочке на ПВ
+                            </button>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-
     <div class="tab-pane fade" id="pills-custom" role="tabpanel" aria-labelledby="pills-custom-tab">
         <div class="card card-glass">
             <div class="card-body">
@@ -179,100 +191,5 @@
 
 {% block scripts %}
 {{ super() }}
-<script>
-// СКРИПТ ДЛЯ ПЕРВОЙ ВКЛАДКИ (СТАНДАРТНАЯ РАССРОЧКА)
-document.getElementById('installment-form').addEventListener('submit', function(e) {
-    e.preventDefault();
-    const sellId = {{ data.apartment.id }};
-    const term = document.getElementById('term').value;
-    const errorDisplay = document.getElementById('error-display');
-    const discountInputs = document.querySelectorAll('.discount-input');
-    let additionalDiscounts = {};
-    let is_valid = true;
-    discountInputs.forEach(input => {
-        input.classList.remove('is-invalid');
-        const enteredValue = parseFloat(input.value);
-        if (enteredValue > parseFloat(input.max)) {
-            is_valid = false;
-            input.classList.add('is-invalid');
-            errorDisplay.textContent = `Скидка ${input.previousElementSibling.textContent} не может превышать ${input.max}%`;
-            errorDisplay.classList.remove('d-none');
-        } else if (enteredValue > 0) {
-            additionalDiscounts[input.id.replace('disc-', '')] = enteredValue / 100.0;
-        }
-    });
-    if (!is_valid) return;
-    errorDisplay.classList.add('d-none');
-    ['res-price-list', 'res-discount', 'res-contract-value', 'res-monthly-payment'].forEach(id => document.getElementById(id).textContent = '...');
-    fetch("{{ url_for('complex_calc.calculate_installment') }}", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sell_id: sellId, term: term, additional_discounts: additionalDiscounts })
-    })
-    .then(response => response.json())
-    .then(result => {
-        if (result.success) {
-            const data = result.data;
-            document.getElementById('res-price-list').textContent = parseFloat(data.price_list).toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' UZS';
-            document.getElementById('res-discount').textContent = data.calculated_discount.toFixed(2) + ' %';
-            document.getElementById('res-contract-value').textContent = data.calculated_contract_value.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' UZS';
-            document.getElementById('res-monthly-payment').textContent = data.monthly_payment.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' UZS';
-        } else {
-            errorDisplay.textContent = result.error;
-            errorDisplay.classList.remove('d-none');
-        }
-    })
-    .catch(err => {
-        errorDisplay.textContent = 'Ошибка сети. Попробуйте позже.';
-        errorDisplay.classList.remove('d-none');
-    });
-});
-
-// СКРИПТ ДЛЯ ВТОРОЙ ВКЛАДКИ (РАССРОЧКА НА ПВ)
-document.getElementById('dp-installment-form').addEventListener('submit', function(e) {
-    e.preventDefault();
-    const errorDisplay = document.getElementById('dp-error-display');
-    let is_valid = true;
-    let additionalDiscounts = {};
-    document.querySelectorAll('.discount-input-dp').forEach(input => {
-        input.classList.remove('is-invalid');
-        const enteredValue = parseFloat(input.value);
-        if (enteredValue > parseFloat(input.max)) {
-            is_valid = false;
-            input.classList.add('is-invalid');
-            errorDisplay.textContent = `Скидка ${input.previousElementSibling.textContent} не может превышать ${input.max}%`;
-            errorDisplay.classList.remove('d-none');
-        } else if (enteredValue > 0) {
-            additionalDiscounts[input.id.replace('dp-disc-', '')] = enteredValue / 100.0;
-        }
-    });
-    if (!is_valid) return;
-    errorDisplay.classList.add('d-none');
-    ['dp-res-term', 'dp-res-monthly', 'dp-res-mortgage', 'dp-res-contract'].forEach(id => document.getElementById(id).textContent = '...');
-    fetch("{{ url_for('complex_calc.calculate_dp_installment') }}", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            sell_id: {{ data.apartment.id }},
-            term: document.getElementById('dp-term').value,
-            dp_amount: document.getElementById('dp-amount').value,
-            dp_type: document.getElementById('dp-type').value,
-            additional_discounts: additionalDiscounts
-        })
-    })
-    .then(response => response.json())
-    .then(result => {
-        if (result.success) {
-            const data = result.data;
-            document.getElementById('dp-res-term').textContent = data.term_months + ' мес.';
-            document.getElementById('dp-res-monthly').textContent = data.monthly_payment_for_dp.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' UZS';
-            document.getElementById('dp-res-mortgage').textContent = data.mortgage_body.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' UZS';
-            document.getElementById('dp-res-contract').textContent = data.calculated_contract_value.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' UZS';
-        } else {
-            errorDisplay.textContent = result.error;
-            errorDisplay.classList.remove('d-none');
-        }
-    });
-});
-</script>
+<script src="{{ url_for('static', filename='js/complex_calc_logic.js') }}" defer></script>
 {% endblock %}

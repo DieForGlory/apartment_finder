@@ -1,10 +1,11 @@
 import json
 from datetime import datetime
 from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app
-from flask_login import login_required
+from flask_login import login_required, current_user
 from ..models.discount_models import PropertyType, PaymentMethod
+from ..models.estate_models import EstateHouse
 from ..models.exclusion_models import ExcludedSell
-from ..services import selection_service
+from ..services import selection_service, report_service, settings_service
 from ..services.selection_service import find_apartments_by_budget, get_apartment_card_data
 from ..services.data_service import get_sells_with_house_info, get_filter_options
 from ..services.discount_service import get_current_usd_rate
@@ -32,12 +33,17 @@ def search_by_id():
         flash('Вы не ввели ID для поиска.', 'info')
         return redirect(url_for('main.selection'))
 @main_bp.route('/')
-@login_required
-@role_required('ADMIN', 'MANAGER',"MPP")
 def index():
     """
-    Главная страница с таблицей и пагинацией.
+    Главная страница.
+    Перенаправляет на страницу входа, если пользователь не аутентифицирован.
+    В противном случае отображает каталог объектов.
     """
+    if not current_user.is_authenticated:
+        # Если пользователь не вошел, перенаправляем его на страницу логина
+        return redirect(url_for('auth.login'))
+
+    # Если пользователь уже вошел в систему, показываем ему каталог с пагинацией
     page = request.args.get('page', 1, type=int)
     PER_PAGE = 40
     sells_pagination = get_sells_with_house_info(page=page, per_page=PER_PAGE)
@@ -179,44 +185,56 @@ def generate_commercial_offer(sell_id):
 
 @main_bp.route('/exclusions', methods=['GET', 'POST'])
 @login_required
-@role_required('ADMIN')
+@role_required('ADMIN', 'MANAGER')
 def manage_exclusions():
     if request.method == 'POST':
-        action = request.form.get('action')
-        sell_id_str = request.form.get('sell_id_to_manage')
-        comment = request.form.get('comment', '').strip()
+        # Логика для исключения отдельных квартир из подбора
+        if 'sell_id_to_manage' in request.form:
+            action = request.form.get('action')
+            sell_id_str = request.form.get('sell_id_to_manage')
+            comment = request.form.get('comment', '').strip()
 
-        if not sell_id_str:
-            flash("ID квартиры не может быть пустым.", "danger")
-            return redirect(url_for('main.manage_exclusions'))
-
-        try:
-            sell_id = int(sell_id_str)
-        except ValueError:
-            flash("ID квартиры должен быть числом.", "danger")
-            return redirect(url_for('main.manage_exclusions'))
-
-        if action == 'add':
-            if ExcludedSell.query.filter_by(sell_id=sell_id).first():
-                flash(f"Квартира с ID {sell_id} уже находится в списке исключений.", "warning")
+            if not sell_id_str:
+                flash("ID квартиры не может быть пустым.", "danger")
             else:
-                db.session.add(ExcludedSell(sell_id=sell_id, comment=comment or None))
-                db.session.commit()
-                flash(f"Квартира с ID {sell_id} успешно добавлена в исключения.", "success")
-        elif action == 'delete':
-            exclusion = ExcludedSell.query.filter_by(sell_id=sell_id).first()
-            if exclusion:
-                db.session.delete(exclusion)
-                db.session.commit()
-                flash(f"Квартира с ID {sell_id} успешно удалена из исключений.", "success")
-            else:
-                flash(f"Квартира с ID {sell_id} не найдена в списке исключений.", "warning")
-        else:
-            flash("Неизвестное действие.", "danger")
+                try:
+                    sell_id = int(sell_id_str)
+                    if action == 'add':
+                        if ExcludedSell.query.filter_by(sell_id=sell_id).first():
+                            flash(f"Квартира с ID {sell_id} уже в исключениях.", "warning")
+                        else:
+                            db.session.add(ExcludedSell(sell_id=sell_id, comment=comment or None))
+                            db.session.commit()
+                            flash(f"Квартира ID {sell_id} добавлена в исключения.", "success")
+                    elif action == 'delete':
+                        exclusion = ExcludedSell.query.filter_by(sell_id=sell_id).first()
+                        if exclusion:
+                            db.session.delete(exclusion)
+                            db.session.commit()
+                            flash(f"Квартира ID {sell_id} удалена из исключений.", "success")
+                except ValueError:
+                    flash("ID квартиры должен быть числом.", "danger")
+
+        # Новая логика для исключения целых ЖК из отчета по остаткам
+        elif 'complex_name_to_toggle' in request.form:
+            complex_name = request.form.get('complex_name_to_toggle')
+            if complex_name:
+                message, category = settings_service.toggle_complex_exclusion(complex_name)
+                flash(message, category)
 
         return redirect(url_for('main.manage_exclusions'))
 
+    # Собираем все данные для обеих частей страницы
     excluded_sells = ExcludedSell.query.order_by(ExcludedSell.created_at.desc()).all()
-    return render_template('manage_exclusions.html', excluded_sells=excluded_sells, title="Управление исключениями")
+    all_complexes = db.session.query(EstateHouse.complex_name).distinct().order_by(EstateHouse.complex_name).all()
+    excluded_complexes_names = {c.complex_name for c in settings_service.get_all_excluded_complexes()}
+
+    return render_template(
+        'manage_exclusions.html',
+        title="Управление исключениями",
+        excluded_sells=excluded_sells,
+        all_complexes=[c[0] for c in all_complexes],
+        excluded_complex_names=excluded_complexes_names
+    )
 
 

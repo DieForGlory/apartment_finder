@@ -1,7 +1,8 @@
 document.addEventListener('DOMContentLoaded', function() {
     const currencyToggle = document.getElementById('currencyToggle');
     const currencyLabel = document.getElementById('currencyLabel');
-    const usdRate = parseFloat(document.body.dataset.usdRate) || 12650;
+    const usdRate = parseFloat(document.body.dataset.usdRate) || 13000;
+    const exportLink = document.getElementById('export-link'); // Находим ссылку экспорта
 
     const STORAGE_KEYS = {
         currency: 'planFactReport_currencyIsUSD',
@@ -9,6 +10,7 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     function updateCurrency(isUsd) {
+        // Обновляем все денежные значения на странице
         document.querySelectorAll('.currency-value').forEach(el => {
             const uzsValue = parseFloat(el.dataset.uzsValue);
             if (isNaN(uzsValue)) return;
@@ -20,10 +22,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 displayValue = '$' + usdValue.toLocaleString('en-US', { maximumFractionDigits: 0 });
             } else {
                 if(currencyLabel) currencyLabel.textContent = 'UZS';
-                displayValue = uzsValue.toLocaleString('ru-RU', { maximumFractionDigits: 0 });
+                displayValue = uzsValue.toLocaleString('ru-RU', { maximumFractionDigits: 0 }).replace(/,/g, '.');
             }
              el.textContent = displayValue;
         });
+
+        // --- НАЧАЛО: НОВЫЙ БЛОК ДЛЯ ОБНОВЛЕНИЯ ССЫЛКИ ЭКСПОРТА ---
+        if (exportLink) {
+            const baseUrl = exportLink.dataset.baseUrl;
+            if (isUsd) {
+                exportLink.href = baseUrl + '?currency=USD';
+            } else {
+                exportLink.href = baseUrl; // Возвращаем базовый URL без параметров
+            }
+        }
+        // --- КОНЕЦ НОВОГО БЛОКА ---
     }
 
     function restoreState() {

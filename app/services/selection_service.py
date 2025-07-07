@@ -104,9 +104,6 @@ def find_apartments_by_budget(budget: float, currency: str, property_type_str: s
 
             if is_match:
                 pv_log = apartment_details.get('initial_payment') or apartment_details['final_price']
-                print(
-                    f"    ✔️  Подходит квартира ID {sell.id} ({sell.estate_rooms} комн). Цена со скидкой: {apartment_details['final_price']:,.0f} UZS. Требуемый первый взнос: {pv_log:,.0f} UZS")
-
                 results.setdefault(complex_name, {"total_matches": 0, "by_payment_method": {}})
                 payment_method_str = payment_method_enum.value
                 results[complex_name]["by_payment_method"].setdefault(payment_method_str, {"total": 0, "by_rooms": {}})

@@ -205,3 +205,4 @@ body {
 .badge.bg-danger-subtle { background-color: rgba(var(--bs-danger-rgb), 0.15) !important; color: var(--bs-danger) !important; border-color: rgba(var(--bs-danger-rgb), 0.2) !important; }
 .badge.bg-info-subtle { background-color: rgba(var(--bs-info-rgb), 0.15) !important; color: var(--bs-info) !important; border-color: rgba(var(--bs-info-rgb), 0.2) !important; }
 .badge.bg-primary-subtle { background-color: rgba(var(--bs-primary-rgb), 0.15) !important; color: var(--bs-primary) !important; border-color: rgba(var(--bs-primary-rgb), 0.2) !important; }
+

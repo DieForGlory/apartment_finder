@@ -14,3 +14,12 @@ class ExcludedSell(db.Model):
 
     def __repr__(self):
         return f"<ExcludedSell(sell_id={self.sell_id}, comment='{self.comment}')>"
+class ExcludedComplex(db.Model):
+    """Модель для хранения названий ЖК, исключенных из отчетов."""
+    __tablename__ = 'excluded_complexes'
+    __bind_key__ = 'discounts'
+    id = db.Column(db.Integer, primary_key=True)
+    complex_name = db.Column(db.String(255), unique=True, nullable=False)
+
+    def __repr__(self):
+        return f'<ExcludedComplex {self.complex_name}>'

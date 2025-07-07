@@ -4,18 +4,69 @@ from werkzeug.utils import secure_filename
 from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app, abort
 from flask_login import login_required
 from app.core.decorators import role_required
-from app.services import report_service
+from app.services import report_service, selection_service
 from app.services.discount_service import get_current_usd_rate
 from app.web.forms import UploadPlanForm
 from app.models.discount_models import PropertyType
-from datetime import date
+from datetime import date, datetime
 from flask import send_file
 import json
 from app.services import report_service, currency_service
 from app.models.finance_models import CurrencySettings
-
+from app.services import report_service, currency_service, inventory_service
+from app.models.finance_models import CurrencySettings
 report_bp = Blueprint('report', __name__, template_folder='templates')
 
+
+@report_bp.route('/inventory-summary')
+@login_required
+@role_required('ADMIN', 'MANAGER')
+def inventory_summary():
+    """
+    Отображает сводку по товарному запасу.
+    """
+    summary_by_complex, overall_summary = inventory_service.get_inventory_summary_data()
+
+    # ИЗМЕНЕНИЕ: Убираем сортировку здесь и передаем словари как есть
+
+    usd_rate = currency_service.get_current_effective_rate()
+
+    return render_template(
+        'inventory_summary.html',
+        title="Сводка по товарному запасу",
+        summary=summary_by_complex,
+        overall_summary=overall_summary,
+        usd_to_uzs_rate=usd_rate
+    )
+
+
+@report_bp.route('/export-inventory-summary')
+@login_required
+@role_required('ADMIN', 'MANAGER')
+def export_inventory_summary():
+    """
+    Формирует и отдает Excel-файл со сводкой по остаткам.
+    """
+    selected_currency = request.args.get('currency', 'UZS')
+    usd_rate = currency_service.get_current_effective_rate()
+
+    # 1. Здесь мы получаем данные в переменную `summary_by_complex`
+    summary_by_complex, _ = inventory_service.get_inventory_summary_data()
+
+    # 2. ИСПОЛЬЗУЕМ ЭТУ ЖЕ ПЕРЕМЕННУЮ `summary_by_complex` здесь
+    excel_stream = inventory_service.generate_inventory_excel(summary_by_complex, selected_currency, usd_rate)
+
+    if excel_stream is None:
+        flash("Нет данных для экспорта.", "warning")
+        return redirect(url_for('report.inventory_summary'))
+
+    filename = f"inventory_summary_{selected_currency}.xlsx"
+    return send_file(
+        excel_stream,
+        download_name=filename,
+        as_attachment=True,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
 
 @report_bp.route('/download-plan-template')
 @login_required
@@ -42,11 +93,16 @@ def plan_fact_report():
     usd_rate = currency_service.get_current_effective_rate()
     summary_data = report_service.get_monthly_summary_by_property_type(year, month)
     report_data, totals = report_service.generate_plan_fact_report(year, month, prop_type)
+
+    # ВЫЗЫВАЕМ НОВУЮ ФУНКЦИЮ
+    grand_totals = report_service.calculate_grand_totals(year, month)
+
     return render_template('plan_fact_report.html',
                            title="План-фактный отчет",
                            data=report_data,
                            summary_data=summary_data,
                            totals=totals,
+                           grand_totals=grand_totals,  # И ПЕРЕДАЕМ РЕЗУЛЬТАТ В ШАБЛОН
                            years=[today.year - 1, today.year, today.year + 1],
                            months=range(1, 13),
                            property_types=list(PropertyType),
@@ -81,6 +137,49 @@ def upload_plan():
 
     return render_template('upload_plan.html', title="Загрузка плана", form=form)
 
+@report_bp.route('/commercial-offer/complex/<int:sell_id>')
+@login_required
+def generate_complex_kp(sell_id):
+    """
+    Генерирует КП для сложных калькуляторов.
+    Данные для расчета берутся из URL.
+    """
+    # 1. Получаем базовую информацию об объекте (для шапки)
+    card_data = selection_service.get_apartment_card_data(sell_id)
+    if not card_data.get('apartment'):
+        abort(404)
+
+    # 2. Получаем тип калькулятора и детали из параметров URL
+    calc_type = request.args.get('calc_type')
+    details_json = request.args.get('details')
+
+    if not all([calc_type, details_json]):
+        flash("Отсутствуют данные для генерации КП.", "danger")
+        return redirect(url_for('main.apartment_details', sell_id=sell_id))
+
+    try:
+        details = json.loads(details_json)
+    except json.JSONDecodeError:
+        abort(400, "Некорректный формат данных (JSON).")
+    if 'payment_schedule' in details:
+        for payment in details['payment_schedule']:
+            # Теперь строка приходит в формате 'YYYY-MM-DD',
+            # поэтому убираем .split('T')[0]
+            payment['payment_date'] = datetime.strptime(payment['payment_date'], '%Y-%m-%d').date()
+    # 3. Получаем актуальную дату и курс валют
+    current_date = datetime.now().strftime("%d.%m.%Y %H:%M")
+    usd_rate = currency_service.get_current_effective_rate()
+
+    # 4. Рендерим новый специальный шаблон
+    return render_template(
+        'commercial_offer_complex.html',
+        title=f"КП (сложный расчет) по объекту ID {sell_id}",
+        data=card_data,
+        calc_type=calc_type,
+        details=details,
+        current_date=current_date,
+        usd_to_uzs_rate=usd_rate
+    )
 
 @report_bp.route('/project-dashboard/<path:complex_name>')
 @login_required

@@ -1,6 +1,7 @@
 from app.models.discount_models import CalculatorSettings
 from app.core.extensions import db
-
+from app.models.exclusion_models import ExcludedComplex # ИЗМЕНЕНИЕ: правильный путь импорта
+from app.core.extensions import db
 
 def get_calculator_settings():
     """
@@ -14,6 +15,30 @@ def get_calculator_settings():
         db.session.commit()
     return settings
 
+
+def get_all_excluded_complexes():
+    """Возвращает список всех исключенных ЖК."""
+    return ExcludedComplex.query.order_by(ExcludedComplex.complex_name).all()
+
+
+def toggle_complex_exclusion(complex_name: str):
+    """
+    Добавляет ЖК в список исключений, если его там нет,
+    или удаляет, если он там уже есть.
+    """
+    existing = ExcludedComplex.query.filter_by(complex_name=complex_name).first()
+    if existing:
+        db.session.delete(existing)
+        message = f"Проект '{complex_name}' был удален из списка исключений."
+        category = "success"
+    else:
+        new_exclusion = ExcludedComplex(complex_name=complex_name)
+        db.session.add(new_exclusion)
+        message = f"Проект '{complex_name}' был добавлен в список исключений."
+        category = "info"
+
+    db.session.commit()
+    return message, category
 
 def update_calculator_settings(form_data):
     """Обновляет настройки калькуляторов из данных формы."""
