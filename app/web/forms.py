@@ -69,3 +69,11 @@ class CalculatorSettingsForm(FlaskForm):
     # --- КОНЕЦ: НОВОГО ПОЛЯ ---
 
     submit = SubmitField('Сохранить настройки')
+
+class UploadManagerPlanForm(FlaskForm):
+    """Форма для загрузки Excel файла с планами менеджеров."""
+    excel_file = FileField(
+        'Выберите Excel-файл с планами',
+        validators=[DataRequired(message="Необходимо выбрать файл.")]
+    )
+    submit = SubmitField('Загрузить планы')

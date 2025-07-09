@@ -1,19 +1,21 @@
 # app/web/report_routes.py
 import os
 from werkzeug.utils import secure_filename
-from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app, abort
+from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app, abort, send_file
 from flask_login import login_required
 from app.core.decorators import role_required
 from app.services import report_service, selection_service
 from app.services.discount_service import get_current_usd_rate
-from app.web.forms import UploadPlanForm
-from app.models.discount_models import PropertyType
+from app.web.forms import UploadPlanForm, UploadManagerPlanForm
+from app.models.discount_models import PropertyType, ManagerSalesPlan
 from datetime import date, datetime
 from flask import send_file
+from app.models.user_models import SalesManager
+
 import json
 from app.services import report_service, currency_service
 from app.models.finance_models import CurrencySettings
-from app.services import report_service, currency_service, inventory_service
+from app.services import report_service, currency_service, inventory_service, manager_report_service
 from app.models.finance_models import CurrencySettings
 report_bp = Blueprint('report', __name__, template_folder='templates')
 
@@ -259,6 +261,116 @@ def export_plan_fact():
 
     # Формируем имя файла и отправляем его пользователю
     filename = f"plan_fact_report_{prop_type}_{month:02d}_{year}.xlsx"
+    return send_file(
+        excel_stream,
+        download_name=filename,
+        as_attachment=True,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+
+
+@report_bp.route('/manager-performance-report', methods=['GET'])
+@login_required
+@role_required('ADMIN', 'MANAGER')
+def manager_performance_report():
+    """Общая страница с отчетами по всем менеджерам."""
+    # Получаем параметры из запроса
+    search_query = request.args.get('q', '')
+    show_only_with_plan = request.args.get('with_plan', 'false').lower() == 'true'
+
+    # Начинаем строить запрос
+    query = SalesManager.query
+
+    # Применяем фильтр по ФИО, если есть поисковый запрос
+    if search_query:
+        query = query.filter(SalesManager.full_name.ilike(f'%{search_query}%'))
+
+    # Если включен переключатель, показываем только менеджеров с планами
+    if show_only_with_plan:
+        # distinct() нужен, чтобы избежать дубликатов, если у менеджера несколько планов
+        query = query.join(ManagerSalesPlan).distinct()
+
+    managers = query.order_by(SalesManager.full_name).all()
+
+    return render_template(
+        'manager_performance_overview.html',
+        title="Выполнение планов менеджерами",
+        managers=managers,
+        # Передаем состояние фильтров обратно в шаблон
+        search_query=search_query,
+        show_only_with_plan=show_only_with_plan
+    )
+
+
+@report_bp.route('/manager-performance-report/<int:manager_id>', methods=['GET'])
+@login_required
+@role_required('ADMIN', 'MANAGER')
+def manager_performance_detail(manager_id):
+    """Детальная страница с выполнением плана по одному менеджеру."""
+    # Используем текущий год по умолчанию
+    current_year = date.today().year
+    year = request.args.get('year', current_year, type=int)
+
+    performance_data = manager_report_service.get_manager_performance_details(manager_id, year)
+    kpi_data = manager_report_service.get_manager_kpis(manager_id,year)
+    usd_rate = currency_service.get_current_effective_rate()
+    if not performance_data:
+        abort(404, "Менеджер не найден или данные отсутствуют.")
+    month_names = {
+        1: 'Январь', 2: 'Февраль', 3: 'Март', 4: 'Апрель', 5: 'Май', 6: 'Июнь',
+        7: 'Июль', 8: 'Август', 9: 'Сентябрь', 10: 'Октябрь', 11: 'Ноябрь', 12: 'Декабрь'
+    }
+    complex_ranking = manager_report_service.get_manager_complex_ranking(manager_id)
+    return render_template(
+        'manager_performance_detail.html',
+        title=f"Детализация по {performance_data['manager_name']}",
+        data=performance_data,
+        kpi_data=kpi_data,
+        complex_ranking=complex_ranking,
+        month_names=month_names,
+        usd_to_uzs_rate=usd_rate,
+        selected_year=year,
+        # Создаем список лет для удобной навигации
+        years_for_nav=[current_year + 1, current_year, current_year - 1, current_year - 2]
+    )
+
+
+@report_bp.route('/upload-manager-plan', methods=['GET', 'POST'])
+@login_required
+@role_required('ADMIN')
+def upload_manager_plan():
+    """Страница для загрузки файла с планами менеджеров."""
+    form = UploadManagerPlanForm()
+    if form.validate_on_submit():
+        f = form.excel_file.data
+        filename = secure_filename(f.filename)
+        # Убедимся, что папка uploads существует
+        upload_folder = os.path.join(current_app.root_path, 'uploads')
+        os.makedirs(upload_folder, exist_ok=True)
+        file_path = os.path.join(upload_folder, filename)
+        f.save(file_path)
+
+        try:
+            result = manager_report_service.process_manager_plans_from_excel(file_path)
+            flash(f"Файл успешно загружен. {result}", "success")
+        except Exception as e:
+            flash(f"Произошла ошибка при обработке файла: {str(e)}", "danger")
+
+        return redirect(url_for('report.manager_performance_report'))
+
+    return render_template('upload_manager_plan.html', title="Загрузка планов менеджеров", form=form)
+
+
+@report_bp.route('/download-manager-plan-template')
+@login_required
+@role_required('ADMIN')
+def download_manager_plan_template():
+    """
+    Генерирует и отдает пользователю для скачивания шаблон Excel с планами менеджеров.
+    """
+    excel_stream = manager_report_service.generate_manager_plan_template_excel()
+    filename = f"manager_plans_template_{date.today().year}.xlsx"
+
     return send_file(
         excel_stream,
         download_name=filename,

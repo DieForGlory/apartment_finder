@@ -2,11 +2,11 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from flask import current_app
-
+from ..models.user_models import SalesManager #
+from ..models.discount_models import ManagerSalesPlan
 from ..core.extensions import db
 from ..models.estate_models import EstateHouse, EstateSell, EstateDeal
 from ..models.discount_models import DiscountVersion, Discount # Ensure Discount is imported if needed for clearing
-from ..models.exclusion_models import ExcludedSell # Ensure ExcludedSell is imported if needed for clearing
 from .discount_service import process_discounts_from_excel
 from ..models.finance_models import FinanceOperation
 
@@ -30,9 +30,11 @@ def _migrate_mysql_estate_data_to_sqlite():
     try:
         # Очищаем данные в SQLite перед новой миграцией
         print("[MIGRATE] 🧹 Очистка существующих данных в SQLite (EstateDeal, EstateSell, EstateHouse)...")
-        db.session.query(EstateDeal).delete()  # <-- ДОБАВЛЕНО: Очистка сделок
+        db.session.query(EstateDeal).delete()
         db.session.query(EstateSell).delete()
         db.session.query(EstateHouse).delete()
+        db.session.query(SalesManager).delete()
+        db.session.query(ManagerSalesPlan).delete()
         db.session.query(FinanceOperation).delete()
         db.session.commit()
         print("[MIGRATE] ✔️ Данные по недвижимости и сделкам очищены.")
@@ -77,6 +79,47 @@ def _migrate_mysql_estate_data_to_sqlite():
             db.session.add(new_sell)
         print(f"[MIGRATE] ✔️ Найдено и подготовлено к записи объектов продажи: {len(mysql_sells)}")
 
+        # 2. Миграция таблицы users
+
+        print("[MIGRATE] 🧑‍💼 Загрузка данных менеджеров из таблицы 'users'...")
+        from sqlalchemy import Table, Column, Integer, String, MetaData
+        meta = MetaData()
+        mysql_users_table = Table('users', meta,
+                                  Column('id', Integer, primary_key=True),
+                                  Column('users_name', String)  # Используем users_name, как вы и указали
+                                  )
+
+        mysql_managers = mysql_session.query(mysql_users_table).all()
+
+        # --- Новая логика с очисткой и проверкой на уникальность ---
+        processed_names = set()  # Сет для отслеживания уже добавленных имен
+        added_count = 0
+
+        for manager in mysql_managers:
+            # Проверяем, есть ли имя и чистим его от пробелов
+            if not manager.users_name:
+                continue
+
+            cleaned_name = manager.users_name.strip()
+
+            # Пропускаем, если имя пустое или такое очищенное имя уже было обработано
+            if not cleaned_name or cleaned_name in processed_names:
+                continue
+
+            # Если имя уникальное, добавляем его в сет и создаем объект
+            processed_names.add(cleaned_name)
+
+            new_manager = SalesManager(
+                id=manager.id,
+                full_name=cleaned_name  # Используем очищенное имя
+            )
+            db.session.add(new_manager)
+            added_count += 1
+
+        print(
+            f"[MIGRATE] ✔️ Найдено менеджеров в источнике: {len(mysql_managers)}. Добавлено уникальных: {added_count}")
+        # --- КОНЕЦ ОБНОВЛЕННОГО БЛОКА ---
+
         # --- НАЧАЛО НОВОГО БЛОКА: Миграция таблицы estate_deals ---
         print("[MIGRATE] 🤝 Загрузка данных из таблицы 'estate_deals'...")
         mysql_deals = mysql_session.query(EstateDeal).all()
@@ -94,6 +137,7 @@ def _migrate_mysql_estate_data_to_sqlite():
                 id=deal.id,
                 estate_sell_id=deal.estate_sell_id,  # Просто копируем ID
                 deal_status_name=deal.deal_status_name,
+                deal_manager_id=deal.deal_manager_id,
                 agreement_date=deal.agreement_date,
                 preliminary_date=deal.preliminary_date,
                 deal_sum = deal.deal_sum

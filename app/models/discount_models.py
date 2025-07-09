@@ -120,7 +120,6 @@ class CalculatorSettings(db.Model):
 class ManagerSalesPlan(db.Model):
     """Модель для хранения индивидуальных планов продаж по менеджерам."""
     __tablename__ = 'manager_sales_plans'
-    __bind_key__ = 'discounts'
 
     id = db.Column(db.Integer, primary_key=True)
     # Внешний ключ к таблице sales_managers
