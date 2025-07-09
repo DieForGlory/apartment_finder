@@ -5,15 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Система подбора квартир{% endblock %}</title>
 
-    <!-- External CSS Libraries -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;700&display=swap" rel="stylesheet">
 
-    <!-- Custom Application Styles -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
 
-    <!-- Initial theme setup to prevent flash of unstyled content -->
     <script>
         (function() {
             const getStoredTheme = () => localStorage.getItem('theme');
@@ -35,7 +32,7 @@
     <header class="header sticky-top border-bottom">
         <nav class="navbar navbar-expand-lg">
             <div class="container">
-                <a class="navbar-brand fw-bold" href="{{ url_for('main.selection') }}" style="color: var(--gh-gold);">
+                <a class="navbar-brand fw-bold" href="{{ url_for('main.index') }}" style="color: var(--gh-gold);">
                     <i class="bi bi-building-check"></i>
                     ApartmentFinder
                 </a>
@@ -46,30 +43,40 @@
                     <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                         {% if current_user.is_authenticated %}
                             <li class="nav-item">
-                                <a class="nav-link {% if request.endpoint == 'main.selection' %}active{% endif %}" href="{{ url_for('main.selection') }}">Подбор по бюджету</a>
+                                <a class="nav-link {% if request.endpoint == 'main.selection' %}active{% endif %}" href="{{ url_for('main.selection') }}">Система подбора</a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link {% if request.endpoint == 'discount.discounts_overview' %}active{% endif %}" href="{{ url_for('discount.discounts_overview') }}">Система скидок</a>
                             </li>
+
                             {% if current_user.role.name in ['ADMIN', 'MANAGER'] %}
                             <li class="nav-item dropdown">
-                                <a class="nav-link dropdown-toggle {% if request.endpoint in ['discount.versions_index', 'report.plan_fact_report', 'report.upload_plan', 'discount.upload_discounts', 'main.manage_exclusions', 'auth.user_management', 'settings.manage_settings'] %}active{% endif %}" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <a class="nav-link dropdown-toggle {% if request.blueprint == 'report' %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    Отчетность
+                                </a>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="{{ url_for('report.plan_fact_report') }}">План-факт отчет</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('report.inventory_summary') }}">Сводка по остаткам</a></li>
+                                </ul>
+                            </li>
+
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle {% if request.blueprint in ['auth', 'settings'] or request.endpoint in ['discount.versions_index', 'discount.upload_discounts', 'report.upload_plan'] %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                     Администрирование
                                 </a>
-                                <ul class="dropdown-menu" aria-labelledby="adminDropdown">
-                                    <li><a class="dropdown-item" href="{{ url_for('discount.versions_index') }}"><i class="bi bi-git me-2"></i>Управление скидками</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('report.plan_fact_report') }}"><i class="bi bi-clipboard-data me-2"></i>План-факт отчет</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('report.inventory_summary') }}"><i class="bi bi-box-seam me-2"></i>Сводка по остаткам</a></li>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="{{ url_for('discount.versions_index') }}">Управление скидками</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('main.manage_exclusions') }}">Управление исключениями</a></li>
                                     {% if current_user.role.name == 'ADMIN' %}
                                     <li><hr class="dropdown-divider"></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('report.upload_plan') }}"><i class="bi bi-cloud-upload me-2"></i>Загрузить план</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('discount.upload_discounts') }}"><i class="bi bi-cloud-arrow-up me-2"></i>Загрузить скидки</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('main.manage_exclusions') }}"><i class="bi bi-slash-circle me-2"></i>Исключения</a></li>
+                                    <li><h6 class="dropdown-header">Загрузка данных</h6></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('report.upload_plan') }}">Загрузить план</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('discount.upload_discounts') }}">Загрузить скидки</a></li>
                                     <li><hr class="dropdown-divider"></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('auth.user_management') }}"><i class="bi bi-people me-2"></i>Пользователи</a></li>
-                                    <li><hr class="dropdown-divider"></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('settings.manage_settings') }}"><i class="bi bi-gear-wide-connected me-2"></i>Настройки калькуляторов</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('report.currency_settings') }}"><i class="bi bi-gear-wide-connected me-2"></i>Настройки курса</a></li>
+                                    <li><h6 class="dropdown-header">Системные настройки</h6></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('auth.user_management') }}">Пользователи</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('settings.manage_settings') }}">Настройки калькуляторов</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('report.currency_settings') }}">Настройки курса</a></li>
                                     {% endif %}
                                 </ul>
                             </li>
@@ -114,14 +121,11 @@
         {% block content %}{% endblock %}
     </main>
 
-    <!-- External JS Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
 
-    <!-- Custom Application Scripts -->
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 
-    <!-- Page-specific scripts block -->
     {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -25,3 +25,15 @@ class User(db.Model, UserMixin):
 
     def __repr__(self):
         return f'<User {self.username}>'
+
+class SalesManager(db.Model):
+    """Модель для хранения данных о менеджерах по продажам из внешней БД."""
+    __tablename__ = 'sales_managers'
+    # Используем тот же bind_key, так как эти данные тесно связаны со скидками и отчетами
+    __bind_key__ = 'discounts'
+
+    id = db.Column(db.Integer, primary_key=True) # Это будет id из MySQL
+    full_name = db.Column(db.String(255), unique=True, nullable=False)
+
+    def __repr__(self):
+        return f'<SalesManager {self.full_name}>'

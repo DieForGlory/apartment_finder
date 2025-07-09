@@ -55,6 +55,17 @@ class CalculatorSettingsForm(FlaskForm):
     """Форма для настроек калькуляторов."""
     standard_installment_whitelist = TextAreaField('ID квартир для обычной рассрочки (через запятую)')
     dp_installment_whitelist = TextAreaField('ID квартир для рассрочки на ПВ (через запятую)')
-    dp_installment_max_term = IntegerField('Макс. срок рассрочки на ПВ (мес)', validators=[DataRequired(), NumberRange(min=1, max=36)])
-    time_value_rate_annual = FloatField('Годовая ставка для коэфф. (%)', validators=[DataRequired(), NumberRange(min=0)])
+    dp_installment_max_term = IntegerField('Макс. срок рассрочки на ПВ (мес)',
+                                           validators=[DataRequired(), NumberRange(min=1, max=36)])
+    time_value_rate_annual = FloatField('Годовая ставка для коэфф. (%)',
+                                        validators=[DataRequired(), NumberRange(min=0)])
+
+    # --- НАЧАЛО: НОВОЕ ПОЛЕ ---
+    standard_installment_min_dp_percent = FloatField(
+        'Мин. ПВ для стандартной рассрочки (%)',
+        validators=[DataRequired(message="Это поле обязательно."), NumberRange(min=0, max=100)],
+        default=15.0
+    )
+    # --- КОНЕЦ: НОВОГО ПОЛЯ ---
+
     submit = SubmitField('Сохранить настройки')

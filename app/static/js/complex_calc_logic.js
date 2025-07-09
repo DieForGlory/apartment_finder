@@ -59,6 +59,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     term: document.getElementById('term').value,
                     // ДОБАВЛЯЕМ СТРОКУ
                     start_date: document.getElementById('first_payment_date').value,
+                    dp_amount: document.getElementById('dp-amount-standard').value,
+                    dp_type: document.getElementById('dp-type-standard').value,
                     additional_discounts: additionalDiscounts
                 })
             })

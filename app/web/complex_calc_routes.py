@@ -14,26 +14,39 @@ def show_page(sell_id):
         return redirect(url_for('main.selection'))
     return render_template('complex_calculations.html', title="Сложные расчёты", data=card_data)
 
+
 @complex_calc_bp.route('/calculate-installment', methods=['POST'])
 @login_required
 def calculate_installment():
-    """Обрабатывает AJAX-запрос для расчета рассрочки."""
+    """Обрабатывает AJAX-запрос для расчета стандартной рассрочки."""
     data = request.get_json()
     try:
         sell_id = int(data.get('sell_id'))
         term = int(data.get('term'))
-        # Собираем доп. скидки из запроса
-        start_date = data.get('start_date')  # Получаем дату (может быть None)
-        additional_discounts = {k: v for k, v in data.get('additional_discounts', {}).items() if v > 0}
+        start_date = data.get('start_date')
+        dp_amount = float(data.get('dp_amount', 0.0))
+        dp_type = data.get('dp_type', 'uzs')
 
-        result = complex_calc_service.calculate_installment_plan(sell_id, term, additional_discounts, start_date)
+        # Преобразуем значения скидок в float перед фильтрацией
+        additional_discounts = {
+            k: float(v) for k, v in data.get('additional_discounts', {}).items() if v and float(v) > 0
+        }
+
+        result = complex_calc_service.calculate_installment_plan(
+            sell_id=sell_id,
+            term_months=term,
+            additional_discounts=additional_discounts,
+            start_date=start_date,
+            dp_amount=dp_amount,
+            dp_type=dp_type
+        )
         return jsonify(success=True, data=result)
     except (ValueError, TypeError) as e:
         return jsonify(success=False, error=str(e)), 400
     except Exception as e:
-        # Логирование полной ошибки на сервере
         current_app.logger.error(f"Critical error in installment calculation: {e}")
         return jsonify(success=False, error="Произошла внутренняя ошибка на сервере."), 500
+
 
 @complex_calc_bp.route('/calculate-dp-installment', methods=['POST'])
 @login_required
@@ -42,13 +55,21 @@ def calculate_dp_installment():
     data = request.get_json()
     try:
         start_date = data.get('start_date')
+
+        # --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
+        # Преобразуем значения скидок в float перед фильтрацией
+        additional_discounts = {
+            k: float(v) for k, v in data.get('additional_discounts', {}).items() if v and float(v) > 0
+        }
+        # --- КОНЕЦ ИСПРАВЛЕНИЯ ---
+
         result = complex_calc_service.calculate_dp_installment_plan(
             sell_id=int(data.get('sell_id')),
             term_months=int(data.get('term')),
             dp_amount=float(data.get('dp_amount')),
             dp_type=data.get('dp_type'),
-            additional_discounts={k: v for k, v in data.get('additional_discounts', {}).items() if v > 0},
-            start_date = start_date
+            additional_discounts=additional_discounts, # Передаем уже преобразованный словарь
+            start_date=start_date
         )
         return jsonify(success=True, data=result)
     except (ValueError, TypeError) as e:

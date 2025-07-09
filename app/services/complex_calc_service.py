@@ -12,7 +12,7 @@ DEFAULT_RATE = 16.5 / 12 / 100
 MAX_MORTGAGE_BODY = 420_000_000
 
 
-def calculate_installment_plan(sell_id: int, term_months: int, additional_discounts: dict, start_date=None):
+def calculate_installment_plan(sell_id: int, term_months: int, additional_discounts: dict, start_date=None, dp_amount: float = 0, dp_type: str = 'uzs'):
     """
     Рассчитывает сложную рассрочку с округлением скидки.
     """
@@ -44,6 +44,21 @@ def calculate_installment_plan(sell_id: int, term_months: int, additional_discou
     if price_for_calc <= 0:
         raise ValueError("Базовая цена для расчета должна быть положительной.")
 
+    dp_uzs = 0
+    if dp_amount > 0:
+        if dp_type == 'percent':
+            dp_uzs = price_for_calc * (dp_amount / 100.0)
+        elif dp_type == 'usd':
+            usd_rate = currency_service.get_current_effective_rate()
+            if not usd_rate: raise ValueError("Не удалось получить курс USD для расчета ПВ.")
+            dp_uzs = dp_amount * usd_rate
+        else:  # 'uzs'
+            dp_uzs = dp_amount
+
+    # Получаем новую настройку минимального ПВ
+    min_dp_percent = settings.standard_installment_min_dp_percent
+    min_dp_uzs = price_for_calc * (min_dp_percent / 100.0)
+
     total_discount_rate = 0
     for key in ['mpp', 'rop', 'action']:
         total_discount_rate += discounts_100_payment.get(key, 0)
@@ -61,23 +76,44 @@ def calculate_installment_plan(sell_id: int, term_months: int, additional_discou
 
     # 1. Теоретический расчет для определения точной скидки
     price_after_discounts_theoretical = price_for_calc * (1 - total_discount_rate)
-    monthly_payment_theoretical = npf.pmt(monthly_rate, term_months, -price_after_discounts_theoretical)
-    contract_value_theoretical = monthly_payment_theoretical * term_months
+
+    # 2. ВЫЧИТАЕМ ПВ из суммы ПОСЛЕ скидок. Это и есть тело рассрочки.
+    remaining_for_installment = price_after_discounts_theoretical - dp_uzs
+    if remaining_for_installment <= 0:
+        raise ValueError("Сумма первоначального взноса равна или превышает стоимость квартиры после скидок.")
+
+    # 3. Рассчитываем ежемесячный платеж от ОСТАТКА
+    monthly_payment_theoretical = npf.pmt(monthly_rate, term_months, -remaining_for_installment)
+
+    # 4. Общая стоимость договора = платежи по рассрочке + первоначальный взнос
+    contract_value_theoretical = (monthly_payment_theoretical * term_months) + dp_uzs
     discount_percent_theoretical = (1 - (contract_value_theoretical / price_for_calc)) * 100
 
-    # 2. Округляем скидку В МЕНЬШУЮ сторону до целого числа
+    # === ШАГ 4: Финализация и генерация графика (с учетом ПВ) ===
     final_discount_percent = math.floor(discount_percent_theoretical)
     final_discount_rate = final_discount_percent / 100.0
 
-    # 3. Пересчитываем финальные значения на основе округленной скидки
     final_contract_value = price_for_calc * (1 - final_discount_rate)
-    final_monthly_payment = final_contract_value / term_months
 
-    # --- Генерация графика платежей (без изменений) ---
+    # Итоговый размер рассрочки
+    final_installment_part = final_contract_value - dp_uzs
+    final_monthly_payment = final_installment_part / term_months
+
+    # --- Генерация графика платежей ---
     payment_schedule = []
     start_date_obj = date.fromisoformat(start_date) if start_date else date.today()
-    current_payment_date = start_date_obj - relativedelta(months=1)
+
+    # Добавляем ПВ как первый платеж
+    payment_schedule.append({
+        "month_number": 0,
+        "payment_date": start_date_obj.isoformat(),
+        "amount": dp_uzs,
+        "type": "initial_payment"
+    })
+
+    current_payment_date = start_date_obj
     for i in range(1, term_months + 1):
+        # Платеж идет через месяц после предыдущего
         current_payment_date += relativedelta(months=1)
         payment_schedule.append({
             "month_number": i,
@@ -88,6 +124,7 @@ def calculate_installment_plan(sell_id: int, term_months: int, additional_discou
 
     return {
         "price_list": apartment_price,
+        "initial_payment_uzs": dp_uzs,  # Добавляем ПВ в результат
         "calculated_discount": final_discount_percent,
         "calculated_contract_value": final_contract_value,
         "monthly_payment": final_monthly_payment,

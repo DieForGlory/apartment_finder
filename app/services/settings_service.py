@@ -40,6 +40,7 @@ def toggle_complex_exclusion(complex_name: str):
     db.session.commit()
     return message, category
 
+
 def update_calculator_settings(form_data):
     """Обновляет настройки калькуляторов из данных формы."""
     settings = get_calculator_settings()
@@ -48,5 +49,8 @@ def update_calculator_settings(form_data):
     settings.dp_installment_whitelist = form_data.get('dp_installment_whitelist', '')
     settings.dp_installment_max_term = int(form_data.get('dp_installment_max_term', 6))
     settings.time_value_rate_annual = float(form_data.get('time_value_rate_annual', 16.5))
+
+    # --- ДОБАВЬТЕ ЭТУ СТРОКУ ---
+    settings.standard_installment_min_dp_percent = float(form_data.get('standard_installment_min_dp_percent', 15.0))
 
     db.session.commit()

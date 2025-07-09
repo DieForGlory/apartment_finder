@@ -1,5 +1,5 @@
 # app/__init__.py
-
+from flask import request, render_template
 import os
 from flask import Flask
 from flask_login import LoginManager
@@ -14,6 +14,8 @@ login_manager = LoginManager()
 login_manager.login_view = 'auth.login'
 login_manager.login_message = "Пожалуйста, войдите в систему для доступа к этой странице."
 login_manager.login_message_category = "info"
+from flask_cors import CORS
+from flask_migrate import Migrate
 
 class CustomJSONEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -33,6 +35,8 @@ def create_app(config_class=DevelopmentConfig):
     """
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_object(config_class)
+    CORS(app)
+
     db_path = os.path.join(app.instance_path, 'app.db')
     app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 
@@ -57,6 +61,7 @@ def create_app(config_class=DevelopmentConfig):
         print(f"Ошибка при создании папки instance: {e}")
 
     # Инициализируем расширения
+    Migrate(app, db)
     db.init_app(app)
     login_manager.init_app(app)
 
@@ -67,6 +72,8 @@ def create_app(config_class=DevelopmentConfig):
     from .web.report_routes import report_bp
     from .web.complex_calc_routes import complex_calc_bp
     from .web.settings_routes import settings_bp
+    from .web.api_routes import api_bp
+
     app.register_blueprint(report_bp, url_prefix='/reports')
     app.register_blueprint(main_bp)
     app.register_blueprint(auth_bp)
@@ -74,6 +81,17 @@ def create_app(config_class=DevelopmentConfig):
     app.register_blueprint(complex_calc_bp)
     app.register_blueprint(settings_bp)
     app.json_encoder = CustomJSONEncoder
+    app.register_blueprint(api_bp, url_prefix='/api/v1')
+
+
+    @app.before_request
+    def check_for_update():
+        lock_file_path = os.path.join(app.instance_path, 'update.lock')
+        # Проверяем, существует ли файл и что запрос не к статическим файлам (css, js)
+        if os.path.exists(lock_file_path) and request.endpoint != 'static':
+            # Если файл есть, показываем страницу-заглушку
+            return render_template('update_in_progress.html')
+
     return app
 
 

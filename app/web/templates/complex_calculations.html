@@ -74,6 +74,15 @@
                                 <label for="term" class="form-label">Срок рассрочки (мес)</label>
                                 <input type="number" class="form-control" id="term" name="term" required min="1">
                             </div>
+                            <label for="dp-amount-standard" class="form-label">Первоначальный взнос</label>
+                            <div class="input-group mb-3">
+                                <input type="number" class="form-control" id="dp-amount-standard" placeholder="Введите сумму или %" required>
+                                <select class="form-select" id="dp-type-standard" style="max-width: 80px;">
+                                    <option value="uzs">UZS</option>
+                                    <option value="usd">USD</option>
+                                    <option value="percent">%</option>
+                                </select>
+                            </div>
                             <div class="mb-3">
                                 <label for="first_payment_date" class="form-label">Первая дата платежа</label>
                                 <input type="date" class="form-control" id="first_payment_date" name="first_payment_date">

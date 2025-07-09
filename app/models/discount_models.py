@@ -114,3 +114,25 @@ class CalculatorSettings(db.Model):
 
     # Годовая ставка для расчета коэффициента "денег во времени"
     time_value_rate_annual = db.Column(db.Float, default=16.5)
+    standard_installment_min_dp_percent = db.Column(db.Float, default=15.0)
+
+
+class ManagerSalesPlan(db.Model):
+    """Модель для хранения индивидуальных планов продаж по менеджерам."""
+    __tablename__ = 'manager_sales_plans'
+    __bind_key__ = 'discounts'
+
+    id = db.Column(db.Integer, primary_key=True)
+    # Внешний ключ к таблице sales_managers
+    manager_id = db.Column(db.Integer, db.ForeignKey('sales_managers.id'), nullable=False, index=True)
+    year = db.Column(db.Integer, nullable=False)
+    month = db.Column(db.Integer, nullable=False)
+    plan_volume = db.Column(db.Float, nullable=False, default=0.0)  # План по контрактации (UZS)
+    plan_income = db.Column(db.Float, nullable=False, default=0.0)  # План по поступлениям (UZS)
+
+    # Связь для удобного доступа к данным менеджера
+    manager = db.relationship('app.models.user_models.SalesManager')
+
+    __table_args__ = (
+        db.UniqueConstraint('manager_id', 'year', 'month', name='_manager_plan_period_uc'),
+    )
