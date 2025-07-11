@@ -178,19 +178,24 @@ def get_manager_kpis(manager_id: int, year: int):
     """
     Рассчитывает расширенные KPI для одного менеджера.
     """
-    # 1. Лучший продаваемый ЖК (название и количество сделок)
+    sold_statuses = ["Сделка в работе", "Сделка проведена"]
+
+    # 1. Лучший продаваемый ЖК по количеству сделок
     best_complex_query = db.session.query(
-        EstateHouse.complex_name,
-        func.count(EstateDeal.id).label('deal_count')
+        EstateHouse.complex_name, func.count(EstateDeal.id).label('deal_count')
     ).join(EstateSell, EstateHouse.sells).join(EstateDeal, EstateSell.deals) \
-        .filter(EstateDeal.deal_manager_id == manager_id) \
-        .group_by(EstateHouse.complex_name).order_by(func.count(EstateDeal.id).desc()).first()
+        .filter(
+        EstateDeal.deal_manager_id == manager_id,
+        EstateDeal.deal_status_name.in_(sold_statuses)  # <-- ДОБАВЛЕН ФИЛЬТР
+    ).group_by(EstateHouse.complex_name).order_by(func.count(EstateDeal.id).desc()).first()
 
     # 2. Количество проданных юнитов по типам
     units_by_type_query = db.session.query(
         EstateSell.estate_sell_category, func.count(EstateDeal.id).label('unit_count')
-    ).join(EstateDeal, EstateSell.deals).filter(EstateDeal.deal_manager_id == manager_id) \
-        .group_by(EstateSell.estate_sell_category).all()
+    ).join(EstateDeal, EstateSell.deals).filter(
+        EstateDeal.deal_manager_id == manager_id,
+        EstateDeal.deal_status_name.in_(sold_statuses)  # <-- ДОБАВЛЕН ФИЛЬТР
+    ).group_by(EstateSell.estate_sell_category).all()
 
     effective_date = func.coalesce(EstateDeal.agreement_date, EstateDeal.preliminary_date)
 
@@ -198,16 +203,22 @@ def get_manager_kpis(manager_id: int, year: int):
     best_year_volume_query = db.session.query(
         extract('year', effective_date).label('deal_year'),
         func.sum(EstateDeal.deal_sum).label('total_volume')
-    ).filter(EstateDeal.deal_manager_id == manager_id, effective_date.isnot(None)) \
-        .group_by('deal_year').order_by(func.sum(EstateDeal.deal_sum).desc()).first()
+    ).filter(
+        EstateDeal.deal_manager_id == manager_id,
+        effective_date.isnot(None),
+        EstateDeal.deal_status_name.in_(sold_statuses)  # <-- ДОБАВЛЕН ФИЛЬТР
+    ).group_by('deal_year').order_by(func.sum(EstateDeal.deal_sum).desc()).first()
 
     # 4. Лучший МЕСЯЦ по контрактации (за все время)
     best_month_volume_query = db.session.query(
         extract('year', effective_date).label('deal_year'),
         extract('month', effective_date).label('deal_month'),
         func.sum(EstateDeal.deal_sum).label('total_volume')
-    ).filter(EstateDeal.deal_manager_id == manager_id, effective_date.isnot(None)) \
-        .group_by('deal_year', 'deal_month').order_by(func.sum(EstateDeal.deal_sum).desc()).first()
+    ).filter(
+        EstateDeal.deal_manager_id == manager_id,
+        effective_date.isnot(None),
+        EstateDeal.deal_status_name.in_(sold_statuses)  # <-- ДОБАВЛЕН ФИЛЬТР
+    ).group_by('deal_year', 'deal_month').order_by(func.sum(EstateDeal.deal_sum).desc()).first()
 
     # 5. Лучший месяц по контрактации в ВЫБРАННОМ году
     best_month_in_year_volume_query = db.session.query(
@@ -215,7 +226,8 @@ def get_manager_kpis(manager_id: int, year: int):
         func.sum(EstateDeal.deal_sum).label('total_volume')
     ).filter(
         EstateDeal.deal_manager_id == manager_id,
-        extract('year', effective_date) == year
+        extract('year', effective_date) == year,
+        EstateDeal.deal_status_name.in_(sold_statuses)  # <-- ДОБАВЛЕН ФИЛЬТР
     ).group_by('deal_month').order_by(func.sum(EstateDeal.deal_sum).desc()).first()
 
     kpis = {
@@ -248,17 +260,55 @@ def get_manager_kpis(manager_id: int, year: int):
 
 def get_manager_complex_ranking(manager_id: int):
     """
-    Возвращает рейтинг ЖК по сумме сделок для конкретного менеджера.
+    Возвращает рейтинг ЖК по количеству и объему сделок для конкретного менеджера.
     """
+    sold_statuses = ["Сделка в работе", "Сделка проведена"]
+
     ranking = db.session.query(
         EstateHouse.complex_name,
         func.sum(EstateDeal.deal_sum).label('total_volume'),
         func.count(EstateDeal.id).label('deal_count')
     ).join(EstateSell, EstateHouse.sells)\
      .join(EstateDeal, EstateSell.deals)\
-     .filter(EstateDeal.deal_manager_id == manager_id)\
+     .filter(
+        EstateDeal.deal_manager_id == manager_id,
+        EstateDeal.deal_status_name.in_(sold_statuses) # <-- ДОБАВЛЕН ФИЛЬТР
+    )\
      .group_by(EstateHouse.complex_name)\
-     .order_by(func.sum(EstateDeal.deal_sum).desc())\
+     .order_by(func.count(EstateDeal.id).desc())\
      .all()
 
     return [{"name": r.complex_name, "total_volume": r.total_volume, "deal_count": r.deal_count} for r in ranking]
+
+# app/services/manager_report_service.py
+
+def get_complex_hall_of_fame(complex_name: str, start_date_str: str = None, end_date_str: str = None):
+    """
+    Возвращает рейтинг менеджеров по количеству и объему сделок
+    для конкретного ЖК в заданном диапазоне дат.
+    """
+    sold_statuses = ["Сделка в работе", "Сделка проведена"]
+
+    query = db.session.query(
+        SalesManager.full_name,
+        func.count(EstateDeal.id).label('deal_count'),
+        func.sum(EstateDeal.deal_sum).label('total_volume'),
+        func.sum(EstateSell.estate_area).label('total_area')
+    ).join(EstateDeal, SalesManager.id == EstateDeal.deal_manager_id) \
+        .join(EstateSell, EstateDeal.estate_sell_id == EstateSell.id) \
+        .join(EstateHouse, EstateSell.house_id == EstateHouse.id) \
+        .filter(
+        EstateHouse.complex_name == complex_name,
+        EstateDeal.deal_status_name.in_(sold_statuses)  # <-- ДОБАВЛЕН ФИЛЬТР
+    )
+
+    if start_date_str:
+        start_date = date.fromisoformat(start_date_str)
+        query = query.filter(func.coalesce(EstateDeal.agreement_date, EstateDeal.preliminary_date) >= start_date)
+    if end_date_str:
+        end_date = date.fromisoformat(end_date_str)
+        query = query.filter(func.coalesce(EstateDeal.agreement_date, EstateDeal.preliminary_date) <= end_date)
+
+    ranking = query.group_by(SalesManager.id).order_by(func.count(EstateDeal.id).desc()).all()
+
+    return ranking

@@ -12,6 +12,15 @@
     <div>
         <h1 class="gradient-heading mb-0">{{ data.complex_name }}</h1>
         <p class="text-muted mb-0">Аналитический дашборд проекта</p>
+        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+            <h1 class="mb-0">Аналитика по проекту: {{ data.complex_name }}</h1>
+
+            <div>
+                <a href="{{ url_for('report.hall_of_fame', complex_name=data.complex_name) }}" class="btn btn-golden-outline">
+                    <i class="bi bi-trophy-fill me-2"></i>Зал славы
+                </a>
+            </div>
+        </div>
     </div>
     <div class="d-flex align-items-center">
         <div class="ms-4 text-center">

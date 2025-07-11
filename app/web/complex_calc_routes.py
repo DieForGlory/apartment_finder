@@ -1,11 +1,15 @@
+# app/web/complex_calc_routes.py
+
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for, current_app
 from flask_login import login_required
 from app.services import selection_service, complex_calc_service
+from app.core.decorators import permission_required # <-- ДОБАВЛЕН ИМПОРТ
 
 complex_calc_bp = Blueprint('complex_calc', __name__, template_folder='templates')
 
 @complex_calc_bp.route('/complex-calculations/<int:sell_id>')
 @login_required
+@permission_required('view_selection') # <-- ДОБАВЛЕНО
 def show_page(sell_id):
     """Отображает страницу сложных расчетов."""
     card_data = selection_service.get_apartment_card_data(sell_id)
@@ -17,6 +21,7 @@ def show_page(sell_id):
 
 @complex_calc_bp.route('/calculate-installment', methods=['POST'])
 @login_required
+@permission_required('view_selection') # <-- ДОБАВЛЕНО
 def calculate_installment():
     """Обрабатывает AJAX-запрос для расчета стандартной рассрочки."""
     data = request.get_json()
@@ -27,7 +32,6 @@ def calculate_installment():
         dp_amount = float(data.get('dp_amount', 0.0))
         dp_type = data.get('dp_type', 'uzs')
 
-        # Преобразуем значения скидок в float перед фильтрацией
         additional_discounts = {
             k: float(v) for k, v in data.get('additional_discounts', {}).items() if v and float(v) > 0
         }
@@ -50,25 +54,23 @@ def calculate_installment():
 
 @complex_calc_bp.route('/calculate-dp-installment', methods=['POST'])
 @login_required
+@permission_required('view_selection') # <-- ДОБАВЛЕНО
 def calculate_dp_installment():
     """Обрабатывает AJAX-запрос для расчета рассрочки на ПВ."""
     data = request.get_json()
     try:
         start_date = data.get('start_date')
 
-        # --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
-        # Преобразуем значения скидок в float перед фильтрацией
         additional_discounts = {
             k: float(v) for k, v in data.get('additional_discounts', {}).items() if v and float(v) > 0
         }
-        # --- КОНЕЦ ИСПРАВЛЕНИЯ ---
 
         result = complex_calc_service.calculate_dp_installment_plan(
             sell_id=int(data.get('sell_id')),
             term_months=int(data.get('term')),
             dp_amount=float(data.get('dp_amount')),
             dp_type=data.get('dp_type'),
-            additional_discounts=additional_discounts, # Передаем уже преобразованный словарь
+            additional_discounts=additional_discounts,
             start_date=start_date
         )
         return jsonify(success=True, data=result)

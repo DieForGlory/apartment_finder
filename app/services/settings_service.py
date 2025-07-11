@@ -54,3 +54,4 @@ def update_calculator_settings(form_data):
     settings.standard_installment_min_dp_percent = float(form_data.get('standard_installment_min_dp_percent', 15.0))
 
     db.session.commit()
+

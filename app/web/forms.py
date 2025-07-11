@@ -2,10 +2,12 @@ from datetime import date
 from wtforms import StringField, SubmitField, TextAreaField, IntegerField, FloatField
 from wtforms.validators import DataRequired, NumberRange
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, SubmitField, FileField, SelectField
-from wtforms.validators import DataRequired, Length, EqualTo, ValidationError
+from wtforms import StringField, PasswordField, SubmitField, FileField, SelectField, SelectMultipleField
+from wtforms.validators import DataRequired, Length, EqualTo, ValidationError, Email
 from ..models.user_models import Role, User # НОВЫЙ ИМПОРТ
 from wtforms import SelectField, IntegerField
+from wtforms.widgets import CheckboxInput
+
 class UploadExcelForm(FlaskForm):
     """Форма для загрузки Excel файла."""
     excel_file = FileField(
@@ -17,17 +19,28 @@ class UploadExcelForm(FlaskForm):
 # --- НОВАЯ ФОРМА ДЛЯ СОЗДАНИЯ ПОЛЬЗОВАТЕЛЯ ---
 class CreateUserForm(FlaskForm):
     username = StringField('Имя пользователя', validators=[DataRequired(), Length(min=4, max=64)])
-    # Делаем выбор роли из Enum
-    role = SelectField('Роль', coerce=lambda r: Role[r], choices=[(role.name, role.value) for role in Role])
+
+    # --- НОВЫЕ ПОЛЯ ФОРМЫ ---
+    full_name = StringField('ФИО', validators=[DataRequired()])
+    email = StringField('Email', validators=[DataRequired(), Email(message="Некорректный email адрес.")])
+    phone_number = StringField('Номер телефона (опционально)')
+    # --- КОНЕЦ НОВЫХ ПОЛЕЙ ---
+
+    role = SelectField('Роль', coerce=int, validators=[DataRequired()])
     password = PasswordField('Пароль', validators=[DataRequired(), Length(min=6)])
     confirm_password = PasswordField('Подтвердите пароль', validators=[DataRequired(), EqualTo('password')])
     submit = SubmitField('Создать пользователя')
 
     def validate_username(self, username):
         """Проверка, что имя пользователя еще не занято."""
-        user = User.query.filter_by(username=username.data).first()
-        if user:
-            raise ValidationError('Это имя пользователя уже занято. Пожалуйста, выберите другое.')
+        if User.query.filter_by(username=username.data).first():
+            raise ValidationError('Это имя пользователя уже занято.')
+
+    # --- НОВАЯ ПРОВЕРКА УНИКАЛЬНОСТИ EMAIL ---
+    def validate_email(self, email):
+        """Проверка, что email еще не занят."""
+        if User.query.filter_by(email=email.data).first():
+            raise ValidationError('Этот email уже зарегистрирован.')
 
 # --- НОВАЯ ФОРМА ДЛЯ СМЕНЫ ПАРОЛЯ ---
 class ChangePasswordForm(FlaskForm):
@@ -77,3 +90,14 @@ class UploadManagerPlanForm(FlaskForm):
         validators=[DataRequired(message="Необходимо выбрать файл.")]
     )
     submit = SubmitField('Загрузить планы')
+
+class RoleForm(FlaskForm):
+    """Форма для создания и редактирования ролей."""
+    name = StringField('Название роли', validators=[DataRequired(), Length(min=2, max=80)])
+    # Это поле будет отображаться как список галочек
+    permissions = SelectMultipleField(
+        'Разрешения для роли',
+        coerce=int, # Мы будем работать с ID разрешений
+        widget=CheckboxInput()
+    )
+    submit = SubmitField('Сохранить')

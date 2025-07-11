@@ -2,13 +2,15 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from flask import current_app
-
+from ..models.user_models import EmailRecipient, User
+from ..core.extensions import db
 
 def send_email(subject, html_body):
     """Отправляет email-сообщение с указанной темой и HTML-содержимым."""
     config = current_app.config
     sender_email = config['MAIL_USERNAME']
-    recipients = config['MAIL_RECIPIENTS']
+    recipients_from_db = db.session.query(User.email).join(EmailRecipient).all()
+    recipients = [email for email, in recipients_from_db]
 
     # --- НАЧАЛО БЛОКА ЛОГИРОВАНИЯ ---
     print("\n" + "=" * 50)

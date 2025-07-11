@@ -23,7 +23,6 @@ class PaymentMethod(enum.Enum):
 class DiscountVersion(db.Model):
     """Модель для хранения версий системы скидок."""
     __tablename__ = 'discount_versions'
-    __bind_key__ = 'discounts'
     id = db.Column(db.Integer, primary_key=True)
     version_number = db.Column(db.Integer, nullable=False, unique=True)
     comment = db.Column(db.Text, nullable=True)
@@ -40,7 +39,6 @@ class DiscountVersion(db.Model):
 class SalesPlan(db.Model):
     """Модель для хранения плановых показателей по продажам."""
     __tablename__ = 'sales_plans'
-    __bind_key__ = 'discounts' # Храним планы в той же БД, что и скидки
 
     id = db.Column(db.Integer, primary_key=True)
     complex_name = db.Column(db.String(255), nullable=False, index=True)
@@ -56,7 +54,7 @@ class SalesPlan(db.Model):
 
 class Discount(db.Model):
     __tablename__ = 'discounts'
-    __bind_key__ = 'discounts'
+
     id = db.Column(db.Integer, primary_key=True)
     version_id = db.Column(db.Integer, db.ForeignKey('discount_versions.id'), nullable=False, index=True)
 
@@ -86,7 +84,6 @@ class Discount(db.Model):
 class ComplexComment(db.Model):
     """Модель для хранения комментариев к ЖК в рамках версии."""
     __tablename__ = 'complex_comments'
-    __bind_key__ = 'discounts'
     id = db.Column(db.Integer, primary_key=True)
     version_id = db.Column(db.Integer, db.ForeignKey('discount_versions.id'), nullable=False)
     complex_name = db.Column(db.String(255), nullable=False, index=True)
@@ -102,7 +99,6 @@ class ComplexComment(db.Model):
 class CalculatorSettings(db.Model):
     """Модель для хранения глобальных настроек калькуляторов."""
     __tablename__ = 'calculator_settings'
-    __bind_key__ = 'discounts'
 
     id = db.Column(db.Integer, primary_key=True)
     # Списки ID квартир, для которых доступен калькулятор (через запятую)

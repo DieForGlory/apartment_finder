@@ -68,6 +68,7 @@
                                 <ul class="dropdown-menu">
                                     <li><a class="dropdown-item" href="{{ url_for('discount.versions_index') }}">Управление скидками</a></li>
                                     <li><a class="dropdown-item" href="{{ url_for('main.manage_exclusions') }}">Управление исключениями</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('auth.manage_roles') }}">Управление ролями</a></li>
                                     {% if current_user.role.name == 'ADMIN' %}
                                     <li><hr class="dropdown-divider"></li>
                                     <li><h6 class="dropdown-header">Загрузка данных</h6></li>
@@ -76,6 +77,7 @@
                                     <li><hr class="dropdown-divider"></li>
                                     <li><h6 class="dropdown-header">Системные настройки</h6></li>
                                     <li><a class="dropdown-item" href="{{ url_for('auth.user_management') }}">Пользователи</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('settings.manage_email_recipients') }}">Получатели уведомлений</a></li>
                                     <li><a class="dropdown-item" href="{{ url_for('settings.manage_settings') }}">Настройки калькуляторов</a></li>
                                     <li><a class="dropdown-item" href="{{ url_for('report.currency_settings') }}">Настройки курса</a></li>
                                     {% endif %}

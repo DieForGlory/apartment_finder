@@ -6,7 +6,6 @@ from sqlalchemy import func
 class ExcludedSell(db.Model):
     __tablename__ = 'excluded_sells'
     __table_args__ = {'extend_existing': True} # Позволяет переопределять таблицу, если она уже определена
-    __bind_key__ = 'discounts'
     id = db.Column(db.Integer, primary_key=True)
     sell_id = db.Column(db.Integer, nullable=False, unique=True, index=True) # ID исключаемой квартиры
     comment = db.Column(db.String(500), nullable=True) # Причина исключения
@@ -17,7 +16,7 @@ class ExcludedSell(db.Model):
 class ExcludedComplex(db.Model):
     """Модель для хранения названий ЖК, исключенных из отчетов."""
     __tablename__ = 'excluded_complexes'
-    __bind_key__ = 'discounts'
+
     id = db.Column(db.Integer, primary_key=True)
     complex_name = db.Column(db.String(255), unique=True, nullable=False)
 

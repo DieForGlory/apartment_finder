@@ -93,7 +93,7 @@
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover table-striped mb-0">
-                    <thead class="table-light"><tr><th rowspan="2" class="align-middle text-center">Месяц</th><th colspan="3" class="text-center">Контрактация</th><th colspan="3" class="text-center">Поступления</th></tr><tr><th class="text-end">План, <span class="table-currency-label">UZS</span></th><th class="text-end">Факт, <span class="table-currency-label">UZS</span></th><th class="text-center">%</th><th class="text-end">План, <span class="table-currency-label">UZS</span></th><th class="text-end">Факт, <span class="table-currency-label">UZS</span></th><th class="text-center">%</th></tr></thead>
+                    <thead><tr><th rowspan="2" class="align-middle text-center">Месяц</th><th colspan="3" class="text-center">Контрактация</th><th colspan="3" class="text-center">Поступления</th></tr><tr><th class="text-end">План, <span class="table-currency-label">UZS</span></th><th class="text-end">Факт, <span class="table-currency-label">UZS</span></th><th class="text-center">%</th><th class="text-end">План, <span class="table-currency-label">UZS</span></th><th class="text-end">Факт, <span class="table-currency-label">UZS</span></th><th class="text-center">%</th></tr></thead>
                     <tbody>
                         {% for month_data in data.performance %}
                         <tr>
@@ -116,7 +116,9 @@
     <div class="card card-glass">
         <div class="card-body">
             <h5 class="card-title">План/Факт по контрактации, <span class="chart-currency-label">UZS</span></h5>
-            <canvas id="performanceChartVolume"></canvas>
+            <div style="position: relative; height:400px">
+                <canvas id="performanceChartVolume"></canvas>
+            </div>
         </div>
     </div>
   </div>
@@ -124,7 +126,9 @@
     <div class="card card-glass">
         <div class="card-body">
             <h5 class="card-title">План/Факт по поступлениям, <span class="chart-currency-label">UZS</span></h5>
-            <canvas id="performanceChartIncome"></canvas>
+            <div style="position: relative; height:400px">
+                <canvas id="performanceChartIncome"></canvas>
+            </div>
         </div>
     </div>
   </div>
@@ -134,7 +138,7 @@
             <h5 class="card-title">Рейтинг ЖК по объему сделок</h5>
             <div class="table-responsive">
                 <table class="table table-hover table-striped mb-0">
-                    <thead class="table-light">
+                    <thead>
                         <tr>
                             <th>ЖК</th>
                             <th class="text-end">Сумма сделок, <span class="table-currency-label">UZS</span></th>

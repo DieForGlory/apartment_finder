@@ -3,36 +3,29 @@ import os
 from werkzeug.utils import secure_filename
 from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app, abort, send_file
 from flask_login import login_required
-from app.core.decorators import role_required
-from app.services import report_service, selection_service
-from app.services.discount_service import get_current_usd_rate
+from app.core.decorators import permission_required
+from app.services import (
+    report_service,
+    selection_service,
+    currency_service,
+    inventory_service,
+    manager_report_service
+)
 from app.web.forms import UploadPlanForm, UploadManagerPlanForm
 from app.models.discount_models import PropertyType, ManagerSalesPlan
-from datetime import date, datetime
-from flask import send_file
 from app.models.user_models import SalesManager
-
+from datetime import date, datetime
 import json
-from app.services import report_service, currency_service
-from app.models.finance_models import CurrencySettings
-from app.services import report_service, currency_service, inventory_service, manager_report_service
-from app.models.finance_models import CurrencySettings
+
 report_bp = Blueprint('report', __name__, template_folder='templates')
 
 
 @report_bp.route('/inventory-summary')
 @login_required
-@role_required('ADMIN', 'MANAGER')
+@permission_required('view_inventory_report')  # ОБЩЕЕ ПРАВО НА ПРОСМОТР ОТЧЕТОВ
 def inventory_summary():
-    """
-    Отображает сводку по товарному запасу.
-    """
     summary_by_complex, overall_summary = inventory_service.get_inventory_summary_data()
-
-    # ИЗМЕНЕНИЕ: Убираем сортировку здесь и передаем словари как есть
-
     usd_rate = currency_service.get_current_effective_rate()
-
     return render_template(
         'inventory_summary.html',
         title="Сводка по товарному запасу",
@@ -44,24 +37,15 @@ def inventory_summary():
 
 @report_bp.route('/export-inventory-summary')
 @login_required
-@role_required('ADMIN', 'MANAGER')
+@permission_required('view_inventory_report') # ЭКСПОРТ - ЧАСТЬ ПРОСМОТРА ОТЧЕТОВ
 def export_inventory_summary():
-    """
-    Формирует и отдает Excel-файл со сводкой по остаткам.
-    """
     selected_currency = request.args.get('currency', 'UZS')
     usd_rate = currency_service.get_current_effective_rate()
-
-    # 1. Здесь мы получаем данные в переменную `summary_by_complex`
     summary_by_complex, _ = inventory_service.get_inventory_summary_data()
-
-    # 2. ИСПОЛЬЗУЕМ ЭТУ ЖЕ ПЕРЕМЕННУЮ `summary_by_complex` здесь
     excel_stream = inventory_service.generate_inventory_excel(summary_by_complex, selected_currency, usd_rate)
-
     if excel_stream is None:
         flash("Нет данных для экспорта.", "warning")
         return redirect(url_for('report.inventory_summary'))
-
     filename = f"inventory_summary_{selected_currency}.xlsx"
     return send_file(
         excel_stream,
@@ -72,7 +56,7 @@ def export_inventory_summary():
 
 @report_bp.route('/download-plan-template')
 @login_required
-@role_required('ADMIN')
+@permission_required('upload_data') # СКАЧИВАНИЕ ШАБЛОНА - ЧАСТЬ ЗАГРУЗКИ ДАННЫХ
 def download_plan_template():
     excel_stream = report_service.generate_plan_template_excel()
     return send_file(
@@ -85,26 +69,22 @@ def download_plan_template():
 
 @report_bp.route('/plan-fact', methods=['GET'])
 @login_required
-@role_required('ADMIN', 'MANAGER')
+@permission_required('view_plan_fact_report') # ОБЩЕЕ ПРАВО НА ПРОСМОТР ОТЧЕТОВ
 def plan_fact_report():
     today = date.today()
     year = request.args.get('year', today.year, type=int)
     month = request.args.get('month', today.month, type=int)
     prop_type = request.args.get('property_type', PropertyType.FLAT.value)
-
     usd_rate = currency_service.get_current_effective_rate()
     summary_data = report_service.get_monthly_summary_by_property_type(year, month)
     report_data, totals = report_service.generate_plan_fact_report(year, month, prop_type)
-
-    # ВЫЗЫВАЕМ НОВУЮ ФУНКЦИЮ
     grand_totals = report_service.calculate_grand_totals(year, month)
-
     return render_template('plan_fact_report.html',
                            title="План-фактный отчет",
                            data=report_data,
                            summary_data=summary_data,
                            totals=totals,
-                           grand_totals=grand_totals,  # И ПЕРЕДАЕМ РЕЗУЛЬТАТ В ШАБЛОН
+                           grand_totals=grand_totals,
                            years=[today.year - 1, today.year, today.year + 1],
                            months=range(1, 13),
                            property_types=list(PropertyType),
@@ -116,7 +96,7 @@ def plan_fact_report():
 
 @report_bp.route('/upload-plan', methods=['GET', 'POST'])
 @login_required
-@role_required('ADMIN')
+@permission_required('upload_data') # ПРАВО НА ЗАГРУЗКУ ДАННЫХ
 def upload_plan():
     form = UploadPlanForm()
     if form.validate_on_submit():
@@ -126,7 +106,6 @@ def upload_plan():
         os.makedirs(upload_folder, exist_ok=True)
         file_path = os.path.join(upload_folder, filename)
         f.save(file_path)
-
         try:
             year = form.year.data
             month = form.month.data
@@ -134,45 +113,29 @@ def upload_plan():
             flash(f"Файл успешно загружен. План на {month:02d}.{year} обновлен. {result}", "success")
         except Exception as e:
             flash(f"Произошла ошибка при обработке файла: {e}", "danger")
-
         return redirect(url_for('report.upload_plan'))
-
     return render_template('upload_plan.html', title="Загрузка плана", form=form)
 
 @report_bp.route('/commercial-offer/complex/<int:sell_id>')
-@login_required
+@login_required # Для КП достаточно быть авторизованным
 def generate_complex_kp(sell_id):
-    """
-    Генерирует КП для сложных калькуляторов.
-    Данные для расчета берутся из URL.
-    """
-    # 1. Получаем базовую информацию об объекте (для шапки)
     card_data = selection_service.get_apartment_card_data(sell_id)
     if not card_data.get('apartment'):
         abort(404)
-
-    # 2. Получаем тип калькулятора и детали из параметров URL
     calc_type = request.args.get('calc_type')
     details_json = request.args.get('details')
-
     if not all([calc_type, details_json]):
         flash("Отсутствуют данные для генерации КП.", "danger")
         return redirect(url_for('main.apartment_details', sell_id=sell_id))
-
     try:
         details = json.loads(details_json)
     except json.JSONDecodeError:
         abort(400, "Некорректный формат данных (JSON).")
     if 'payment_schedule' in details:
         for payment in details['payment_schedule']:
-            # Теперь строка приходит в формате 'YYYY-MM-DD',
-            # поэтому убираем .split('T')[0]
             payment['payment_date'] = datetime.strptime(payment['payment_date'], '%Y-%m-%d').date()
-    # 3. Получаем актуальную дату и курс валют
     current_date = datetime.now().strftime("%d.%m.%Y %H:%M")
     usd_rate = currency_service.get_current_effective_rate()
-
-    # 4. Рендерим новый специальный шаблон
     return render_template(
         'commercial_offer_complex.html',
         title=f"КП (сложный расчет) по объекту ID {sell_id}",
@@ -185,23 +148,15 @@ def generate_complex_kp(sell_id):
 
 @report_bp.route('/project-dashboard/<path:complex_name>')
 @login_required
-@role_required('ADMIN', 'MANAGER')
+@permission_required('view_project_dashboard') # ОБЩЕЕ ПРАВО НА ПРОСМОТР ОТЧЕТОВ
 def project_dashboard(complex_name):
-    # 1. Получаем тип недвижимости из URL
     selected_prop_type = request.args.get('property_type', None)
-
-    # 2. Вызываем сервис ОДИН РАЗ с учётом фильтра
     data = report_service.get_project_dashboard_data(complex_name, selected_prop_type)
-
     if not data:
         abort(404)
-
-    # 3. Готовим данные для шаблона, используя одну и ту же переменную 'data'
     property_types = [pt.value for pt in PropertyType]
     charts_json = json.dumps(data.get('charts', {}))
     usd_rate = currency_service.get_current_effective_rate()
-
-    # 4. Передаем в шаблон правильные данные
     return render_template(
         'project_dashboard.html',
         title=f"Аналитика по проекту {complex_name}",
@@ -214,15 +169,13 @@ def project_dashboard(complex_name):
 
 @report_bp.route('/currency-settings', methods=['GET', 'POST'])
 @login_required
-@role_required('ADMIN')
+@permission_required('manage_settings') # ПРАВО НА УПРАВЛЕНИЕ НАСТРОЙКАМИ
 def currency_settings():
     if request.method == 'POST':
-        # Обработка форм
         if 'set_source' in request.form:
             source = request.form.get('rate_source')
             currency_service.set_rate_source(source)
             flash(f"Источник курса изменен на '{source}'.", "success")
-
         if 'set_manual_rate' in request.form:
             try:
                 rate = float(request.form.get('manual_rate'))
@@ -230,36 +183,23 @@ def currency_settings():
                 flash(f"Ручной курс успешно установлен: {rate}.", "success")
             except (ValueError, TypeError):
                 flash("Неверное значение для ручного курса.", "danger")
-
         return redirect(url_for('report.currency_settings'))
-
-    settings = currency_service._get_settings() # Используем внутреннюю функцию для получения данных
+    settings = currency_service._get_settings()
     return render_template('currency_settings.html', settings=settings, title="Настройки курса валют")
-
-
 
 
 @report_bp.route('/export-plan-fact')
 @login_required
-@role_required('ADMIN', 'MANAGER')
+@permission_required('view_plan_fact_report') # ЭКСПОРТ - ЧАСТЬ ПРОСМОТРА ОТЧЕТОВ
 def export_plan_fact():
-    """
-    Обрабатывает запрос на экспорт план-фактного отчета в Excel.
-    """
     today = date.today()
-    # Получаем те же параметры, что и для отображения отчета
     year = request.args.get('year', today.year, type=int)
     month = request.args.get('month', today.month, type=int)
     prop_type = request.args.get('property_type', PropertyType.FLAT.value)
-
-    # Вызываем сервис для генерации файла
     excel_stream = report_service.generate_plan_fact_excel(year, month, prop_type)
-
     if excel_stream is None:
         flash("Нет данных для экспорта.", "warning")
         return redirect(url_for('report.plan_fact_report'))
-
-    # Формируем имя файла и отправляем его пользователю
     filename = f"plan_fact_report_{prop_type}_{month:02d}_{year}.xlsx"
     return send_file(
         excel_stream,
@@ -269,34 +209,24 @@ def export_plan_fact():
     )
 
 
+# --- РОУТЫ ДЛЯ ОТЧЕТОВ ПО МЕНЕДЖЕРАМ ---
+
 @report_bp.route('/manager-performance-report', methods=['GET'])
 @login_required
-@role_required('ADMIN', 'MANAGER')
+@permission_required('view_manager_report') # ОБЩЕЕ ПРАВО НА ПРОСМОТР ОТЧЕТОВ
 def manager_performance_report():
-    """Общая страница с отчетами по всем менеджерам."""
-    # Получаем параметры из запроса
     search_query = request.args.get('q', '')
     show_only_with_plan = request.args.get('with_plan', 'false').lower() == 'true'
-
-    # Начинаем строить запрос
     query = SalesManager.query
-
-    # Применяем фильтр по ФИО, если есть поисковый запрос
     if search_query:
         query = query.filter(SalesManager.full_name.ilike(f'%{search_query}%'))
-
-    # Если включен переключатель, показываем только менеджеров с планами
     if show_only_with_plan:
-        # distinct() нужен, чтобы избежать дубликатов, если у менеджера несколько планов
         query = query.join(ManagerSalesPlan).distinct()
-
     managers = query.order_by(SalesManager.full_name).all()
-
     return render_template(
         'manager_performance_overview.html',
         title="Выполнение планов менеджерами",
         managers=managers,
-        # Передаем состояние фильтров обратно в шаблон
         search_query=search_query,
         show_only_with_plan=show_only_with_plan
     )
@@ -304,22 +234,19 @@ def manager_performance_report():
 
 @report_bp.route('/manager-performance-report/<int:manager_id>', methods=['GET'])
 @login_required
-@role_required('ADMIN', 'MANAGER')
+@permission_required('view_manager_report') # ОБЩЕЕ ПРАВО НА ПРОСМОТР ОТЧЕТОВ
 def manager_performance_detail(manager_id):
-    """Детальная страница с выполнением плана по одному менеджеру."""
-    # Используем текущий год по умолчанию
     current_year = date.today().year
     year = request.args.get('year', current_year, type=int)
-
     performance_data = manager_report_service.get_manager_performance_details(manager_id, year)
-    kpi_data = manager_report_service.get_manager_kpis(manager_id,year)
+    kpi_data = manager_report_service.get_manager_kpis(manager_id, year)
     usd_rate = currency_service.get_current_effective_rate()
-    if not performance_data:
-        abort(404, "Менеджер не найден или данные отсутствуют.")
     month_names = {
         1: 'Январь', 2: 'Февраль', 3: 'Март', 4: 'Апрель', 5: 'Май', 6: 'Июнь',
         7: 'Июль', 8: 'Август', 9: 'Сентябрь', 10: 'Октябрь', 11: 'Ноябрь', 12: 'Декабрь'
     }
+    if not performance_data:
+        abort(404, "Менеджер не найден или данные отсутствуют.")
     complex_ranking = manager_report_service.get_manager_complex_ranking(manager_id)
     return render_template(
         'manager_performance_detail.html',
@@ -330,50 +257,62 @@ def manager_performance_detail(manager_id):
         month_names=month_names,
         usd_to_uzs_rate=usd_rate,
         selected_year=year,
-        # Создаем список лет для удобной навигации
         years_for_nav=[current_year + 1, current_year, current_year - 1, current_year - 2]
     )
 
 
 @report_bp.route('/upload-manager-plan', methods=['GET', 'POST'])
 @login_required
-@role_required('ADMIN')
+@permission_required('upload_data') # ПРАВО НА ЗАГРУЗКУ ДАННЫХ
 def upload_manager_plan():
-    """Страница для загрузки файла с планами менеджеров."""
     form = UploadManagerPlanForm()
     if form.validate_on_submit():
         f = form.excel_file.data
         filename = secure_filename(f.filename)
-        # Убедимся, что папка uploads существует
         upload_folder = os.path.join(current_app.root_path, 'uploads')
         os.makedirs(upload_folder, exist_ok=True)
         file_path = os.path.join(upload_folder, filename)
         f.save(file_path)
-
         try:
             result = manager_report_service.process_manager_plans_from_excel(file_path)
             flash(f"Файл успешно загружен. {result}", "success")
         except Exception as e:
             flash(f"Произошла ошибка при обработке файла: {str(e)}", "danger")
-
         return redirect(url_for('report.manager_performance_report'))
-
     return render_template('upload_manager_plan.html', title="Загрузка планов менеджеров", form=form)
 
 
 @report_bp.route('/download-manager-plan-template')
 @login_required
-@role_required('ADMIN')
+@permission_required('upload_data') # СКАЧИВАНИЕ ШАБЛОНА - ЧАСТЬ ЗАГРУЗКИ ДАННЫХ
 def download_manager_plan_template():
-    """
-    Генерирует и отдает пользователю для скачивания шаблон Excel с планами менеджеров.
-    """
     excel_stream = manager_report_service.generate_manager_plan_template_excel()
     filename = f"manager_plans_template_{date.today().year}.xlsx"
-
     return send_file(
         excel_stream,
         download_name=filename,
         as_attachment=True,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+
+
+# app/web/report_routes.py -> hall_of_fame()
+
+@report_bp.route('/hall-of-fame/<path:complex_name>')
+@login_required
+@permission_required('view_manager_report')
+def hall_of_fame(complex_name):
+    start_date = request.args.get('start_date', '')
+    end_date = request.args.get('end_date', '')
+    ranking_data = manager_report_service.get_complex_hall_of_fame(complex_name, start_date, end_date)
+
+    usd_rate = currency_service.get_current_effective_rate()  # <-- ДОБАВЬТЕ ЭТУ СТРОКУ
+
+    return render_template(
+        'hall_of_fame.html',
+        title=f"Зал славы: {complex_name}",
+        complex_name=complex_name,
+        ranking_data=ranking_data,
+        filters={'start_date': start_date, 'end_date': end_date},
+        usd_to_uzs_rate=usd_rate  # <-- И ПЕРЕДАЙТЕ КУРС В ШАБЛОН
     )

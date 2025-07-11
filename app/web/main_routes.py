@@ -1,3 +1,5 @@
+# app/web/main_routes.py
+
 import json
 from datetime import datetime
 from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app
@@ -10,19 +12,17 @@ from ..services.selection_service import find_apartments_by_budget, get_apartmen
 from ..services.data_service import get_sells_with_house_info, get_filter_options
 from ..services.discount_service import get_current_usd_rate
 from ..core.extensions import db
-from ..core.decorators import role_required
-from flask import request, redirect, url_for, flash
+from ..core.decorators import permission_required # <-- Используем новый декоратор
+
 main_bp = Blueprint('main', __name__, template_folder='templates')
+
 
 @main_bp.route('/search-by-id', methods=['POST'])
 @login_required
+@permission_required('view_selection') # <-- ИЗМЕНЕНИЕ
 def search_by_id():
-    """
-    Принимает ID из формы поиска и перенаправляет на карточку объекта.
-    """
     sell_id = request.form.get('search_id')
     if sell_id:
-        # Проверяем, что введено число
         try:
             int(sell_id)
             return redirect(url_for('main.apartment_details', sell_id=sell_id))
@@ -32,18 +32,12 @@ def search_by_id():
     else:
         flash('Вы не ввели ID для поиска.', 'info')
         return redirect(url_for('main.selection'))
-@main_bp.route('/')
-def index():
-    """
-    Главная страница.
-    Перенаправляет на страницу входа, если пользователь не аутентифицирован.
-    В противном случае отображает каталог объектов.
-    """
-    if not current_user.is_authenticated:
-        # Если пользователь не вошел, перенаправляем его на страницу логина
-        return redirect(url_for('auth.login'))
 
-    # Если пользователь уже вошел в систему, показываем ему каталог с пагинацией
+@main_bp.route('/')
+@login_required # <-- ИЗМЕНЕНИЕ
+@permission_required('view_selection') # <-- ИЗМЕНЕНИЕ
+def index():
+    # Логика редиректа теперь не нужна, ее обработают декораторы
     page = request.args.get('page', 1, type=int)
     PER_PAGE = 40
     sells_pagination = get_sells_with_house_info(page=page, per_page=PER_PAGE)
@@ -57,9 +51,8 @@ def index():
 
 @main_bp.route('/selection', methods=['GET', 'POST'])
 @login_required
-@role_required('ADMIN', 'MANAGER', 'MPP')
+@permission_required('view_selection') # <-- ИЗМЕНЕНИЕ
 def selection():
-    """Страница для подбора квартир по бюджету."""
     results = None
     filter_options = get_filter_options()
     property_types = list(PropertyType)
@@ -95,11 +88,8 @@ def selection():
 
 @main_bp.route('/apartment/<int:sell_id>')
 @login_required
-@role_required('ADMIN', 'MANAGER', 'MPP')
+@permission_required('view_selection') # <-- ИЗМЕНЕНИЕ
 def apartment_details(sell_id):
-    """
-    Страница с детальной информацией о конкретной квартире.
-    """
     card_data = get_apartment_card_data(sell_id)
     all_discounts_data = card_data.pop('all_discounts_for_property_type', [])
 
@@ -113,11 +103,8 @@ def apartment_details(sell_id):
 
 @main_bp.route('/commercial-offer/<int:sell_id>')
 @login_required
-@role_required('ADMIN', 'MANAGER', 'MPP')
+@permission_required('view_selection') # <-- ИЗМЕНЕНИЕ
 def generate_commercial_offer(sell_id):
-    """
-    Генерирует КП. Пересчитывает все цены на сервере на основе выбранных скидок.
-    """
     card_data = get_apartment_card_data(sell_id)
     if not card_data.get('apartment'):
         return "Apartment not found", 404
@@ -185,10 +172,9 @@ def generate_commercial_offer(sell_id):
 
 @main_bp.route('/exclusions', methods=['GET', 'POST'])
 @login_required
-@role_required('ADMIN', 'MANAGER')
+@permission_required('manage_settings') # <-- ИЗМЕНЕНИЕ
 def manage_exclusions():
     if request.method == 'POST':
-        # Логика для исключения отдельных квартир из подбора
         if 'sell_id_to_manage' in request.form:
             action = request.form.get('action')
             sell_id_str = request.form.get('sell_id_to_manage')
@@ -215,7 +201,6 @@ def manage_exclusions():
                 except ValueError:
                     flash("ID квартиры должен быть числом.", "danger")
 
-        # Новая логика для исключения целых ЖК из отчета по остаткам
         elif 'complex_name_to_toggle' in request.form:
             complex_name = request.form.get('complex_name_to_toggle')
             if complex_name:
@@ -224,7 +209,6 @@ def manage_exclusions():
 
         return redirect(url_for('main.manage_exclusions'))
 
-    # Собираем все данные для обеих частей страницы
     excluded_sells = ExcludedSell.query.order_by(ExcludedSell.created_at.desc()).all()
     all_complexes = db.session.query(EstateHouse.complex_name).distinct().order_by(EstateHouse.complex_name).all()
     excluded_complexes_names = {c.complex_name for c in settings_service.get_all_excluded_complexes()}
@@ -236,5 +220,3 @@ def manage_exclusions():
         all_complexes=[c[0] for c in all_complexes],
         excluded_complex_names=excluded_complexes_names
     )
-
-

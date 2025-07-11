@@ -341,8 +341,8 @@ def _generate_version_comparison_summary(old_version, new_version, comments_data
         diffs = []
 
         for field in ['mpp', 'rop', 'kd', 'opt', 'gd', 'holding', 'shareholder', 'action']:
-            old_val = getattr(old_d, field)
-            new_val = getattr(new_d, field)
+            old_val = getattr(old_d, field) or 0.0
+            new_val = getattr(new_d, field) or 0.0
 
             if abs(old_val - new_val) > 1e-9:
                 delta = new_val - old_val

@@ -1,9 +1,11 @@
+# app/web/discount_routes.py
+
 import os
 from werkzeug.utils import secure_filename
 from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app, send_file, jsonify
 from flask_login import login_required
 from ..core.extensions import db
-from ..core.decorators import role_required
+from ..core.decorators import permission_required # <-- Используем новый декоратор
 from ..models.discount_models import Discount, DiscountVersion, ComplexComment
 from .forms import UploadExcelForm
 from ..services import discount_service
@@ -22,22 +24,16 @@ discount_bp = Blueprint('discount', __name__, template_folder='templates')
 
 @discount_bp.route('/discounts')
 @login_required
-@role_required('ADMIN', 'MANAGER', 'MPP')
+@permission_required('view_discounts') # <-- ИЗМЕНЕНИЕ
 def discounts_overview():
-    """
-    Страница для отображения всей системы скидок.
-    """
     discounts_data = get_discounts_with_summary()
     return render_template('discounts.html', title="Система скидок", structured_discounts=discounts_data)
 
 
 @discount_bp.route('/download-template')
 @login_required
-@role_required('ADMIN')
+@permission_required('manage_discounts') # <-- ИЗМЕНЕНИЕ
 def download_template():
-    """
-    Генерирует и отдает пользователю для скачивания шаблон Excel.
-    """
     excel_data_stream = generate_discount_template_excel()
     return send_file(
         excel_data_stream,
@@ -49,11 +45,8 @@ def download_template():
 
 @discount_bp.route('/upload-discounts', methods=['GET', 'POST'])
 @login_required
-@role_required('ADMIN')
+@permission_required('manage_discounts') # <-- ИЗМЕНЕНИЕ
 def upload_discounts():
-    """
-    Страница для загрузки файла со скидками.
-    """
     form = UploadExcelForm()
     if form.validate_on_submit():
         f = form.excel_file.data
@@ -72,11 +65,8 @@ def upload_discounts():
             if email_data:
                 send_email(email_data['subject'], email_data['html_body'])
 
-            flash(
-                f"Файл успешно загружен. Создана и активирована новая версия №{new_version.version_number}. {result_message}",
-                "success")
+            flash(f"Файл успешно загружен. Создана и активирована новая версия №{new_version.version_number}. {result_message}", "success")
             return redirect(url_for('discount.versions_index'))
-
         except Exception as e:
             db.session.rollback()
             flash(f"Произошла ошибка при обработке файла: {e}", "danger")
@@ -87,9 +77,8 @@ def upload_discounts():
 
 @discount_bp.route('/versions')
 @login_required
-@role_required('ADMIN', 'MANAGER')
+@permission_required('view_version_history') # <-- ИЗМЕНЕНИЕ
 def versions_index():
-    """Главная страница управления версиями."""
     versions = DiscountVersion.query.order_by(DiscountVersion.version_number.desc()).all()
     active_version_obj = next((v for v in versions if v.is_active), None)
     return render_template(
@@ -103,12 +92,10 @@ def versions_index():
 
 @discount_bp.route('/versions/view/<int:version_id>')
 @login_required
-@role_required('ADMIN', 'MANAGER')
+@permission_required('view_version_history') # <-- ИЗМЕНЕНИЕ
 def view_version(version_id):
-    """Страница просмотра конкретной версии."""
     version = DiscountVersion.query.get_or_404(version_id)
-    discounts = Discount.query.filter_by(version_id=version_id).order_by(Discount.complex_name, Discount.property_type,
-                                                                         Discount.payment_method).all()
+    discounts = Discount.query.filter_by(version_id=version_id).order_by(Discount.complex_name, Discount.property_type, Discount.payment_method).all()
     return render_template(
         'view_version.html',
         version=version,
@@ -119,7 +106,7 @@ def view_version(version_id):
 
 @discount_bp.route('/versions/edit/<int:version_id>', methods=['GET', 'POST'])
 @login_required
-@role_required('ADMIN')
+@permission_required('manage_discounts') # <-- ИЗМЕНЕНИЕ
 def edit_version(version_id):
     version = DiscountVersion.query.get_or_404(version_id)
     if version.is_active:
@@ -139,8 +126,7 @@ def edit_version(version_id):
             flash(f"Произошла критическая ошибка при сохранении: {e}", "danger")
         return redirect(url_for('discount.versions_index'))
 
-    discounts = Discount.query.filter_by(version_id=version_id).order_by(Discount.complex_name, Discount.property_type,
-                                                                         Discount.payment_method).all()
+    discounts = Discount.query.filter_by(version_id=version_id).order_by(Discount.complex_name, Discount.property_type, Discount.payment_method).all()
     comments_for_version = ComplexComment.query.filter_by(version_id=version_id).all()
     complex_comments = {c.complex_name: c.comment for c in comments_for_version}
 
@@ -155,7 +141,7 @@ def edit_version(version_id):
 
 @discount_bp.route('/versions/create-draft', methods=['POST'])
 @login_required
-@role_required('ADMIN')
+@permission_required('manage_discounts') # <-- ИЗМЕНЕНИЕ
 def create_draft_version():
     active_version = DiscountVersion.query.filter_by(is_active=True).first()
     if not active_version:
@@ -172,7 +158,7 @@ def create_draft_version():
 
 @discount_bp.route('/versions/activate/<int:version_id>', methods=['POST'])
 @login_required
-@role_required('ADMIN')
+@permission_required('manage_discounts') # <-- ИЗМЕНЕНИЕ
 def activate_discount_version(version_id):
     activation_comment = request.form.get('comment')
     if not activation_comment:
@@ -191,7 +177,7 @@ def activate_discount_version(version_id):
 
 @discount_bp.route('/versions/delete/<int:version_id>', methods=['POST'])
 @login_required
-@role_required('ADMIN')
+@permission_required('manage_discounts') # <-- ИЗМЕНЕНИЕ
 def delete_version(version_id):
     try:
         delete_draft_version(version_id)
@@ -205,9 +191,8 @@ def delete_version(version_id):
 
 @discount_bp.route('/versions/comment/save', methods=['POST'])
 @login_required
-@role_required('ADMIN')
+@permission_required('manage_discounts') # <-- ИЗМЕНЕНИЕ
 def save_complex_comment():
-    """Сохраняет комментарий к ЖК через AJAX."""
     data = request.get_json()
     version_id = data.get('version_id')
     complex_name = data.get('complex_name')
