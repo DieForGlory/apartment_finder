@@ -9,7 +9,7 @@ from ..models.estate_models import EstateHouse, EstateSell, EstateDeal
 from ..models.discount_models import DiscountVersion, Discount # Ensure Discount is imported if needed for clearing
 from .discount_service import process_discounts_from_excel
 from ..models.finance_models import FinanceOperation
-
+from ..models.funnel_models import EstateBuy, EstateBuysStatusLog
 CURRENT_DIR = os.path.dirname(__file__)
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, '..', '..'))
 DISCOUNTS_EXCEL_PATH = os.path.join(PROJECT_ROOT, 'data_sources', 'discounts_template.xlsx')
@@ -36,6 +36,8 @@ def _migrate_mysql_estate_data_to_sqlite():
         db.session.query(SalesManager).delete()
         db.session.query(ManagerSalesPlan).delete()
         db.session.query(FinanceOperation).delete()
+        db.session.query(EstateBuysStatusLog).delete()
+        db.session.query(EstateBuy).delete()
         db.session.commit()
         print("[MIGRATE] ✔️ Данные по недвижимости и сделкам очищены.")
 
@@ -53,6 +55,31 @@ def _migrate_mysql_estate_data_to_sqlite():
             db.session.add(new_house)
         print(f"[MIGRATE] ✔️ Найдено и подготовлено к записи домов: {len(mysql_houses)}")
 
+        print("[MIGRATE] funnel: Заявки из 'estate_buys'...")
+        mysql_buys = mysql_session.query(EstateBuy).all()
+        for buy in mysql_buys:
+            new_buy = EstateBuy(
+                id=buy.id,
+                date_added=buy.date_added,  # <-- Добавлено
+                created_at=buy.created_at,
+                status_name=buy.status_name,
+                custom_status_name=buy.custom_status_name  # <-- Добавлено
+            )
+            db.session.add(new_buy)
+        print(f"[MIGRATE] ✔️ Найдено и подготовлено к записи заявок: {len(mysql_buys)}")
+
+        print("[MIGRATE] funnel: Лог статусов из 'estate_buys_statuses_log'...")
+        mysql_logs = mysql_session.query(EstateBuysStatusLog).all()
+        for log in mysql_logs:
+            new_log = EstateBuysStatusLog(
+                id=log.id,
+                log_date=log.log_date,
+                estate_buy_id=log.estate_buy_id,
+                status_to_name=log.status_to_name,
+                status_custom_to_name=log.status_custom_to_name
+            )
+            db.session.add(new_log)
+        print(f"[MIGRATE] ✔️ Найдено и подготовлено к записи логов: {len(mysql_logs)}")
         # 2. Миграция таблицы estate_sells
         print("[MIGRATE] 🏢 Загрузка данных из таблицы 'estate_sells'...")
         mysql_sells = mysql_session.query(EstateSell).all()

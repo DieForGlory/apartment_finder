@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="mb-4">Воронка продаж (Когортный анализ)</h1>
+
+<div class="card card-glass mb-4">
+    <div class="card-body">
+        <form method="GET">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-5"><label for="start_date" class="form-label">Дата создания заявок от</label><input type="date" name="start_date" id="start_date" class="form-control" value="{{ filters.start_date }}"></div>
+                <div class="col-md-5"><label for="end_date" class="form-label">Дата создания заявок до</label><input type="date" name="end_date" id="end_date" class="form-control" value="{{ filters.end_date }}"></div>
+                <div class="col-md-2"><button type="submit" class="btn btn-primary w-100">Применить</button></div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="funnel-tree-container">
+    {% if funnel_data and funnel_data.trunk %}
+        <div class="tree-node trunk">
+            <div class="node-name">{{ funnel_data.trunk.name }}</div>
+            <div class="node-count">{{ funnel_data.trunk.count }}</div>
+        </div>
+
+        <div class="tree-connector-main"></div>
+
+        <div class="tree-branches">
+            {% for branch in funnel_data.main_branches %}
+                <div class="branch-wrapper">
+                    <div class="tree-node branch {% if branch.sub_branches %}has-sub-branches{% endif %}">
+                        <div class="node-name">{{ branch.name }}</div>
+                        <div class="node-count">{{ branch.count }}</div>
+                        {% if funnel_data.trunk.count > 0 %}
+                            <div class="node-conversion">{{ "%.1f"|format(branch.count / funnel_data.trunk.count * 100) }}% от созданных</div>
+                        {% endif %}
+                    </div>
+                    {% if branch.sub_branches %}
+                        <div class="tree-connector-sub"></div>
+                        <div class="sub-branches">
+                            {% for sub_branch in branch.sub_branches %}
+                                <div class="branch-wrapper">
+                                     <div class="tree-node sub-branch">
+                                        <div class="node-name">{{ sub_branch.name }}</div>
+                                        <div class="node-count">{{ sub_branch.count }}</div>
+                                         {% if branch.count > 0 %}
+                                            <div class="node-conversion">{{ "%.1f"|format(sub_branch.count / branch.count * 100) }}% от '{{ branch.name }}'</div>
+                                        {% endif %}
+                                    </div>
+                                    {% if sub_branch.sub_branches %}
+                                        <div class="tree-connector-sub"></div>
+                                        <div class="sub-branches">
+                                            {% for sub_sub_branch in sub_branch.sub_branches %}
+                                                 <div class="branch-wrapper">
+                                                     <div class="tree-node sub-branch">
+                                                        <div class="node-name">{{ sub_sub_branch.name }}</div>
+                                                        <div class="node-count">{{ sub_sub_branch.count }}</div>
+                                                         {% if sub_branch.count > 0 %}
+                                                            <div class="node-conversion">{{ "%.1f"|format(sub_sub_branch.count / sub_branch.count * 100) }}% от '{{ sub_branch.name }}'</div>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="card card-glass"><div class="card-body text-center text-muted">Нет данных за выбранный период.</div></div>
+    {% endif %}
+</div>
+
+
+<style>
+    .funnel-tree-container { display: flex; align-items: center; justify-content: center; padding: 2rem 0; flex-wrap: wrap; }
+    .tree-node { background: rgba(var(--bs-body-color-rgb), 0.05); border: 1px solid rgba(var(--bs-body-color-rgb), 0.2); border-radius: 8px; padding: 1rem; text-align: center; min-width: 260px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+    .tree-node.trunk { background: var(--gh-gold); color: black; border-color: var(--gh-gold); }
+    .node-name { font-weight: bold; font-size: 1rem; }
+    .node-count { font-size: 1.8rem; font-weight: bold; margin: 0.25rem 0; }
+    .node-conversion { font-size: 0.8rem; opacity: 0.7; }
+    .tree-connector-main { min-width: 50px; height: 2px; background: rgba(var(--bs-body-color-rgb), 0.3); }
+    .tree-branches { display: flex; flex-direction: column; gap: 1rem; position: relative; }
+    .tree-branches::before { content: ''; position: absolute; left: -25px; top: 50%; height: calc(100% + 1rem); transform: translateY(-50%); width: 2px; background-color: rgba(var(--bs-body-color-rgb), 0.3); }
+    .branch-wrapper { display: flex; align-items: center; position: relative; }
+    .branch-wrapper::before { content: ''; position: absolute; left: -25px; top: 50%; width: 25px; height: 2px; background-color: rgba(var(--bs-body-color-rgb), 0.3); }
+    .tree-connector-sub { min-width: 25px; height: 2px; background: rgba(var(--bs-body-color-rgb), 0.3); }
+    .sub-branches { display: flex; flex-direction: column; gap: 0.5rem; position: relative; }
+    .sub-branches::before { content: ''; position: absolute; left: -25px; top: 50%; height: calc(100% + 0.5rem); transform: translateY(-50%); width: 2px; background-color: rgba(var(--bs-body-color-rgb), 0.3); }
+</style>
+{% endblock %}

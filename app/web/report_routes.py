@@ -9,14 +9,14 @@ from app.services import (
     selection_service,
     currency_service,
     inventory_service,
-    manager_report_service
+    manager_report_service, funnel_service
 )
 from app.web.forms import UploadPlanForm, UploadManagerPlanForm
 from app.models.discount_models import PropertyType, ManagerSalesPlan
 from app.models.user_models import SalesManager
 from datetime import date, datetime
 import json
-
+from app.core.extensions import db
 report_bp = Blueprint('report', __name__, template_folder='templates')
 
 
@@ -296,8 +296,24 @@ def download_manager_plan_template():
     )
 
 
-# app/web/report_routes.py -> hall_of_fame()
+# app/web/report_routes.py
 
+@report_bp.route('/sales-funnel')
+@login_required
+@permission_required('view_plan_fact_report')
+def sales_funnel():
+    start_date = request.args.get('start_date', '')
+    end_date = request.args.get('end_date', '')
+
+    # Вызываем новую функцию, которая возвращает одну воронку и пустой словарь
+    funnel_data, _ = funnel_service.get_funnel_data(start_date, end_date)
+
+    return render_template(
+        'sales_funnel.html',
+        title="Воронка продаж",
+        funnel_data=funnel_data,
+        filters={'start_date': start_date, 'end_date': end_date}
+    )
 @report_bp.route('/hall-of-fame/<path:complex_name>')
 @login_required
 @permission_required('view_manager_report')
@@ -316,3 +332,7 @@ def hall_of_fame(complex_name):
         filters={'start_date': start_date, 'end_date': end_date},
         usd_to_uzs_rate=usd_rate  # <-- И ПЕРЕДАЙТЕ КУРС В ШАБЛОН
     )
+
+
+# app/web/report_routes.py
+
