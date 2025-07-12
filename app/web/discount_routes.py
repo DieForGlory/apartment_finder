@@ -5,8 +5,12 @@ from werkzeug.utils import secure_filename
 from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app, send_file, jsonify
 from flask_login import login_required
 from ..core.extensions import db
-from ..core.decorators import permission_required # <-- Используем новый декоратор
-from ..models.discount_models import Discount, DiscountVersion, ComplexComment
+from ..core.decorators import permission_required
+
+# --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
+# Импортируем модуль planning_models вместо классов из discount_models
+from ..models import planning_models
+
 from .forms import UploadExcelForm
 from ..services import discount_service
 from ..services.email_service import send_email
@@ -24,15 +28,16 @@ discount_bp = Blueprint('discount', __name__, template_folder='templates')
 
 @discount_bp.route('/discounts')
 @login_required
-@permission_required('view_discounts') # <-- ИЗМЕНЕНИЕ
+@permission_required('view_discounts')
 def discounts_overview():
+    # Сервис get_discounts_with_summary сам должен быть обновлен для работы с planning_models
     discounts_data = get_discounts_with_summary()
     return render_template('discounts.html', title="Система скидок", structured_discounts=discounts_data)
 
 
 @discount_bp.route('/download-template')
 @login_required
-@permission_required('manage_discounts') # <-- ИЗМЕНЕНИЕ
+@permission_required('manage_discounts')
 def download_template():
     excel_data_stream = generate_discount_template_excel()
     return send_file(
@@ -45,7 +50,7 @@ def download_template():
 
 @discount_bp.route('/upload-discounts', methods=['GET', 'POST'])
 @login_required
-@permission_required('manage_discounts') # <-- ИЗМЕНЕНИЕ
+@permission_required('manage_discounts')
 def upload_discounts():
     form = UploadExcelForm()
     if form.validate_on_submit():
@@ -77,9 +82,10 @@ def upload_discounts():
 
 @discount_bp.route('/versions')
 @login_required
-@permission_required('view_version_history') # <-- ИЗМЕНЕНИЕ
+@permission_required('view_version_history')
 def versions_index():
-    versions = DiscountVersion.query.order_by(DiscountVersion.version_number.desc()).all()
+    # Обращаемся к моделям через planning_models
+    versions = planning_models.DiscountVersion.query.order_by(planning_models.DiscountVersion.version_number.desc()).all()
     active_version_obj = next((v for v in versions if v.is_active), None)
     return render_template(
         'versions.html',
@@ -92,10 +98,14 @@ def versions_index():
 
 @discount_bp.route('/versions/view/<int:version_id>')
 @login_required
-@permission_required('view_version_history') # <-- ИЗМЕНЕНИЕ
+@permission_required('view_version_history')
 def view_version(version_id):
-    version = DiscountVersion.query.get_or_404(version_id)
-    discounts = Discount.query.filter_by(version_id=version_id).order_by(Discount.complex_name, Discount.property_type, Discount.payment_method).all()
+    version = planning_models.DiscountVersion.query.get_or_404(version_id)
+    discounts = planning_models.Discount.query.filter_by(version_id=version_id).order_by(
+        planning_models.Discount.complex_name,
+        planning_models.Discount.property_type,
+        planning_models.Discount.payment_method
+    ).all()
     return render_template(
         'view_version.html',
         version=version,
@@ -106,9 +116,9 @@ def view_version(version_id):
 
 @discount_bp.route('/versions/edit/<int:version_id>', methods=['GET', 'POST'])
 @login_required
-@permission_required('manage_discounts') # <-- ИЗМЕНЕНИЕ
+@permission_required('manage_discounts')
 def edit_version(version_id):
-    version = DiscountVersion.query.get_or_404(version_id)
+    version = planning_models.DiscountVersion.query.get_or_404(version_id)
     if version.is_active:
         flash('Активные версии нельзя редактировать. Создайте новый черновик.', 'warning')
         return redirect(url_for('discount.versions_index'))
@@ -126,8 +136,12 @@ def edit_version(version_id):
             flash(f"Произошла критическая ошибка при сохранении: {e}", "danger")
         return redirect(url_for('discount.versions_index'))
 
-    discounts = Discount.query.filter_by(version_id=version_id).order_by(Discount.complex_name, Discount.property_type, Discount.payment_method).all()
-    comments_for_version = ComplexComment.query.filter_by(version_id=version_id).all()
+    discounts = planning_models.Discount.query.filter_by(version_id=version_id).order_by(
+        planning_models.Discount.complex_name,
+        planning_models.Discount.property_type,
+        planning_models.Discount.payment_method
+    ).all()
+    comments_for_version = planning_models.ComplexComment.query.filter_by(version_id=version_id).all()
     complex_comments = {c.complex_name: c.comment for c in comments_for_version}
 
     return render_template(
@@ -141,9 +155,9 @@ def edit_version(version_id):
 
 @discount_bp.route('/versions/create-draft', methods=['POST'])
 @login_required
-@permission_required('manage_discounts') # <-- ИЗМЕНЕНИЕ
+@permission_required('manage_discounts')
 def create_draft_version():
-    active_version = DiscountVersion.query.filter_by(is_active=True).first()
+    active_version = planning_models.DiscountVersion.query.filter_by(is_active=True).first()
     if not active_version:
         flash('Не найдена активная версия для создания черновика.', 'danger')
         return redirect(url_for('discount.versions_index'))
@@ -158,7 +172,7 @@ def create_draft_version():
 
 @discount_bp.route('/versions/activate/<int:version_id>', methods=['POST'])
 @login_required
-@permission_required('manage_discounts') # <-- ИЗМЕНЕНИЕ
+@permission_required('manage_discounts')
 def activate_discount_version(version_id):
     activation_comment = request.form.get('comment')
     if not activation_comment:
@@ -168,7 +182,7 @@ def activate_discount_version(version_id):
         email_data = activate_version(version_id, activation_comment=activation_comment)
         if email_data:
             send_email(email_data['subject'], email_data['html_body'])
-        version = DiscountVersion.query.get(version_id)
+        version = planning_models.DiscountVersion.query.get(version_id)
         flash(f"Версия №{version.version_number} успешно активирована.", "success")
     except Exception as e:
         flash(f"Ошибка при активации: {e}", "danger")
@@ -177,7 +191,7 @@ def activate_discount_version(version_id):
 
 @discount_bp.route('/versions/delete/<int:version_id>', methods=['POST'])
 @login_required
-@permission_required('manage_discounts') # <-- ИЗМЕНЕНИЕ
+@permission_required('manage_discounts')
 def delete_version(version_id):
     try:
         delete_draft_version(version_id)
@@ -191,7 +205,7 @@ def delete_version(version_id):
 
 @discount_bp.route('/versions/comment/save', methods=['POST'])
 @login_required
-@permission_required('manage_discounts') # <-- ИЗМЕНЕНИЕ
+@permission_required('manage_discounts')
 def save_complex_comment():
     data = request.get_json()
     version_id = data.get('version_id')
@@ -201,9 +215,9 @@ def save_complex_comment():
     if not all([version_id, complex_name]):
         return jsonify({'success': False, 'error': 'Missing data'}), 400
 
-    comment = ComplexComment.query.filter_by(version_id=version_id, complex_name=complex_name).first()
+    comment = planning_models.ComplexComment.query.filter_by(version_id=version_id, complex_name=complex_name).first()
     if not comment:
-        comment = ComplexComment(version_id=version_id, complex_name=complex_name)
+        comment = planning_models.ComplexComment(version_id=version_id, complex_name=complex_name)
         db.session.add(comment)
 
     comment.comment = comment_text

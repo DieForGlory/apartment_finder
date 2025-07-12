@@ -4,13 +4,14 @@ import numpy as np
 from datetime import date, timedelta
 from sqlalchemy import func, extract, case
 from app.core.extensions import db
-from app.models.discount_models import SalesPlan, PropertyType, Discount, DiscountVersion, PaymentMethod
 import io
-from sqlalchemy.dialects import sqlite
+from collections import defaultdict
+
+# --- ИЗМЕНЕНИЯ ЗДЕСЬ: Обновляем импорты ---
+from app.models import planning_models
 from .data_service import get_all_complex_names
 from ..models.estate_models import EstateDeal, EstateHouse, EstateSell
 from ..models.finance_models import FinanceOperation
-from collections import defaultdict
 
 
 def get_fact_income_data(year: int, month: int, property_type: str):
@@ -45,7 +46,8 @@ def get_expected_income_data(year: int, month: int, property_type: str):
 
 def get_plan_income_data(year: int, month: int, property_type: str):
     """Получает плановые данные по поступлениям."""
-    results = SalesPlan.query.filter_by(year=year, month=month, property_type=property_type).all()
+    # Используем planning_models.SalesPlan
+    results = planning_models.SalesPlan.query.filter_by(year=year, month=month, property_type=property_type).all()
     return {row.complex_name: row.plan_income for row in results}
 
 
@@ -75,13 +77,10 @@ def get_fact_data(year: int, month: int, property_type: str):
 
 def get_plan_data(year: int, month: int, property_type: str):
     """Получает плановые данные из нашей таблицы SalesPlan."""
-
-    results = SalesPlan.query.filter_by(
-        year=year,
-        month=month,
-        property_type=property_type
+    # Используем planning_models.SalesPlan
+    results = planning_models.SalesPlan.query.filter_by(
+        year=year, month=month, property_type=property_type
     ).all()
-
     return {row.complex_name: row.plan_units for row in results}
 
 
@@ -164,11 +163,12 @@ def generate_plan_fact_report(year: int, month: int, property_type: str):
 def process_plan_from_excel(file_path: str, year: int, month: int):
     df = pd.read_excel(file_path)
     for index, row in df.iterrows():
-        plan_entry = SalesPlan.query.filter_by(
+        # Используем planning_models.SalesPlan
+        plan_entry = planning_models.SalesPlan.query.filter_by(
             year=year, month=month, complex_name=row['ЖК'], property_type=row['Тип недвижимости']
         ).first()
         if not plan_entry:
-            plan_entry = SalesPlan(year=year, month=month, complex_name=row['ЖК'],
+            plan_entry = planning_models.SalesPlan(year=year, month=month, complex_name=row['ЖК'],
                                    property_type=row['Тип недвижимости'])
             db.session.add(plan_entry)
         plan_entry.plan_units = row['План, шт']
@@ -180,7 +180,8 @@ def process_plan_from_excel(file_path: str, year: int, month: int):
 
 def generate_plan_template_excel():
     complex_names = get_all_complex_names()
-    property_types = list(PropertyType)
+    # Используем planning_models.PropertyType
+    property_types = list(planning_models.PropertyType)
     headers = ['ЖК', 'Тип недвижимости', 'План, шт', 'План контрактации, UZS', 'План поступлений, UZS']
     data = [{'ЖК': name, 'Тип недвижимости': prop_type.value, 'План, шт': 0, 'План контрактации, UZS': 0,
              'План поступлений, UZS': 0} for name in complex_names for prop_type in property_types]
@@ -193,13 +194,16 @@ def generate_plan_template_excel():
 
 def get_monthly_summary_by_property_type(year: int, month: int):
     summary_data = []
-    property_types = list(PropertyType)
+    # Используем planning_models.PropertyType
+    property_types = list(planning_models.PropertyType)
     today = date.today()
     workdays_in_month = np.busday_count(f'{year}-{month:02d}-01',
                                         f'{year}-{month + 1:02d}-01' if month < 12 else f'{year + 1}-01-01')
     passed_workdays = np.busday_count(f'{year}-{month:02d}-01',
-                                      today) if today.month == month and today.year == year else workdays_in_month
+                                      today.strftime(
+                                          '%Y-%m-%d')) if today.month == month and today.year == year else workdays_in_month
     passed_workdays = max(1, passed_workdays)
+
     for prop_type in property_types:
         total_plan_units = sum(get_plan_data(year, month, prop_type.value).values())
         total_fact_units = sum(get_fact_data(year, month, prop_type.value).values())
@@ -208,9 +212,11 @@ def get_monthly_summary_by_property_type(year: int, month: int):
         total_plan_income = sum(get_plan_income_data(year, month, prop_type.value).values())
         total_fact_income = sum(get_fact_income_data(year, month, prop_type.value).values())
         total_expected_income = sum(get_expected_income_data(year, month, prop_type.value).values())
+
         if (
                 total_plan_units + total_fact_units + total_plan_volume + total_fact_volume + total_plan_income + total_fact_income) == 0:
             continue
+
         percent_fact_units = (total_fact_units / total_plan_units) * 100 if total_plan_units > 0 else 0
         forecast_units = ((
                                       total_fact_units / passed_workdays) * workdays_in_month / total_plan_units) * 100 if total_plan_units > 0 else 0
@@ -218,13 +224,22 @@ def get_monthly_summary_by_property_type(year: int, month: int):
         forecast_volume = ((
                                        total_fact_volume / passed_workdays) * workdays_in_month / total_plan_volume) * 100 if total_plan_volume > 0 else 0
         percent_fact_income = (total_fact_income / total_plan_income) * 100 if total_plan_income > 0 else 0
-        summary_data.append({'property_type': prop_type.value, 'total_plan_units': total_plan_units,
-                             'total_fact_units': total_fact_units, 'percent_fact_units': percent_fact_units,
-                             'forecast_units': forecast_units, 'total_plan_volume': total_plan_volume,
-                             'total_fact_volume': total_fact_volume, 'percent_fact_volume': percent_fact_volume,
-                             'forecast_volume': forecast_volume, 'total_plan_income': total_plan_income,
-                             'total_fact_income': total_fact_income, 'percent_fact_income': percent_fact_income,
-                             'total_expected_income': total_expected_income})
+
+        summary_data.append({
+            'property_type': prop_type.value,
+            'total_plan_units': total_plan_units,
+            'total_fact_units': total_fact_units,
+            'percent_fact_units': percent_fact_units,
+            'forecast_units': forecast_units,
+            'total_plan_volume': total_plan_volume,
+            'total_fact_volume': total_fact_volume,
+            'percent_fact_volume': percent_fact_volume,
+            'forecast_volume': forecast_volume,
+            'total_plan_income': total_plan_income,
+            'total_fact_income': total_fact_income,
+            'percent_fact_income': percent_fact_income,
+            'total_expected_income': total_expected_income
+        })
     return summary_data
 
 
@@ -243,7 +258,9 @@ def get_fact_volume_data(year: int, month: int, property_type: str):
 
 
 def get_plan_volume_data(year: int, month: int, property_type: str):
-    results = SalesPlan.query.filter_by(year=year, month=month, property_type=property_type).all()
+    """Получает плановые данные по объему контрактации."""
+    # Используем planning_models.SalesPlan
+    results = planning_models.SalesPlan.query.filter_by(year=year, month=month, property_type=property_type).all()
     return {row.complex_name: row.plan_volume for row in results}
 
 
@@ -253,7 +270,8 @@ def get_project_dashboard_data(complex_name: str, property_type: str = None):
     houses_in_complex = EstateHouse.query.filter_by(complex_name=complex_name).order_by(EstateHouse.name).all()
     houses_data = []
 
-    active_version = DiscountVersion.query.filter_by(is_active=True).first()
+    # Используем planning_models
+    active_version = planning_models.DiscountVersion.query.filter_by(is_active=True).first()
 
     for house in houses_in_complex:
         house_details = {
@@ -261,21 +279,18 @@ def get_project_dashboard_data(complex_name: str, property_type: str = None):
             "property_types_data": {}
         }
 
-        # Для каждого дома и каждого типа недвижимости считаем свои показатели
-        for prop_type_enum in PropertyType:
+        # Используем planning_models
+        for prop_type_enum in planning_models.PropertyType:
             prop_type_value = prop_type_enum.value
 
-            # 1. Всего юнитов данного типа в доме
             total_units = db.session.query(func.count(EstateSell.id)).filter(
                 EstateSell.house_id == house.id,
                 EstateSell.estate_sell_category == prop_type_value
             ).scalar()
 
-            # Пропускаем тип, если его нет в этом доме
             if total_units == 0:
                 continue
 
-            # 2. Продано юнитов данного типа в доме
             sold_units = db.session.query(func.count(EstateDeal.id)).join(EstateSell).filter(
                 EstateSell.house_id == house.id,
                 EstateSell.estate_sell_category == prop_type_value,
@@ -283,16 +298,14 @@ def get_project_dashboard_data(complex_name: str, property_type: str = None):
             ).scalar()
 
             remaining_count = total_units - sold_units
-
-            # 3. Расчет средней цены "дна" для ОСТАТКОВ
             avg_price_per_sqm = 0
             if remaining_count > 0:
-                # Берем логику расчета скидок
                 total_discount_rate = 0
                 if active_version:
-                    discount = Discount.query.filter_by(
+                    # Используем planning_models
+                    discount = planning_models.Discount.query.filter_by(
                         version_id=active_version.id, complex_name=complex_name,
-                        property_type=prop_type_enum, payment_method=PaymentMethod.FULL_PAYMENT
+                        property_type=prop_type_enum, payment_method=planning_models.PaymentMethod.FULL_PAYMENT
                     ).first()
                     if discount:
                         total_discount_rate = (discount.mpp or 0) + (discount.rop or 0) + (discount.kd or 0)
@@ -304,31 +317,28 @@ def get_project_dashboard_data(complex_name: str, property_type: str = None):
                 ).all()
 
                 prices_per_sqm_list = []
-                deduction_amount = 3_000_000 if prop_type_enum == PropertyType.FLAT else 0
+                # Используем planning_models
+                deduction_amount = 3_000_000 if prop_type_enum == planning_models.PropertyType.FLAT else 0
 
                 for sell in unsold_units:
                     if sell.estate_price and sell.estate_price > deduction_amount and sell.estate_area and sell.estate_area > 0:
-                        # Рассчитываем цену дна для ОДНОЙ квартиры
                         price_after_deduction = sell.estate_price - deduction_amount
                         final_price = price_after_deduction * (1 - total_discount_rate)
                         price_per_sqm = final_price / sell.estate_area
                         prices_per_sqm_list.append(price_per_sqm)
 
-                # Находим среднее арифметическое всех полученных цен
                 if prices_per_sqm_list:
                     avg_price_per_sqm = sum(prices_per_sqm_list) / len(prices_per_sqm_list)
 
-            # 4. Сохраняем все метрики
             house_details["property_types_data"][prop_type_value] = {
                 "total_count": total_units,
                 "remaining_count": remaining_count,
                 "avg_price_per_sqm": avg_price_per_sqm
             }
 
-        # Добавляем данные по дому в общий список, если по нему есть хоть какая-то информация
         if house_details["property_types_data"]:
             houses_data.append(house_details)
-    # --- KPI ЗА ВСЕ ВРЕМЯ ---
+
     total_deals_volume = db.session.query(func.sum(EstateDeal.deal_sum)).join(EstateSell).join(EstateHouse).filter(
         EstateHouse.complex_name == complex_name,
         EstateDeal.deal_status_name.in_(sold_statuses)
@@ -339,24 +349,22 @@ def get_project_dashboard_data(complex_name: str, property_type: str = None):
         FinanceOperation.status_name == 'Проведено'
     ).scalar() or 0
 
-    # --- РАСЧЕТ СТОИМОСТИ ОСТАТКОВ (с исправлением) ---
     remainders_by_type = {}
-    active_version = DiscountVersion.query.filter_by(is_active=True).first()
+    active_version = planning_models.DiscountVersion.query.filter_by(is_active=True).first()
 
-    for prop_type_enum in PropertyType:
+    for prop_type_enum in planning_models.PropertyType:
         prop_type_value = prop_type_enum.value
         total_discount_rate = 0
         if active_version:
-            discount = Discount.query.filter_by(
+            discount = planning_models.Discount.query.filter_by(
                 version_id=active_version.id,
                 complex_name=complex_name,
                 property_type=prop_type_enum,
-                payment_method=PaymentMethod.FULL_PAYMENT
+                payment_method=planning_models.PaymentMethod.FULL_PAYMENT
             ).first()
             if discount:
                 total_discount_rate = (discount.mpp or 0) + (discount.rop or 0) + (discount.kd or 0)
 
-        # Исправленный запрос для остатков
         remainder_sells_query = EstateSell.query.join(EstateHouse).filter(
             EstateHouse.complex_name == complex_name,
             EstateSell.estate_sell_category == prop_type_value,
@@ -365,7 +373,7 @@ def get_project_dashboard_data(complex_name: str, property_type: str = None):
 
         total_discounted_price = 0
         count_remainder = 0
-        deduction_amount = 3_000_000 if prop_type_enum == PropertyType.FLAT else 0
+        deduction_amount = 3_000_000 if prop_type_enum == planning_models.PropertyType.FLAT else 0
 
         for sell in remainder_sells_query.all():
             if sell.estate_price and sell.estate_price > deduction_amount:
@@ -380,14 +388,13 @@ def get_project_dashboard_data(complex_name: str, property_type: str = None):
                 'count': count_remainder
             }
 
-    # --- ДАННЫЕ ДЛЯ ГРАФИКОВ (уже исправлены) ---
     yearly_plan_fact = {
         'labels': [f"{i:02}" for i in range(1, 13)],
         'plan_volume': [0] * 12, 'fact_volume': [0] * 12,
         'plan_income': [0] * 12, 'fact_income': [0] * 12
     }
 
-    plans_query = SalesPlan.query.filter_by(complex_name=complex_name, year=today.year)
+    plans_query = planning_models.SalesPlan.query.filter_by(complex_name=complex_name, year=today.year)
     if property_type:
         plans_query = plans_query.filter_by(property_type=property_type)
     for p in plans_query.all():
@@ -425,9 +432,7 @@ def get_project_dashboard_data(complex_name: str, property_type: str = None):
         fact_income_by_month[row.month - 1] = row.total or 0
     yearly_plan_fact['fact_income'] = fact_income_by_month
     recent_deals = db.session.query(
-        EstateDeal.id,
-        EstateDeal.deal_sum,
-        EstateSell.estate_sell_category.label('property_type'),
+        EstateDeal.id, EstateDeal.deal_sum, EstateSell.estate_sell_category.label('property_type'),
         func.coalesce(EstateDeal.agreement_date, EstateDeal.preliminary_date).label('deal_date')
     ).join(EstateSell).join(EstateHouse).filter(
         EstateHouse.complex_name == complex_name,
@@ -436,74 +441,46 @@ def get_project_dashboard_data(complex_name: str, property_type: str = None):
         func.coalesce(EstateDeal.agreement_date, EstateDeal.preliminary_date).desc()
     ).limit(15).all()
 
-    remainders_chart_data = {
-        "labels": [],
-        "data": []
-    }
+    remainders_chart_data = {"labels": [], "data": []}
     if remainders_by_type:
         remainders_chart_data["labels"] = list(remainders_by_type.keys())
         remainders_chart_data["data"] = [v['count'] for v in remainders_by_type.values()]
-    sales_analysis = {
-        "by_floor": {},
-        "by_rooms": {},
-        "by_area": {}
-    }
 
+    sales_analysis = {"by_floor": {}, "by_rooms": {}, "by_area": {}}
     type_to_analyze = property_type if property_type else 'Квартира'
 
-    # --- ОТЛАДКА 1: Проверяем, какой тип анализируем ---
-    print(f"\n--- DEBUG: Тип для анализа спроса: '{type_to_analyze}' ---")
-
     if type_to_analyze == 'Квартира':
-        print("--- DEBUG: Условие (type_to_analyze == 'Квартира') выполнено. Запускаем запросы. ---\n")
-
         base_query = db.session.query(EstateSell).join(EstateDeal).join(EstateHouse).filter(
             EstateHouse.complex_name == complex_name,
             EstateDeal.deal_status_name.in_(sold_statuses),
             EstateSell.estate_sell_category == type_to_analyze
         )
 
-        # --- ОТЛАДКА 2: Проверяем, сколько всего продано квартир ---
-        print(f"--- DEBUG: Найдено проданных квартир (base_query.count()): {base_query.count()} ---\n")
-
-        # 1. Анализ по этажам
         floor_data = base_query.with_entities(EstateSell.estate_floor, func.count(EstateSell.id)).group_by(
             EstateSell.estate_floor).order_by(EstateSell.estate_floor).all()
-        print(f"--- DEBUG: Сырые данные по ЭТАЖАМ: {floor_data} ---")
         if floor_data:
             sales_analysis['by_floor']['labels'] = [f"{row[0]} этаж" for row in floor_data if row[0] is not None]
             sales_analysis['by_floor']['data'] = [row[1] for row in floor_data if row[0] is not None]
 
-        # 2. Анализ по комнатности
         rooms_data = base_query.filter(EstateSell.estate_rooms.isnot(None)).with_entities(EstateSell.estate_rooms,
                                                                                           func.count(
                                                                                               EstateSell.id)).group_by(
             EstateSell.estate_rooms).order_by(EstateSell.estate_rooms).all()
-        print(f"--- DEBUG: Сырые данные по КОМНАТНОСТИ: {rooms_data} ---")
         if rooms_data:
             sales_analysis['by_rooms']['labels'] = [f"{int(row[0])}-комн." for row in rooms_data if row[0] is not None]
             sales_analysis['by_rooms']['data'] = [row[1] for row in rooms_data if row[0] is not None]
 
-        # 3. Анализ по площадям
         area_case = case(
-            (EstateSell.estate_area < 40, "до 40 м²"),
-            (EstateSell.estate_area.between(40, 50), "40-50 м²"),
-            (EstateSell.estate_area.between(50, 60), "50-60 м²"),
-            (EstateSell.estate_area.between(60, 75), "60-75 м²"),
-            (EstateSell.estate_area.between(75, 90), "75-90 м²"),
-            (EstateSell.estate_area >= 90, "90+ м²"),
+            (EstateSell.estate_area < 40, "до 40 м²"), (EstateSell.estate_area.between(40, 50), "40-50 м²"),
+            (EstateSell.estate_area.between(50, 60), "50-60 м²"), (EstateSell.estate_area.between(60, 75), "60-75 м²"),
+            (EstateSell.estate_area.between(75, 90), "75-90 м²"), (EstateSell.estate_area >= 90, "90+ м²"),
         )
         area_data = base_query.filter(EstateSell.estate_area.isnot(None)).with_entities(area_case, func.count(
             EstateSell.id)).group_by(area_case).order_by(area_case).all()
-        print(f"--- DEBUG: Сырые данные по ПЛОЩАДЯМ: {area_data} ---")
         if area_data:
             sales_analysis['by_area']['labels'] = [row[0] for row in area_data if row[0] is not None]
             sales_analysis['by_area']['data'] = [row[1] for row in area_data if row[0] is not None]
 
-        print(f"\n--- DEBUG: Финальный словарь sales_analysis: {sales_analysis} ---\n")
-    else:
-        print("--- DEBUG: Условие (type_to_analyze == 'Квартира') НЕ выполнено. Анализ пропущен. ---")
-    # --- Сборка финального ответа ---
     dashboard_data = {
         "complex_name": complex_name,
         "kpi": {"total_deals_volume": total_deals_volume, "total_income": total_income,
@@ -511,7 +488,7 @@ def get_project_dashboard_data(complex_name: str, property_type: str = None):
         "charts": {
             "plan_fact_dynamics_yearly": yearly_plan_fact,
             "remainders_chart_data": remainders_chart_data,
-            "sales_analysis": sales_analysis, # <--- ПРАВИЛЬНОЕ МЕСТО
+            "sales_analysis": sales_analysis,
             "price_dynamics": get_price_dynamics_data(complex_name, property_type)
         },
         "recent_deals": recent_deals,

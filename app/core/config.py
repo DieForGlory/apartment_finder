@@ -1,3 +1,5 @@
+# app/core/config.py
+
 import os
 
 
@@ -5,25 +7,33 @@ class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'a-very-secret-key'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    # --- ОБНОВИТЕ ПАРОЛЬ ЗДЕСЬ ---
+    # URI для подключения к исходной базе данных MySQL (для импорта)
+    # Используйте переменные окружения для безопасности
     SOURCE_MYSQL_URI = (
         f"mysql+pymysql://"
-        f"macro_bi_cmp_528:p[8qG^]Qf3v[qr*1@172.16.0.199:9906/macro_bi_cmp_528"
+        f"macro_bi_cmp_528:p[8qG^]Qf3v[qr*1"  # <-- Замените на ваши данные
+        f"@172.16.0.199:9906"  # <-- Правильный IP и порт
+        f"/macro_bi_cmp_528"  # <-- Замените на ваши данные
     )
-    # --------------------------------
 
-    # --- НОВЫЕ НАСТРОЙКИ ДЛЯ EMAIL ---
-    MAIL_SERVER = os.environ.get('EMAIL_SERVER') or 'mail.gh.uz'
-    MAIL_PORT = int(os.environ.get('EMAIL_SERVER_PORT') or 587)
-    MAIL_USE_TLS = True  # Используем TLS для порта 587
-    MAIL_USERNAME = os.environ.get('SEND_FROM_EMAIL') or 'robot@gh.uz'
-    MAIL_PASSWORD = os.environ.get('SEND_FROM_EMAIL_PASSWORD') or 'ABwHRMp1'
-
-    # !!! ЗАМЕНИТЕ НА РЕАЛЬНЫЙ АДРЕС ПОЛУЧАТЕЛЯ !!!
+    # Настройки для отправки Email
+    MAIL_SERVER = os.environ.get('MAIL_SERVER', 'mail.gh.uz')
+    MAIL_PORT = int(os.environ.get('MAIL_SERVER_PORT', 587))
+    MAIL_USE_TLS = True
+    MAIL_USERNAME = os.environ.get('SEND_FROM_EMAIL', 'robot@gh.uz')
+    MAIL_PASSWORD = os.environ.get('SEND_FROM_EMAIL_PASSWORD', 'YourEmailPassword')
     MAIL_RECIPIENTS = ['d.plakhotnyi@gh.uz']
     USD_TO_UZS_RATE = 13050.0
 
 
+# --- ИЗМЕНЕНИЯ НУЖНО ВНЕСТИ ЗДЕСЬ ---
 class DevelopmentConfig(Config):
     DEBUG = True
-    # Основной базой остается локальная SQLite, здесь ничего не меняем.
+
+    # Основная база данных
+    SQLALCHEMY_DATABASE_URI = os.environ.get('MAIN_DATABASE_URL') or 'sqlite:///main_app.db'
+
+    # Оставляем только одну дополнительную БД
+    SQLALCHEMY_BINDS = {
+        'planning_db': os.environ.get('PLANNING_DATABASE_URL') or 'sqlite:///planning.db'
+    }

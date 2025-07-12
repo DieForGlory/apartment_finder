@@ -12,17 +12,21 @@ from app.services import (
     manager_report_service, funnel_service
 )
 from app.web.forms import UploadPlanForm, UploadManagerPlanForm
-from app.models.discount_models import PropertyType, ManagerSalesPlan
-from app.models.user_models import SalesManager
-from datetime import date, datetime
 import json
 from app.core.extensions import db
+
+# --- ИЗМЕНЕНИЯ ЗДЕСЬ ---
+from datetime import date, datetime, timedelta # Добавлен timedelta
+# Импортируем модули вместо классов из удаленных файлов
+from app.models import planning_models
+from app.models import auth_models
+
 report_bp = Blueprint('report', __name__, template_folder='templates')
 
 
 @report_bp.route('/inventory-summary')
 @login_required
-@permission_required('view_inventory_report')  # ОБЩЕЕ ПРАВО НА ПРОСМОТР ОТЧЕТОВ
+@permission_required('view_inventory_report')
 def inventory_summary():
     summary_by_complex, overall_summary = inventory_service.get_inventory_summary_data()
     usd_rate = currency_service.get_current_effective_rate()
@@ -37,7 +41,7 @@ def inventory_summary():
 
 @report_bp.route('/export-inventory-summary')
 @login_required
-@permission_required('view_inventory_report') # ЭКСПОРТ - ЧАСТЬ ПРОСМОТРА ОТЧЕТОВ
+@permission_required('view_inventory_report')
 def export_inventory_summary():
     selected_currency = request.args.get('currency', 'UZS')
     usd_rate = currency_service.get_current_effective_rate()
@@ -56,7 +60,7 @@ def export_inventory_summary():
 
 @report_bp.route('/download-plan-template')
 @login_required
-@permission_required('upload_data') # СКАЧИВАНИЕ ШАБЛОНА - ЧАСТЬ ЗАГРУЗКИ ДАННЫХ
+@permission_required('upload_data')
 def download_plan_template():
     excel_stream = report_service.generate_plan_template_excel()
     return send_file(
@@ -69,12 +73,13 @@ def download_plan_template():
 
 @report_bp.route('/plan-fact', methods=['GET'])
 @login_required
-@permission_required('view_plan_fact_report') # ОБЩЕЕ ПРАВО НА ПРОСМОТР ОТЧЕТОВ
+@permission_required('view_plan_fact_report')
 def plan_fact_report():
     today = date.today()
     year = request.args.get('year', today.year, type=int)
     month = request.args.get('month', today.month, type=int)
-    prop_type = request.args.get('property_type', PropertyType.FLAT.value)
+    # Используем planning_models.PropertyType
+    prop_type = request.args.get('property_type', planning_models.PropertyType.FLAT.value)
     usd_rate = currency_service.get_current_effective_rate()
     summary_data = report_service.get_monthly_summary_by_property_type(year, month)
     report_data, totals = report_service.generate_plan_fact_report(year, month, prop_type)
@@ -87,7 +92,7 @@ def plan_fact_report():
                            grand_totals=grand_totals,
                            years=[today.year - 1, today.year, today.year + 1],
                            months=range(1, 13),
-                           property_types=list(PropertyType),
+                           property_types=list(planning_models.PropertyType),
                            selected_year=year,
                            selected_month=month,
                            usd_to_uzs_rate=usd_rate,
@@ -96,7 +101,7 @@ def plan_fact_report():
 
 @report_bp.route('/upload-plan', methods=['GET', 'POST'])
 @login_required
-@permission_required('upload_data') # ПРАВО НА ЗАГРУЗКУ ДАННЫХ
+@permission_required('upload_data')
 def upload_plan():
     form = UploadPlanForm()
     if form.validate_on_submit():
@@ -117,7 +122,7 @@ def upload_plan():
     return render_template('upload_plan.html', title="Загрузка плана", form=form)
 
 @report_bp.route('/commercial-offer/complex/<int:sell_id>')
-@login_required # Для КП достаточно быть авторизованным
+@login_required
 def generate_complex_kp(sell_id):
     card_data = selection_service.get_apartment_card_data(sell_id)
     if not card_data.get('apartment'):
@@ -148,13 +153,13 @@ def generate_complex_kp(sell_id):
 
 @report_bp.route('/project-dashboard/<path:complex_name>')
 @login_required
-@permission_required('view_project_dashboard') # ОБЩЕЕ ПРАВО НА ПРОСМОТР ОТЧЕТОВ
+@permission_required('view_project_dashboard')
 def project_dashboard(complex_name):
     selected_prop_type = request.args.get('property_type', None)
     data = report_service.get_project_dashboard_data(complex_name, selected_prop_type)
     if not data:
         abort(404)
-    property_types = [pt.value for pt in PropertyType]
+    property_types = [pt.value for pt in planning_models.PropertyType]
     charts_json = json.dumps(data.get('charts', {}))
     usd_rate = currency_service.get_current_effective_rate()
     return render_template(
@@ -169,7 +174,7 @@ def project_dashboard(complex_name):
 
 @report_bp.route('/currency-settings', methods=['GET', 'POST'])
 @login_required
-@permission_required('manage_settings') # ПРАВО НА УПРАВЛЕНИЕ НАСТРОЙКАМИ
+@permission_required('manage_settings')
 def currency_settings():
     if request.method == 'POST':
         if 'set_source' in request.form:
@@ -190,12 +195,12 @@ def currency_settings():
 
 @report_bp.route('/export-plan-fact')
 @login_required
-@permission_required('view_plan_fact_report') # ЭКСПОРТ - ЧАСТЬ ПРОСМОТРА ОТЧЕТОВ
+@permission_required('view_plan_fact_report')
 def export_plan_fact():
     today = date.today()
     year = request.args.get('year', today.year, type=int)
     month = request.args.get('month', today.month, type=int)
-    prop_type = request.args.get('property_type', PropertyType.FLAT.value)
+    prop_type = request.args.get('property_type', planning_models.PropertyType.FLAT.value)
     excel_stream = report_service.generate_plan_fact_excel(year, month, prop_type)
     if excel_stream is None:
         flash("Нет данных для экспорта.", "warning")
@@ -213,16 +218,17 @@ def export_plan_fact():
 
 @report_bp.route('/manager-performance-report', methods=['GET'])
 @login_required
-@permission_required('view_manager_report') # ОБЩЕЕ ПРАВО НА ПРОСМОТР ОТЧЕТОВ
+@permission_required('view_manager_report')
 def manager_performance_report():
     search_query = request.args.get('q', '')
     show_only_with_plan = request.args.get('with_plan', 'false').lower() == 'true'
-    query = SalesManager.query
+    # Используем auth_models.SalesManager и planning_models.ManagerSalesPlan
+    query = auth_models.SalesManager.query
     if search_query:
-        query = query.filter(SalesManager.full_name.ilike(f'%{search_query}%'))
+        query = query.filter(auth_models.SalesManager.full_name.ilike(f'%{search_query}%'))
     if show_only_with_plan:
-        query = query.join(ManagerSalesPlan).distinct()
-    managers = query.order_by(SalesManager.full_name).all()
+        query = query.join(planning_models.ManagerSalesPlan).distinct()
+    managers = query.order_by(auth_models.SalesManager.full_name).all()
     return render_template(
         'manager_performance_overview.html',
         title="Выполнение планов менеджерами",
@@ -234,7 +240,7 @@ def manager_performance_report():
 
 @report_bp.route('/manager-performance-report/<int:manager_id>', methods=['GET'])
 @login_required
-@permission_required('view_manager_report') # ОБЩЕЕ ПРАВО НА ПРОСМОТР ОТЧЕТОВ
+@permission_required('view_manager_report')
 def manager_performance_detail(manager_id):
     current_year = date.today().year
     year = request.args.get('year', current_year, type=int)
@@ -263,7 +269,7 @@ def manager_performance_detail(manager_id):
 
 @report_bp.route('/upload-manager-plan', methods=['GET', 'POST'])
 @login_required
-@permission_required('upload_data') # ПРАВО НА ЗАГРУЗКУ ДАННЫХ
+@permission_required('upload_data')
 def upload_manager_plan():
     form = UploadManagerPlanForm()
     if form.validate_on_submit():
@@ -284,7 +290,7 @@ def upload_manager_plan():
 
 @report_bp.route('/download-manager-plan-template')
 @login_required
-@permission_required('upload_data') # СКАЧИВАНИЕ ШАБЛОНА - ЧАСТЬ ЗАГРУЗКИ ДАННЫХ
+@permission_required('upload_data')
 def download_manager_plan_template():
     excel_stream = manager_report_service.generate_manager_plan_template_excel()
     filename = f"manager_plans_template_{date.today().year}.xlsx"
@@ -296,17 +302,13 @@ def download_manager_plan_template():
     )
 
 
-# app/web/report_routes.py
-
 @report_bp.route('/sales-funnel')
 @login_required
 @permission_required('view_plan_fact_report')
 def sales_funnel():
-    # --- ИЗМЕНЕНИЯ ЗДЕСЬ ---
     # Устанавливаем диапазон по умолчанию (последние 30 дней), если даты не выбраны
     end_date_str = request.args.get('end_date') or date.today().isoformat()
     start_date_str = request.args.get('start_date') or (date.today() - timedelta(days=30)).isoformat()
-    # --- КОНЕЦ ИЗМЕНЕНИЙ ---
 
     funnel_data, _ = funnel_service.get_funnel_data(start_date_str, end_date_str)
 
@@ -316,6 +318,7 @@ def sales_funnel():
         funnel_data=funnel_data,
         filters={'start_date': start_date_str, 'end_date': end_date_str}
     )
+
 @report_bp.route('/hall-of-fame/<path:complex_name>')
 @login_required
 @permission_required('view_manager_report')
@@ -324,7 +327,7 @@ def hall_of_fame(complex_name):
     end_date = request.args.get('end_date', '')
     ranking_data = manager_report_service.get_complex_hall_of_fame(complex_name, start_date, end_date)
 
-    usd_rate = currency_service.get_current_effective_rate()  # <-- ДОБАВЬТЕ ЭТУ СТРОКУ
+    usd_rate = currency_service.get_current_effective_rate()
 
     return render_template(
         'hall_of_fame.html',
@@ -332,9 +335,5 @@ def hall_of_fame(complex_name):
         complex_name=complex_name,
         ranking_data=ranking_data,
         filters={'start_date': start_date, 'end_date': end_date},
-        usd_to_uzs_rate=usd_rate  # <-- И ПЕРЕДАЙТЕ КУРС В ШАБЛОН
+        usd_to_uzs_rate=usd_rate
     )
-
-
-# app/web/report_routes.py
-

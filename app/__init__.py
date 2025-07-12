@@ -1,22 +1,24 @@
 # app/__init__.py
-from flask import request, render_template
 import os
-from flask import Flask
+from flask import Flask, request, render_template
 from flask_login import LoginManager
-from .core.config import DevelopmentConfig
-from .core.extensions import db
-from .models import user_models
 from flask_apscheduler import APScheduler
+from flask_cors import CORS
+from flask_migrate import Migrate
 import json
 from datetime import date, datetime
-# Создаем экземпляр LoginManager
+
+from .core.config import DevelopmentConfig
+from .core.extensions import db
+
+# 1. Создаем экземпляр LoginManager один раз
 login_manager = LoginManager()
 login_manager.login_view = 'auth.login'
 login_manager.login_message = "Пожалуйста, войдите в систему для доступа к этой странице."
 login_manager.login_message_category = "info"
-from flask_cors import CORS
-from flask_migrate import Migrate
 
+
+# Пользовательский кодировщик для преобразования дат в JSON
 class CustomJSONEncoder(json.JSONEncoder):
     def default(self, obj):
         try:
@@ -28,73 +30,80 @@ class CustomJSONEncoder(json.JSONEncoder):
         else:
             return list(iterable)
         return json.JSONEncoder.default(self, obj)
-login_manager = LoginManager()
+
+
 def create_app(config_class=DevelopmentConfig):
     """
     Фабрика для создания и конфигурации экземпляра приложения Flask.
     """
     app = Flask(__name__, instance_relative_config=True)
-    app.config.from_object(config_class)
-    CORS(app)
 
-    db_path = os.path.join(app.instance_path, 'app.db')
-    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+    # Загружаем конфигурацию из объекта (включая URI основной БД и BINDS)
+    app.config.from_object(config_class)
+
+    # 2. Удалена строка, которая перезаписывала URI базы данных.
+    # Теперь приложение будет использовать настройки из config.py
+
+    # Инициализируем расширения
+    CORS(app)
+    db.init_app(app)
+    Migrate(app, db)  # Migrate инициализируется после db
+    login_manager.init_app(app)
+
+    # Устанавливаем кастомный JSON-кодировщик
+    app.json_encoder = CustomJSONEncoder
+
+    # Создаем папку instance, если ее нет
+    try:
+        os.makedirs(app.instance_path, exist_ok=True)
+    except OSError as e:
+        print(f"Ошибка при создании папки instance: {e}")
 
     # Инициализация планировщика
     scheduler = APScheduler()
     scheduler.init_app(app)
     scheduler.start()
 
-    # Добавление задачи через СТРОКОВЫЙ ПУТЬ для избежания циклического импорта
-    if not scheduler.get_job('update_cbu_rate_job'):
-        scheduler.add_job(
-            id='update_cbu_rate_job',
-            func='app.services.currency_service:fetch_and_update_cbu_rate',
-            trigger='interval',
-            hours=1
-        )
+    with app.app_context():
+        # 3. Импортируем все актуальные модули моделей
+        from .models import auth_models, planning_models, estate_models, finance_models, exclusion_models, funnel_models
 
-    try:
-        os.makedirs(app.instance_path, exist_ok=True)
-        print(f"Папка instance готова по пути: {app.instance_path}")
-    except OSError as e:
-        print(f"Ошибка при создании папки instance: {e}")
+        # Регистрация Blueprints
+        from .web.main_routes import main_bp
+        from .web.auth_routes import auth_bp
+        from .web.discount_routes import discount_bp
+        from .web.report_routes import report_bp
+        from .web.complex_calc_routes import complex_calc_bp
+        from .web.settings_routes import settings_bp
+        from .web.api_routes import api_bp
 
-    # Инициализируем расширения
-    Migrate(app, db)
-    db.init_app(app)
-    login_manager.init_app(app)
+        app.register_blueprint(report_bp, url_prefix='/reports')
+        app.register_blueprint(main_bp)
+        app.register_blueprint(auth_bp)
+        app.register_blueprint(discount_bp)
+        app.register_blueprint(complex_calc_bp)
+        app.register_blueprint(settings_bp)
+        app.register_blueprint(api_bp, url_prefix='/api/v1')
 
-    # Регистрация Blueprints
-    from .web.main_routes import main_bp
-    from .web.auth_routes import auth_bp
-    from .web.discount_routes import discount_bp
-    from .web.report_routes import report_bp
-    from .web.complex_calc_routes import complex_calc_bp
-    from .web.settings_routes import settings_bp
-    from .web.api_routes import api_bp
+        # 4. Обновляем загрузчик пользователя для Flask-Login
+        @login_manager.user_loader
+        def load_user(user_id):
+            # Используем auth_models для поиска пользователя
+            return auth_models.User.query.get(int(user_id))
 
-    app.register_blueprint(report_bp, url_prefix='/reports')
-    app.register_blueprint(main_bp)
-    app.register_blueprint(auth_bp)
-    app.register_blueprint(discount_bp)
-    app.register_blueprint(complex_calc_bp)
-    app.register_blueprint(settings_bp)
-    app.json_encoder = CustomJSONEncoder
-    app.register_blueprint(api_bp, url_prefix='/api/v1')
-
+        # Добавление задачи в планировщик
+        if not scheduler.get_job('update_cbu_rate_job'):
+            scheduler.add_job(
+                id='update_cbu_rate_job',
+                func='app.services.currency_service:fetch_and_update_cbu_rate',
+                trigger='interval',
+                hours=1
+            )
 
     @app.before_request
     def check_for_update():
         lock_file_path = os.path.join(app.instance_path, 'update.lock')
-        # Проверяем, существует ли файл и что запрос не к статическим файлам (css, js)
         if os.path.exists(lock_file_path) and request.endpoint != 'static':
-            # Если файл есть, показываем страницу-заглушку
             return render_template('update_in_progress.html')
 
     return app
-
-
-@login_manager.user_loader
-def load_user(user_id):
-    return user_models.User.query.get(int(user_id))

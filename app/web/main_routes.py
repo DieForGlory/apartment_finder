@@ -4,7 +4,11 @@ import json
 from datetime import datetime
 from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app
 from flask_login import login_required, current_user
-from ..models.discount_models import PropertyType, PaymentMethod
+
+# --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
+# Импортируем PropertyType и PaymentMethod из их нового местоположения
+from ..models.planning_models import PropertyType, PaymentMethod
+
 from ..models.estate_models import EstateHouse
 from ..models.exclusion_models import ExcludedSell
 from ..services import selection_service, report_service, settings_service
@@ -12,14 +16,14 @@ from ..services.selection_service import find_apartments_by_budget, get_apartmen
 from ..services.data_service import get_sells_with_house_info, get_filter_options
 from ..services.discount_service import get_current_usd_rate
 from ..core.extensions import db
-from ..core.decorators import permission_required # <-- Используем новый декоратор
+from ..core.decorators import permission_required
 
 main_bp = Blueprint('main', __name__, template_folder='templates')
 
 
 @main_bp.route('/search-by-id', methods=['POST'])
 @login_required
-@permission_required('view_selection') # <-- ИЗМЕНЕНИЕ
+@permission_required('view_selection')
 def search_by_id():
     sell_id = request.form.get('search_id')
     if sell_id:
@@ -33,11 +37,11 @@ def search_by_id():
         flash('Вы не ввели ID для поиска.', 'info')
         return redirect(url_for('main.selection'))
 
+
 @main_bp.route('/')
-@login_required # <-- ИЗМЕНЕНИЕ
-@permission_required('view_selection') # <-- ИЗМЕНЕНИЕ
+@login_required
+@permission_required('view_selection')
 def index():
-    # Логика редиректа теперь не нужна, ее обработают декораторы
     page = request.args.get('page', 1, type=int)
     PER_PAGE = 40
     sells_pagination = get_sells_with_house_info(page=page, per_page=PER_PAGE)
@@ -51,10 +55,11 @@ def index():
 
 @main_bp.route('/selection', methods=['GET', 'POST'])
 @login_required
-@permission_required('view_selection') # <-- ИЗМЕНЕНИЕ
+@permission_required('view_selection')
 def selection():
     results = None
     filter_options = get_filter_options()
+    # Здесь используются импортированные PropertyType и PaymentMethod, теперь они придут из правильного файла
     property_types = list(PropertyType)
     payment_methods = list(PaymentMethod)
 
@@ -88,7 +93,7 @@ def selection():
 
 @main_bp.route('/apartment/<int:sell_id>')
 @login_required
-@permission_required('view_selection') # <-- ИЗМЕНЕНИЕ
+@permission_required('view_selection')
 def apartment_details(sell_id):
     card_data = get_apartment_card_data(sell_id)
     all_discounts_data = card_data.pop('all_discounts_for_property_type', [])
@@ -103,7 +108,7 @@ def apartment_details(sell_id):
 
 @main_bp.route('/commercial-offer/<int:sell_id>')
 @login_required
-@permission_required('view_selection') # <-- ИЗМЕНЕНИЕ
+@permission_required('view_selection')
 def generate_commercial_offer(sell_id):
     card_data = get_apartment_card_data(sell_id)
     if not card_data.get('apartment'):
@@ -172,7 +177,7 @@ def generate_commercial_offer(sell_id):
 
 @main_bp.route('/exclusions', methods=['GET', 'POST'])
 @login_required
-@permission_required('manage_settings') # <-- ИЗМЕНЕНИЕ
+@permission_required('manage_settings')
 def manage_exclusions():
     if request.method == 'POST':
         if 'sell_id_to_manage' in request.form:

@@ -2,18 +2,21 @@
 
 from flask import Blueprint, render_template, request, flash, redirect, url_for
 from flask_login import login_required
-from app.core.decorators import permission_required # <-- Используем новый декоратор
+from app.core.decorators import permission_required
 from app.services import settings_service
 from .forms import CalculatorSettingsForm
 from ..core.extensions import db
 from ..models.estate_models import EstateHouse
-from ..models.user_models import User, EmailRecipient
+
+# --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
+# Импортируем модуль auth_models
+from ..models import auth_models
 
 settings_bp = Blueprint('settings', __name__, template_folder='templates')
 
 @settings_bp.route('/calculator-settings', methods=['GET', 'POST'])
 @login_required
-@permission_required('manage_settings') # <-- ИЗМЕНЕНИЕ
+@permission_required('manage_settings')
 def manage_settings():
     form = CalculatorSettingsForm()
     settings = settings_service.get_calculator_settings()
@@ -28,16 +31,14 @@ def manage_settings():
     form.dp_installment_whitelist.data = settings.dp_installment_whitelist
     form.dp_installment_max_term.data = settings.dp_installment_max_term
     form.time_value_rate_annual.data = settings.time_value_rate_annual
-    # Добавлено для корректного отображения
     if hasattr(settings, 'standard_installment_min_dp_percent'):
         form.standard_installment_min_dp_percent.data = settings.standard_installment_min_dp_percent
-
 
     return render_template('calculator_settings.html', title="Настройки калькуляторов", form=form)
 
 @settings_bp.route('/manage-inventory-exclusions', methods=['GET', 'POST'])
 @login_required
-@permission_required('manage_settings') # <-- ИЗМЕНЕНИЕ
+@permission_required('manage_settings')
 def manage_inventory_exclusions():
     """Страница для управления исключенными ЖК из сводки по остаткам."""
     if request.method == 'POST':
@@ -65,24 +66,24 @@ def manage_inventory_exclusions():
 def manage_email_recipients():
     """Страница для управления получателями email-уведомлений."""
     if request.method == 'POST':
-        # Получаем ID пользователей, отмеченных галочками
         selected_user_ids = request.form.getlist('recipient_ids', type=int)
 
-        # Полностью очищаем старый список подписчиков
-        EmailRecipient.query.delete()
+        # --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
+        # Обращаемся к модели через auth_models
+        auth_models.EmailRecipient.query.delete()
 
-        # Создаем новый список на основе выбора
         for user_id in selected_user_ids:
-            recipient = EmailRecipient(user_id=user_id)
+            recipient = auth_models.EmailRecipient(user_id=user_id)
             db.session.add(recipient)
 
         db.session.commit()
         flash('Список получателей уведомлений успешно обновлен.', 'success')
         return redirect(url_for('settings.manage_email_recipients'))
 
-    # Для GET-запроса получаем всех пользователей и ID тех, кто уже подписан
-    all_users = User.query.order_by(User.full_name).all()
-    subscribed_user_ids = {r.user_id for r in EmailRecipient.query.all()}
+    # --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
+    # Обращаемся к моделям через auth_models
+    all_users = auth_models.User.query.order_by(auth_models.User.full_name).all()
+    subscribed_user_ids = {r.user_id for r in auth_models.EmailRecipient.query.all()}
 
     return render_template(
         'manage_recipients.html',

@@ -1,15 +1,18 @@
 import os
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, Table, Column, Integer, String, MetaData
 from sqlalchemy.orm import sessionmaker
 from flask import current_app
-from ..models.user_models import SalesManager #
-from ..models.discount_models import ManagerSalesPlan
+
 from ..core.extensions import db
-from ..models.estate_models import EstateHouse, EstateSell, EstateDeal
-from ..models.discount_models import DiscountVersion, Discount # Ensure Discount is imported if needed for clearing
 from .discount_service import process_discounts_from_excel
+
+# Обновленные импорты моделей
+from ..models import auth_models
+from ..models import planning_models
+from ..models.estate_models import EstateHouse, EstateSell, EstateDeal
 from ..models.finance_models import FinanceOperation
 from ..models.funnel_models import EstateBuy, EstateBuysStatusLog
+
 CURRENT_DIR = os.path.dirname(__file__)
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, '..', '..'))
 DISCOUNTS_EXCEL_PATH = os.path.join(PROJECT_ROOT, 'data_sources', 'discounts_template.xlsx')
@@ -17,10 +20,9 @@ DISCOUNTS_EXCEL_PATH = os.path.join(PROJECT_ROOT, 'data_sources', 'discounts_tem
 
 def _migrate_mysql_estate_data_to_sqlite():
     """
-    Подключается к MySQL, извлекает данные (дома, квартиры, СДЕЛКИ)
-    и перезаписывает их в SQLite.
+    Подключается к MySQL, извлекает данные и перезаписывает их в соответствующие базы данных SQLite.
     """
-    print("[MIGRATE] 🔄 Начало миграции данных из MySQL в SQLite...")
+    print("[MIGRATE] 🔄 Начало миграции данных из MySQL...")
 
     mysql_uri = current_app.config['SOURCE_MYSQL_URI']
     mysql_engine = create_engine(mysql_uri)
@@ -28,24 +30,26 @@ def _migrate_mysql_estate_data_to_sqlite():
     mysql_session = MySQLSession()
 
     try:
-        # Очищаем данные в SQLite перед новой миграцией
-        print("[MIGRATE] 🧹 Очистка существующих данных в SQLite (EstateDeal, EstateSell, EstateHouse)...")
+        print("[MIGRATE] 🧹 Очистка существующих данных...")
+        # Очистка таблиц в основной БД
         db.session.query(EstateDeal).delete()
         db.session.query(EstateSell).delete()
         db.session.query(EstateHouse).delete()
-        db.session.query(SalesManager).delete()
-        db.session.query(ManagerSalesPlan).delete()
         db.session.query(FinanceOperation).delete()
         db.session.query(EstateBuysStatusLog).delete()
         db.session.query(EstateBuy).delete()
+
+        # Очистка таблиц в auth_db и planning_db
+        db.session.query(auth_models.SalesManager).delete()
+        db.session.query(planning_models.ManagerSalesPlan).delete()
+
         db.session.commit()
-        print("[MIGRATE] ✔️ Данные по недвижимости и сделкам очищены.")
+        print("[MIGRATE] ✔️ Данные очищены.")
 
         # 1. Миграция таблицы estate_houses
         print("[MIGRATE] 🏡 Загрузка данных из таблицы 'estate_houses'...")
         mysql_houses = mysql_session.query(EstateHouse).filter(EstateHouse.complex_name.isnot(None)).all()
         for house in mysql_houses:
-            # ... (код без изменений)
             new_house = EstateHouse(
                 id=house.id,
                 complex_name=house.complex_name,
@@ -60,10 +64,10 @@ def _migrate_mysql_estate_data_to_sqlite():
         for buy in mysql_buys:
             new_buy = EstateBuy(
                 id=buy.id,
-                date_added=buy.date_added,  # <-- Добавлено
+                date_added=buy.date_added,
                 created_at=buy.created_at,
                 status_name=buy.status_name,
-                custom_status_name=buy.custom_status_name  # <-- Добавлено
+                custom_status_name=buy.custom_status_name
             )
             db.session.add(new_buy)
         print(f"[MIGRATE] ✔️ Найдено и подготовлено к записи заявок: {len(mysql_buys)}")
@@ -80,6 +84,7 @@ def _migrate_mysql_estate_data_to_sqlite():
             )
             db.session.add(new_log)
         print(f"[MIGRATE] ✔️ Найдено и подготовлено к записи логов: {len(mysql_logs)}")
+
         # 2. Миграция таблицы estate_sells
         print("[MIGRATE] 🏢 Загрузка данных из таблицы 'estate_sells'...")
         mysql_sells = mysql_session.query(EstateSell).all()
@@ -90,7 +95,6 @@ def _migrate_mysql_estate_data_to_sqlite():
             'storageroom': 'Кладовое помещение',
         }
         for sell in mysql_sells:
-            # ... (код без изменений)
             new_sell = EstateSell(
                 id=sell.id,
                 house_id=sell.house_id,
@@ -106,72 +110,41 @@ def _migrate_mysql_estate_data_to_sqlite():
             db.session.add(new_sell)
         print(f"[MIGRATE] ✔️ Найдено и подготовлено к записи объектов продажи: {len(mysql_sells)}")
 
-        # 2. Миграция таблицы users
-
+        # 3. Миграция менеджеров
         print("[MIGRATE] 🧑‍💼 Загрузка данных менеджеров из таблицы 'users'...")
-        from sqlalchemy import Table, Column, Integer, String, MetaData
         meta = MetaData()
-        mysql_users_table = Table('users', meta,
-                                  Column('id', Integer, primary_key=True),
-                                  Column('users_name', String)  # Используем users_name, как вы и указали
-                                  )
-
+        mysql_users_table = Table('users', meta, Column('id', Integer, primary_key=True), Column('users_name', String))
         mysql_managers = mysql_session.query(mysql_users_table).all()
-
-        # --- Новая логика с очисткой и проверкой на уникальность ---
-        processed_names = set()  # Сет для отслеживания уже добавленных имен
+        processed_names = set()
         added_count = 0
-
         for manager in mysql_managers:
-            # Проверяем, есть ли имя и чистим его от пробелов
-            if not manager.users_name:
-                continue
-
-            cleaned_name = manager.users_name.strip()
-
-            # Пропускаем, если имя пустое или такое очищенное имя уже было обработано
+            cleaned_name = (manager.users_name or "").strip()
             if not cleaned_name or cleaned_name in processed_names:
                 continue
-
-            # Если имя уникальное, добавляем его в сет и создаем объект
             processed_names.add(cleaned_name)
-
-            new_manager = SalesManager(
-                id=manager.id,
-                full_name=cleaned_name  # Используем очищенное имя
-            )
+            new_manager = auth_models.SalesManager(id=manager.id, full_name=cleaned_name)
             db.session.add(new_manager)
             added_count += 1
-
         print(
             f"[MIGRATE] ✔️ Найдено менеджеров в источнике: {len(mysql_managers)}. Добавлено уникальных: {added_count}")
-        # --- КОНЕЦ ОБНОВЛЕННОГО БЛОКА ---
 
-        # --- НАЧАЛО НОВОГО БЛОКА: Миграция таблицы estate_deals ---
+        # 4. Миграция таблицы estate_deals
         print("[MIGRATE] 🤝 Загрузка данных из таблицы 'estate_deals'...")
         mysql_deals = mysql_session.query(EstateDeal).all()
-
-        # Используем тот же маппинг, что и для estate_sells, если названия типов совпадают
-        DEAL_PROPERTY_TYPE_MAPPING = {
-            'flat': 'Квартира',
-            'comm': 'Коммерческое помещение',
-            'garage': 'Парковка',
-            'storageroom': 'Кладовое помещение',
-        }
-
         for deal in mysql_deals:
             new_deal = EstateDeal(
                 id=deal.id,
-                estate_sell_id=deal.estate_sell_id,  # Просто копируем ID
+                estate_sell_id=deal.estate_sell_id,
                 deal_status_name=deal.deal_status_name,
                 deal_manager_id=deal.deal_manager_id,
                 agreement_date=deal.agreement_date,
                 preliminary_date=deal.preliminary_date,
-                deal_sum = deal.deal_sum
+                deal_sum=deal.deal_sum
             )
             db.session.add(new_deal)
         print(f"[MIGRATE] ✔️ Найдено и подготовлено к записи сделок: {len(mysql_deals)}")
-        # --- КОНЕЦ НОВОГО БЛОКА ---
+
+        # 5. Миграция таблицы finances
         print("[MIGRATE] 💰 Загрузка данных из таблицы 'finances'...")
         mysql_finances = mysql_session.query(FinanceOperation).all()
         for fin_op in mysql_finances:
@@ -184,6 +157,7 @@ def _migrate_mysql_estate_data_to_sqlite():
             )
             db.session.add(new_fin_op)
         print(f"[MIGRATE] ✔️ Найдено и подготовлено к записи фин. операций: {len(mysql_finances)}")
+
         db.session.commit()
         print("[MIGRATE] ✔️ Все данные успешно сохранены в SQLite.")
 
@@ -198,67 +172,55 @@ def _migrate_mysql_estate_data_to_sqlite():
 
 def load_all_initial_data(is_initial_setup=False):
     """
-    Наполняет ОБЕ базы данных.
-    Вызывается только при ПЕРВОНАЧАЛЬНОМ запуске, когда БД пуста.
+    Наполняет ВСЕ базы данных. Вызывается только при ПЕРВОНАЧАЛЬНОМ запуске.
     """
     print("\n[INITIAL LOAD] 🚀 НАЧАЛО ПРОЦЕССА ПЕРВОНАЧАЛЬНОЙ ЗАГРУЗКИ ДАННЫХ...")
 
     if is_initial_setup:
-        print("[INITIAL LOAD] 🛠️ Создание всех таблиц в обеих базах данных...")
-        # db.create_all() создаст таблицы во всех привязанных базах данных
+        print("[INITIAL LOAD] 🛠️ Создание таблиц во всех базах...")
         db.create_all()
         print("[INITIAL LOAD] ✔️ Таблицы созданы.")
 
     try:
-        # 1. Мигрируем данные по недвижимости из MySQL
         _migrate_mysql_estate_data_to_sqlite()
 
-        # 2. Очищаем и загружаем скидки из Excel (только при первоначальной настройке)
-        print("[INITIAL LOAD] 🧹 Очистка существующих версий скидок для начальной загрузки...")
-        # Явно указываем, из какой сессии удалять (хотя bind_key в модели уже это делает)
-        # Это для дополнительной ясности
-        db.session.query(Discount).delete(synchronize_session=False)
-        db.session.query(DiscountVersion).delete(synchronize_session=False)
+        print("[INITIAL LOAD] 🧹 Очистка существующих версий скидок...")
+        db.session.query(planning_models.Discount).delete(synchronize_session=False)
+        db.session.query(planning_models.DiscountVersion).delete(synchronize_session=False)
         db.session.commit()
         print("[INITIAL LOAD] ✔️ Версии скидок очищены.")
 
         if os.path.exists(DISCOUNTS_EXCEL_PATH):
             print(f"[INITIAL LOAD] 📥 Загрузка скидок из файла: {DISCOUNTS_EXCEL_PATH}")
-            initial_version = DiscountVersion(
+            initial_version = planning_models.DiscountVersion(
                 version_number=1,
                 comment="Начальная загрузка из Excel",
                 is_active=True
             )
             db.session.add(initial_version)
             db.session.flush()
-
             process_discounts_from_excel(DISCOUNTS_EXCEL_PATH, initial_version.id)
             print("[INITIAL LOAD] ✔️ Скидки из Excel успешно подготовлены в 'Версию 1'.")
         else:
-            print(f"[INITIAL LOAD] ⚠️  ВНИМАНИЕ: Файл со скидками не найден ({DISCOUNTS_EXCEL_PATH}). Пропускаем шаг.")
+            print(f"[INITIAL LOAD] ⚠️  ВНИМАНИЕ: Файл со скидками не найден ({DISCOUNTS_EXCEL_PATH}).")
 
         db.session.commit()
         print("[INITIAL LOAD] ✅ ПРОЦЕСС ПЕРВОНАЧАЛЬНОЙ ЗАГРУЗКИ ЗАВЕРШЕН.\n")
-
     except Exception as e:
         print(f"[INITIAL LOAD] ❌ Ошибка при полной загрузке данных: {e}")
         db.session.rollback()
         raise e
 
 
-# New function for the refresh button
 def refresh_estate_data_from_mysql():
     """
-    Обновляет только данные по недвижимости (дома, квартиры) из MySQL.
-    НЕ ТРОГАЕТ СКИДКИ.
-    Используется для кнопки "Обновить данные" и при каждом перезапуске.
+    Обновляет данные из MySQL. НЕ ТРОГАЕТ СКИДКИ.
     """
-    print("\n[REFRESH DATA] 🔄 НАЧАЛО ПРОЦЕССА ОБНОВЛЕНИЯ ДАННЫХ НЕДВИЖИМОСТИ ИЗ MySQL...")
+    print("\n[REFRESH DATA] 🔄 НАЧАЛО ПРОЦЕССА ОБНОВЛЕНИЯ ДАННЫХ ИЗ MySQL...")
     try:
-        # Эта функция теперь будет вызываться при каждом запуске приложения
         _migrate_mysql_estate_data_to_sqlite()
-        print("[REFRESH DATA] ✅ ДАННЫЕ НЕДВИЖИМОСТИ УСПЕШНО ОБНОВЛЕНЫ ИЗ MySQL.\n")
+        print("[REFRESH DATA] ✅ ДАННЫЕ УСПЕШНО ОБНОВЛЕНЫ ИЗ MySQL.\n")
         return True
     except Exception as e:
-        print(f"[REFRESH DATA] ❌ ОШИБКА ПРИ ОБНОВЛЕНИИ ДАННЫХ НЕДВИЖИМОСТИ: {e}")
+        print(f"[REFRESH DATA] ❌ ОШИБКА ПРИ ОБНОВЛЕНИИ ДАННЫХ: {e}")
         return False

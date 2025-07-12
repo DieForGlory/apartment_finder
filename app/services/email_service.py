@@ -1,18 +1,26 @@
+# app/services/email_service.py
+
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from flask import current_app
-from ..models.user_models import EmailRecipient, User
+
+# --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
+# Импортируем модуль auth_models
+from ..models import auth_models
 from ..core.extensions import db
 
 def send_email(subject, html_body):
     """Отправляет email-сообщение с указанной темой и HTML-содержимым."""
     config = current_app.config
     sender_email = config['MAIL_USERNAME']
-    recipients_from_db = db.session.query(User.email).join(EmailRecipient).all()
+
+    # --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
+    # Обновляем запрос для получения email-адресов получателей
+    recipients_from_db = db.session.query(auth_models.User.email).join(auth_models.EmailRecipient).all()
     recipients = [email for email, in recipients_from_db]
 
-    # --- НАЧАЛО БЛОКА ЛОГИРОВАНИЯ ---
+    # --- БЛОК ЛОГИРОВАНИЯ (без изменений) ---
     print("\n" + "=" * 50)
     print("[EMAIL SERVICE] 📨 НАЧАЛО ПРОЦЕССА ОТПРАВКИ ПИСЬМА")
     print(f"[EMAIL SERVICE] Отправитель: {sender_email}")
@@ -20,9 +28,8 @@ def send_email(subject, html_body):
     print(f"[EMAIL SERVICE] Тема: {subject}")
     # --- КОНЕЦ БЛОКА ЛОГИРОВАНИЯ ---
 
-    if not recipients or not recipients[0] or "example.com" in recipients[0]:
-        print("[EMAIL SERVICE] ❌ ОШИБКА: Получатели не заданы или используется адрес-заглушка.")
-        print("[EMAIL SERVICE] Пожалуйста, укажите реальный адрес в MAIL_RECIPIENTS в файле config.py.")
+    if not recipients:
+        print("[EMAIL SERVICE] ❕ ВНИМАНИЕ: Список получателей в базе данных пуст. Отправка отменена.")
         print("=" * 50 + "\n")
         return
 
@@ -37,11 +44,7 @@ def send_email(subject, html_body):
     try:
         print(f"[EMAIL SERVICE] Попытка подключения к серверу: {config['MAIL_SERVER']}:{config['MAIL_PORT']}")
         server = smtplib.SMTP(config['MAIL_SERVER'], config['MAIL_PORT'])
-
-        # --- ВКЛЮЧАЕМ РАСШИРЕННЫЙ РЕЖИМ ОТЛАДКИ ---
-        # Этот режим покажет в консоли весь диалог между нашим приложением и почтовым сервером.
         server.set_debuglevel(1)
-        # --------------------------------------------
 
         if config['MAIL_USE_TLS']:
             print("[EMAIL SERVICE] Попытка запуска TLS...")
@@ -59,7 +62,6 @@ def send_email(subject, html_body):
     except Exception as e:
         print(f"[EMAIL SERVICE] ❌ КРИТИЧЕСКАЯ ОШИБКА ПРИ ОТПРАВКЕ: {type(e).__name__}: {e}")
     finally:
-        # Убеждаемся, что сессия с сервером всегда закрывается
         if 'server' in locals() and server:
             print("[EMAIL SERVICE] Попытка закрытия соединения с сервером...")
             server.quit()

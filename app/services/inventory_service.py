@@ -2,11 +2,13 @@
 
 from collections import defaultdict
 from app.core.extensions import db
-from app.models.discount_models import Discount, DiscountVersion, PaymentMethod, PropertyType
-from app.models.estate_models import EstateSell, EstateHouse
 import pandas as pd
 import io
 
+# --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
+# Импортируем модели из их нового местоположения
+from app.models.planning_models import DiscountVersion, PaymentMethod, PropertyType
+from app.models.estate_models import EstateSell, EstateHouse
 from app.models.exclusion_models import ExcludedComplex
 
 
@@ -18,7 +20,7 @@ def get_inventory_summary_data():
     # 1. Получаем список исключенных ЖК
     excluded_complex_names = {c.complex_name for c in ExcludedComplex.query.all()}
 
-    # 2. Получаем активную версию скидок
+    # 2. Получаем активную версию скидок (теперь из planning_models)
     active_version = DiscountVersion.query.filter_by(is_active=True).first()
     if not active_version:
         return {}, {}
@@ -26,10 +28,10 @@ def get_inventory_summary_data():
     discounts_map = {
         (d.complex_name, d.property_type): d
         for d in active_version.discounts
-        if d.payment_method == PaymentMethod.FULL_PAYMENT
+        if d.payment_method == PaymentMethod.FULL_PAYMENT # Используем Enum из planning_models
     }
 
-    # 3. Обновляем запрос к базе данных, чтобы сразу отфильтровать ненужные ЖК
+    # 3. Запрос к базе данных (без изменений, так как модели из main_db)
     valid_statuses = ["Маркетинговый резерв", "Подбор"]
     unsold_sells_query = db.session.query(EstateSell).options(
         db.joinedload(EstateSell.house)
@@ -39,7 +41,6 @@ def get_inventory_summary_data():
         EstateSell.estate_area > 0
     )
 
-    # Применяем фильтр, если есть исключения
     if excluded_complex_names:
         unsold_sells_query = unsold_sells_query.join(EstateSell.house).filter(
             EstateHouse.complex_name.notin_(excluded_complex_names)
@@ -56,6 +57,7 @@ def get_inventory_summary_data():
         if not sell.house:
             continue
         try:
+            # Используем Enum из planning_models
             prop_type_enum = PropertyType(sell.estate_sell_category)
             complex_name = sell.house.complex_name
         except ValueError:
@@ -64,6 +66,7 @@ def get_inventory_summary_data():
         discount = discounts_map.get((complex_name, prop_type_enum))
         bottom_price = 0
         if sell.estate_price and discount:
+            # Используем Enum из planning_models
             deduction = 3_000_000 if prop_type_enum == PropertyType.FLAT else 0
             price_for_calc = sell.estate_price - deduction
             if price_for_calc > 0:
@@ -106,14 +109,12 @@ def get_inventory_summary_data():
 def generate_inventory_excel(summary_data: dict, currency: str, usd_rate: float):
     """
     Создает красиво оформленный Excel-файл с учетом выбранной валюты.
+    (Эта функция не требует изменений, так как не работает с моделями напрямую)
     """
     flat_data = []
-
-    # Определяем заголовки и курс в зависимости от валюты
     is_usd = currency == 'USD'
     rate = usd_rate if is_usd else 1.0
     currency_suffix = f', {currency}'
-
     value_header = 'Стоимость остатков (дно)' + currency_suffix
     price_header = 'Цена дна, за м²' + currency_suffix
 
@@ -132,21 +133,14 @@ def generate_inventory_excel(summary_data: dict, currency: str, usd_rate: float)
         return None
 
     df = pd.DataFrame(flat_data)
-
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Сводка по остаткам', startrow=1, header=False)
-
         workbook = writer.book
         worksheet = writer.sheets['Сводка по остаткам']
-
-        header_format = workbook.add_format(
-            {'bold': True, 'text_wrap': True, 'valign': 'top', 'fg_color': '#D7E4BC', 'border': 1})
-
-        # Разные форматы для UZS и USD
+        header_format = workbook.add_format({'bold': True, 'text_wrap': True, 'valign': 'top', 'fg_color': '#D7E4BC', 'border': 1})
         money_format_uzs = workbook.add_format({'num_format': '#,##0', 'border': 1})
         money_format_usd = workbook.add_format({'num_format': '"$"#,##0.00', 'border': 1})
-
         area_format = workbook.add_format({'num_format': '#,##0.00', 'border': 1})
         integer_format = workbook.add_format({'num_format': '0', 'border': 1})
         default_format = workbook.add_format({'border': 1})
@@ -154,9 +148,7 @@ def generate_inventory_excel(summary_data: dict, currency: str, usd_rate: float)
         for col_num, value in enumerate(df.columns.values):
             worksheet.write(0, col_num, value, header_format)
 
-        # Выбираем нужный денежный формат
         current_money_format = money_format_usd if is_usd else money_format_uzs
-
         worksheet.set_column(0, 0, 25, default_format)
         worksheet.set_column(1, 1, 25, default_format)
         worksheet.set_column(2, 2, 15, integer_format)

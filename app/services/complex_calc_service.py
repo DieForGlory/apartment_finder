@@ -1,13 +1,18 @@
+# app/services/complex_calc_service.py
+
 from datetime import date
 from dateutil.relativedelta import relativedelta
 import numpy_financial as npf
 from flask import current_app
 from app.services import selection_service, settings_service, currency_service
-from app.models.discount_models import PaymentMethod
+
+# --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
+# Импортируем PaymentMethod из его нового местоположения
+from app.models.planning_models import PaymentMethod
+
 from app.services.discount_service import get_current_usd_rate
 import math
-from datetime import date
-from dateutil.relativedelta import relativedelta
+
 DEFAULT_RATE = 16.5 / 12 / 100
 MAX_MORTGAGE_BODY = 420_000_000
 
@@ -26,6 +31,7 @@ def calculate_installment_plan(sell_id: int, term_months: int, additional_discou
 
     card_data = selection_service.get_apartment_card_data(sell_id)
     apartment_price = card_data.get('apartment', {}).get('estate_price', 0)
+    # Здесь используется PaymentMethod, который мы теперь импортируем из правильного места
     discounts_100_payment = next((d for d in card_data.get('all_discounts_for_property_type', []) if d['payment_method'] == PaymentMethod.FULL_PAYMENT.value), None)
 
     if not discounts_100_payment:
@@ -55,7 +61,6 @@ def calculate_installment_plan(sell_id: int, term_months: int, additional_discou
         else:  # 'uzs'
             dp_uzs = dp_amount
 
-    # Получаем новую настройку минимального ПВ
     min_dp_percent = settings.standard_installment_min_dp_percent
     min_dp_uzs = price_for_calc * (min_dp_percent / 100.0)
 
@@ -72,38 +77,24 @@ def calculate_installment_plan(sell_id: int, term_months: int, additional_discou
     if term_months <= 0:
         raise ValueError("Срок рассрочки должен быть больше нуля.")
 
-    # --- Новая логика расчета ---
-
-    # 1. Теоретический расчет для определения точной скидки
     price_after_discounts_theoretical = price_for_calc * (1 - total_discount_rate)
-
-    # 2. ВЫЧИТАЕМ ПВ из суммы ПОСЛЕ скидок. Это и есть тело рассрочки.
     remaining_for_installment = price_after_discounts_theoretical - dp_uzs
     if remaining_for_installment <= 0:
         raise ValueError("Сумма первоначального взноса равна или превышает стоимость квартиры после скидок.")
 
-    # 3. Рассчитываем ежемесячный платеж от ОСТАТКА
     monthly_payment_theoretical = npf.pmt(monthly_rate, term_months, -remaining_for_installment)
-
-    # 4. Общая стоимость договора = платежи по рассрочке + первоначальный взнос
     contract_value_theoretical = (monthly_payment_theoretical * term_months) + dp_uzs
     discount_percent_theoretical = (1 - (contract_value_theoretical / price_for_calc)) * 100
 
-    # === ШАГ 4: Финализация и генерация графика (с учетом ПВ) ===
     final_discount_percent = math.floor(discount_percent_theoretical)
     final_discount_rate = final_discount_percent / 100.0
-
     final_contract_value = price_for_calc * (1 - final_discount_rate)
-
-    # Итоговый размер рассрочки
     final_installment_part = final_contract_value - dp_uzs
     final_monthly_payment = final_installment_part / term_months
 
-    # --- Генерация графика платежей ---
     payment_schedule = []
     start_date_obj = date.fromisoformat(start_date) if start_date else date.today()
 
-    # Добавляем ПВ как первый платеж
     payment_schedule.append({
         "month_number": 0,
         "payment_date": start_date_obj.isoformat(),
@@ -113,7 +104,6 @@ def calculate_installment_plan(sell_id: int, term_months: int, additional_discou
 
     current_payment_date = start_date_obj
     for i in range(1, term_months + 1):
-        # Платеж идет через месяц после предыдущего
         current_payment_date += relativedelta(months=1)
         payment_schedule.append({
             "month_number": i,
@@ -124,7 +114,7 @@ def calculate_installment_plan(sell_id: int, term_months: int, additional_discou
 
     return {
         "price_list": apartment_price,
-        "initial_payment_uzs": dp_uzs,  # Добавляем ПВ в результат
+        "initial_payment_uzs": dp_uzs,
         "calculated_discount": final_discount_percent,
         "calculated_contract_value": final_contract_value,
         "monthly_payment": final_monthly_payment,
@@ -188,7 +178,6 @@ def calculate_dp_installment_plan(sell_id: int, term_months: int, dp_amount: flo
 
     mortgage_body = price_after_discounts - dp_uzs
     if mortgage_body > MAX_MORTGAGE_BODY:
-        # ... (код обработки превышения лимита ипотеки без изменений) ...
         increase_needed_uzs = mortgage_body - MAX_MORTGAGE_BODY
         if dp_type == 'percent':
             increase_needed_val = (increase_needed_uzs / price_after_discounts) * 100
@@ -200,29 +189,20 @@ def calculate_dp_installment_plan(sell_id: int, term_months: int, dp_amount: flo
             msg = f"Тело ипотеки превышает лимит. Увеличьте ПВ на {increase_needed_uzs:,.0f} UZS."
         raise ValueError(msg)
 
-    # --- Новая логика расчета ---
-
-    # 1. Теоретический расчет для определения точной скидки
     monthly_payment_for_dp_theoretical = npf.pmt(monthly_rate, term_months, -dp_uzs)
     dp_value_theoretical = monthly_payment_for_dp_theoretical * term_months
     contract_value_theoretical = dp_value_theoretical + mortgage_body
     discount_percent_theoretical = (1 - (contract_value_theoretical / price_for_calc)) * 100
 
-    # 2. Округляем скидку В МЕНЬШУЮ сторону до целого числа
     final_discount_percent = math.floor(discount_percent_theoretical)
     final_discount_rate = final_discount_percent / 100.0
 
-    # 3. Пересчитываем финальные значения
     final_contract_value = price_for_calc * (1 - final_discount_rate)
-    # Тело ипотеки остается неизменным, меняется только сумма рассрочки на ПВ
     final_dp_value = final_contract_value - mortgage_body
     final_monthly_payment_for_dp = final_dp_value / term_months if term_months > 0 else 0
 
-    # --- Генерация графика платежей ---
     payment_schedule = []
-    # Если дата не выбрана, используем сегодняшний день
     start_date_obj = date.fromisoformat(start_date) if start_date else date.today()
-    # Начинаем отсчет за месяц до первого платежа
     current_payment_date = start_date_obj - relativedelta(months=1)
 
     for i in range(1, term_months + 1):
