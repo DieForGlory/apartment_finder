@@ -101,14 +101,6 @@ def manage_roles():
     return render_template('manage_roles.html', title="Управление ролями", roles=roles)
 
 
-# app/web/auth_routes.py
-
-# app/web/auth_routes.py
-
-# app/web/auth_routes.py
-
-# app/web/auth_routes.py
-
 @auth_bp.route('/role/edit/<int:role_id>', methods=['GET', 'POST'])
 @auth_bp.route('/role/new', methods=['GET', 'POST'], defaults={'role_id': None})
 @login_required

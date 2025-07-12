@@ -64,10 +64,10 @@ def get_current_usd_rate():
 def _normalize_percentage(value):
     try:
         num_value = float(value)
-        if num_value > 1.0: return num_value / 100.0
+        if num_value > 1.0: return int(num_value / 100.0)
         return num_value
     except (ValueError, TypeError):
-        return 0.0
+        return 0
 
 
 def process_discounts_from_excel(file_path: str, version_id: int):

@@ -302,17 +302,19 @@ def download_manager_plan_template():
 @login_required
 @permission_required('view_plan_fact_report')
 def sales_funnel():
-    start_date = request.args.get('start_date', '')
-    end_date = request.args.get('end_date', '')
+    # --- ИЗМЕНЕНИЯ ЗДЕСЬ ---
+    # Устанавливаем диапазон по умолчанию (последние 30 дней), если даты не выбраны
+    end_date_str = request.args.get('end_date') or date.today().isoformat()
+    start_date_str = request.args.get('start_date') or (date.today() - timedelta(days=30)).isoformat()
+    # --- КОНЕЦ ИЗМЕНЕНИЙ ---
 
-    # Вызываем новую функцию, которая возвращает одну воронку и пустой словарь
-    funnel_data, _ = funnel_service.get_funnel_data(start_date, end_date)
+    funnel_data, _ = funnel_service.get_funnel_data(start_date_str, end_date_str)
 
     return render_template(
         'sales_funnel.html',
-        title="Воронка продаж",
+        title="Активность по статусам",
         funnel_data=funnel_data,
-        filters={'start_date': start_date, 'end_date': end_date}
+        filters={'start_date': start_date_str, 'end_date': end_date_str}
     )
 @report_bp.route('/hall-of-fame/<path:complex_name>')
 @login_required

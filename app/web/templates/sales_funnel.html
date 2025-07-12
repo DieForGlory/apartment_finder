@@ -1,94 +1,195 @@
 {% extends "base.html" %}
 
+{# === РЕКУРСИВНЫЙ МАКРОС ДЛЯ ОТРИСОВКИ УЗЛОВ ДЕРЕВА === #}
+{% macro render_tree_node(node, parent_count) %}
+<div class="tree-node-wrapper">
+    {# --- HTML-ИЗМЕНЕНИЕ --- #}
+    {# Добавляем класс 'collapsible', если есть дочерние узлы #}
+    <div class="tree-node {% if node.children %}collapsible{% endif %}">
+        <div class="node-name">
+            {# Добавляем иконку-переключатель #}
+            <span class="toggle-icon"></span>
+            {{ node.name }}
+        </div>
+        <div class="node-count">{{ node.count }}</div>
+        {% if parent_count and parent_count > 0 %}
+            <div class="node-conversion">CR: <strong>{{ "%.1f"|format(node.count * 100 / parent_count) }}%</strong></div>
+        {% endif %}
+    </div>
+
+    {# --- HTML-ИЗМЕНЕНИЕ --- #}
+    {# Добавляем класс 'collapsed', чтобы скрыть контейнер по умолчанию #}
+    {% if node.children %}
+        <div class="children-container collapsed">
+            {% for child in node.children %}
+                {{ render_tree_node(child, node.count) }} {# <--- Рекурсивный вызов #}
+            {% endfor %}
+        </div>
+    {% endif %}
+</div>
+{% endmacro %}
+
+
 {% block content %}
-<h1 class="mb-4">Воронка продаж (Когортный анализ)</h1>
+<h1 class="mb-4">Дерево путей заявок</h1>
 
 <div class="card card-glass mb-4">
     <div class="card-body">
+        <h5 class="card-title">Фильтр по дате создания заявки</h5>
         <form method="GET">
             <div class="row g-2 align-items-end">
-                <div class="col-md-5"><label for="start_date" class="form-label">Дата создания заявок от</label><input type="date" name="start_date" id="start_date" class="form-control" value="{{ filters.start_date }}"></div>
-                <div class="col-md-5"><label for="end_date" class="form-label">Дата создания заявок до</label><input type="date" name="end_date" id="end_date" class="form-control" value="{{ filters.end_date }}"></div>
+                <div class="col-md-5"><label for="start_date" class="form-label">От</label><input type="date" name="start_date" id="start_date" class="form-control" value="{{ filters.start_date }}"></div>
+                <div class="col-md-5"><label for="end_date" class="form-label">До</label><input type="date" name="end_date" id="end_date" class="form-control" value="{{ filters.end_date }}"></div>
                 <div class="col-md-2"><button type="submit" class="btn btn-primary w-100">Применить</button></div>
             </div>
         </form>
     </div>
 </div>
 
-<div class="funnel-tree-container">
-    {% if funnel_data and funnel_data.trunk %}
-        <div class="tree-node trunk">
-            <div class="node-name">{{ funnel_data.trunk.name }}</div>
-            <div class="node-count">{{ funnel_data.trunk.count }}</div>
-        </div>
-
-        <div class="tree-connector-main"></div>
-
-        <div class="tree-branches">
-            {% for branch in funnel_data.main_branches %}
-                <div class="branch-wrapper">
-                    <div class="tree-node branch {% if branch.sub_branches %}has-sub-branches{% endif %}">
-                        <div class="node-name">{{ branch.name }}</div>
-                        <div class="node-count">{{ branch.count }}</div>
-                        {% if funnel_data.trunk.count > 0 %}
-                            <div class="node-conversion">{{ "%.1f"|format(branch.count / funnel_data.trunk.count * 100) }}% от созданных</div>
-                        {% endif %}
-                    </div>
-                    {% if branch.sub_branches %}
-                        <div class="tree-connector-sub"></div>
-                        <div class="sub-branches">
-                            {% for sub_branch in branch.sub_branches %}
-                                <div class="branch-wrapper">
-                                     <div class="tree-node sub-branch">
-                                        <div class="node-name">{{ sub_branch.name }}</div>
-                                        <div class="node-count">{{ sub_branch.count }}</div>
-                                         {% if branch.count > 0 %}
-                                            <div class="node-conversion">{{ "%.1f"|format(sub_branch.count / branch.count * 100) }}% от '{{ branch.name }}'</div>
-                                        {% endif %}
-                                    </div>
-                                    {% if sub_branch.sub_branches %}
-                                        <div class="tree-connector-sub"></div>
-                                        <div class="sub-branches">
-                                            {% for sub_sub_branch in sub_branch.sub_branches %}
-                                                 <div class="branch-wrapper">
-                                                     <div class="tree-node sub-branch">
-                                                        <div class="node-name">{{ sub_sub_branch.name }}</div>
-                                                        <div class="node-count">{{ sub_sub_branch.count }}</div>
-                                                         {% if sub_branch.count > 0 %}
-                                                            <div class="node-conversion">{{ "%.1f"|format(sub_sub_branch.count / sub_branch.count * 100) }}% от '{{ sub_branch.name }}'</div>
-                                                        {% endif %}
-                                                    </div>
-                                                </div>
-                                            {% endfor %}
-                                        </div>
-                                    {% endif %}
-                                </div>
-                            {% endfor %}
-                        </div>
-                    {% endif %}
-                </div>
-            {% endfor %}
-        </div>
+<div class="funnel-container">
+    {% if funnel_data and funnel_data.count > 0 %}
+        {# Начальный вызов макроса для корневого элемента #}
+        {{ render_tree_node(funnel_data, None) }}
     {% else %}
-        <div class="card card-glass"><div class="card-body text-center text-muted">Нет данных за выбранный период.</div></div>
+        <div class="card card-glass">
+            <div class="card-body text-center text-muted">Нет данных за выбранный период.</div>
+        </div>
     {% endif %}
 </div>
 
 
 <style>
-    .funnel-tree-container { display: flex; align-items: center; justify-content: center; padding: 2rem 0; flex-wrap: wrap; }
-    .tree-node { background: rgba(var(--bs-body-color-rgb), 0.05); border: 1px solid rgba(var(--bs-body-color-rgb), 0.2); border-radius: 8px; padding: 1rem; text-align: center; min-width: 260px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-    .tree-node.trunk { background: var(--gh-gold); color: black; border-color: var(--gh-gold); }
-    .node-name { font-weight: bold; font-size: 1rem; }
-    .node-count { font-size: 1.8rem; font-weight: bold; margin: 0.25rem 0; }
-    .node-conversion { font-size: 0.8rem; opacity: 0.7; }
-    .tree-connector-main { min-width: 50px; height: 2px; background: rgba(var(--bs-body-color-rgb), 0.3); }
-    .tree-branches { display: flex; flex-direction: column; gap: 1rem; position: relative; }
-    .tree-branches::before { content: ''; position: absolute; left: -25px; top: 50%; height: calc(100% + 1rem); transform: translateY(-50%); width: 2px; background-color: rgba(var(--bs-body-color-rgb), 0.3); }
-    .branch-wrapper { display: flex; align-items: center; position: relative; }
-    .branch-wrapper::before { content: ''; position: absolute; left: -25px; top: 50%; width: 25px; height: 2px; background-color: rgba(var(--bs-body-color-rgb), 0.3); }
-    .tree-connector-sub { min-width: 25px; height: 2px; background: rgba(var(--bs-body-color-rgb), 0.3); }
-    .sub-branches { display: flex; flex-direction: column; gap: 0.5rem; position: relative; }
-    .sub-branches::before { content: ''; position: absolute; left: -25px; top: 50%; height: calc(100% + 0.5rem); transform: translateY(-50%); width: 2px; background-color: rgba(var(--bs-body-color-rgb), 0.3); }
+    .funnel-container {
+        padding: 1rem;
+    }
+    .tree-node-wrapper {
+        position: relative;
+        padding-left: 50px; /* Отступ для дочерних элементов */
+    }
+    .funnel-container > .tree-node-wrapper {
+        padding-left: 0;
+    }
+
+    .tree-node {
+        background: rgba(var(--bs-body-color-rgb), 0.05);
+        border: 1px solid rgba(var(--bs-body-color-rgb), 0.2);
+        border-radius: 8px;
+        padding: 0.75rem 1.25rem;
+        margin-top: 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .funnel-container > .tree-node-wrapper > .tree-node {
+        background: var(--gh-gold);
+        color: black;
+        border-color: var(--gh-gold);
+    }
+
+    /* --- CSS-ИЗМЕНЕНИЯ --- */
+    .tree-node.collapsible {
+        cursor: pointer;
+        user-select: none; /* Чтобы текст не выделялся при клике */
+    }
+    .tree-node.collapsible:hover {
+        background: rgba(var(--bs-body-color-rgb), 0.1);
+    }
+    .children-container {
+        max-height: 10000px; /* Большая высота для анимации */
+        overflow: hidden;
+        transition: max-height 0.5s ease-in-out;
+    }
+    .children-container.collapsed {
+        max-height: 0;
+    }
+    .toggle-icon {
+        display: inline-block;
+        width: 20px;
+        text-align: center;
+        margin-right: 5px;
+        transition: transform 0.3s;
+    }
+    .toggle-icon::before {
+        content: '▸'; /* Иконка "вправо" для свернутого состояния */
+    }
+    .tree-node.expanded .toggle-icon {
+       transform: rotate(90deg); /* Поворачиваем иконку */
+    }
+    /* --- КОНЕЦ CSS-ИЗМЕНЕНИЙ --- */
+
+
+    /* Соединительные линии */
+    .tree-node-wrapper::before {
+        content: '';
+        position: absolute;
+        left: 25px;
+        top: 0;
+        height: 100%;
+        width: 2px;
+        background-color: rgba(var(--bs-body-color-rgb), 0.15);
+    }
+    .tree-node-wrapper:last-child::before {
+        height: 28px;
+    }
+     .tree-node-wrapper::after {
+        content: '';
+        position: absolute;
+        left: 25px;
+        top: 28px;
+        width: 25px;
+        height: 2px;
+        background-color: rgba(var(--bs-body-color-rgb), 0.15);
+    }
+     .funnel-container > .tree-node-wrapper::before,
+     .funnel-container > .tree-node-wrapper::after {
+        display: none;
+    }
+
+    .node-name { font-weight: bold; flex-grow: 1; display: flex; align-items: center;}
+    .node-count { font-size: 1.2rem; font-weight: bold; background: rgba(0,0,0,0.1); padding: 0.2rem 0.6rem; border-radius: 5px;}
+    .node-conversion { font-size: 0.9rem; opacity: 0.8; }
 </style>
+{% endblock %}
+
+
+{% block scripts %}
+{{ super() }}
+<script>
+// --- JS-ЛОГИКА ДЛЯ СКРЫТИЯ/РАСКРЫТИЯ ВЕТОК ---
+document.addEventListener('DOMContentLoaded', function() {
+    // Находим все кликабельные узлы
+    const collapsibles = document.querySelectorAll('.collapsible');
+
+    collapsibles.forEach(function(node) {
+        // Устанавливаем начальное состояние (раскрыты только дети корневого элемента)
+        const isRootChild = node.parentElement.parentElement.classList.contains('funnel-container');
+        if (isRootChild) {
+            node.classList.add('expanded');
+        }
+
+        node.addEventListener('click', function(event) {
+            // Останавливаем событие, чтобы не сработали родительские обработчики
+            event.stopPropagation();
+
+            // Переключаем класс 'expanded' на самом узле (для смены иконки)
+            this.classList.toggle('expanded');
+
+            // Находим контейнер с дочерними элементами (следующий элемент после .tree-node)
+            const content = this.nextElementSibling;
+
+            if (content && content.classList.contains('children-container')) {
+                // Переключаем класс 'collapsed' для скрытия/раскрытия
+                content.classList.toggle('collapsed');
+            }
+        });
+    });
+
+    // Раскрываем первый уровень по умолчанию
+    const rootChildrenContainer = document.querySelector('.funnel-container > .tree-node-wrapper > .children-container');
+    if (rootChildrenContainer) {
+        rootChildrenContainer.classList.remove('collapsed');
+    }
+});
+</script>
 {% endblock %}

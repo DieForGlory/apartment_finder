@@ -65,10 +65,10 @@
                     <td>{{ discount.property_type.value }}</td>
                     <td>{{ discount.payment_method.value }}</td>
                     {% set key = discount.complex_name ~ '|' ~ discount.property_type.value ~ '|' ~ discount.payment_method.value %}
-                    <td><input type="number" step="0.1" class="form-control editable" data-field-name="МПП" name="discount-{{ key }}-mpp" value="{{ discount.mpp * 100 }}"></td>
-                    <td><input type="number" step="0.1" class="form-control editable" data-field-name="РОП" name="discount-{{ key }}-rop" value="{{ discount.rop * 100 }}"></td>
-                    <td><input type="number" step="0.1" class="form-control editable" data-field-name="КД" name="discount-{{ key }}-kd" value="{{ discount.kd * 100 }}"></td>
-                    <td><input type="number" step="0.1" class="form-control editable" data-field-name="Акция" name="discount-{{ key }}-action" value="{{ discount.action * 100 }}"></td>
+                    <td><input type="number" step="1" class="form-control editable" data-field-name="МПП" name="discount-{{ key }}-mpp" value="{{ (discount.mpp * 100) | int }}"></td>
+                    <td><input type="number" step="1" class="form-control editable" data-field-name="РОП" name="discount-{{ key }}-rop" value="{{ (discount.rop * 100) | int}}"></td>
+                    <td><input type="number" step="1" class="form-control editable" data-field-name="КД" name="discount-{{ key }}-kd" value="{{ (discount.kd * 100) | int}}"></td>
+                    <td><input type="number" step="1" class="form-control editable" data-field-name="Акция" name="discount-{{ key }}-action" value="{{ (discount.action * 100) | int}}"></td>
                 </tr>
                 {% else %}
                 <tr>
