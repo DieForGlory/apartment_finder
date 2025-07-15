@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="mb-4">Сводка по конечным статусам</h1>
+
+<div class="card card-glass mb-4">
+    <div class="card-body">
+        <h5 class="card-title">Фильтр по дате создания заявки</h5>
+        <form method="GET">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-5"><label for="start_date" class="form-label">От</label><input type="date" name="start_date" id="start_date" class="form-control" value="{{ filters.start_date }}"></div>
+                <div class="col-md-5"><label for="end_date" class="form-label">До</label><input type="date" name="end_date" id="end_date" class="form-control" value="{{ filters.end_date }}"></div>
+                <div class="col-md-2"><button type="submit" class="btn btn-primary w-100">Применить</button></div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if summary_data and summary_data.total_leads > 0 %}
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="card card-glass">
+            <div class="card-header bg-transparent">
+                <i class="bi bi-flag-fill me-2"></i>Конечный статус (тупик)
+            </div>
+            <div class="card-body">
+                <p>Всего заявок в когорте: <strong>{{ summary_data.total_leads }}</strong></p>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th>Статус</th>
+                                <th class="text-end">Количество заявок</th>
+                                <th class="text-end">% от всех</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in summary_data.summary %}
+                            <tr>
+                                <td>{{ item.name }}</td>
+                                <td class="text-end fw-bold">{{ item.count }}</td>
+                                <td class="text-end text-muted">{{ "%.2f"|format(item.count * 100 / summary_data.total_leads) }}%</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card card-glass">
+             <div class="card-header bg-transparent">
+                <i class="bi bi-pie-chart-fill me-2"></i>Топ-10 конечных статусов
+            </div>
+            <div class="card-body">
+                <canvas id="deadEndChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card card-glass">
+    <div class="card-body text-center text-muted p-5">
+        Нет данных за выбранный период.
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+
+{% block scripts %}
+{{ super() }}
+{# Подключаем библиотеку для диаграмм #}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const chartData = JSON.parse('{{ chart_data_json|safe }}');
+
+    if (chartData && chartData.labels && chartData.labels.length > 0) {
+        const ctx = document.getElementById('deadEndChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'doughnut', // или 'pie'
+            data: {
+                labels: chartData.labels,
+                datasets: [{
+                    label: 'Кол-во заявок',
+                    data: chartData.values,
+                    backgroundColor: [ // Завершенный массив цветов
+                        '#FFC107', '#FFCA28', '#FFD54F', '#FFDDB3', '#FFE082',
+                        '#FFECB3', '#FFF8E1', '#BFA24B', '#A68B3A', '#8C7428'
+                    ],
+                    borderColor: 'rgba(var(--bs-body-bg-rgb), 0.5)',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            // Используем цвет текста из темы для лучшей читаемости
+                            color: 'rgba(var(--bs-body-color-rgb), 0.8)'
+                        }
+                    },
+                    title: {
+                        display: false
+                    }
+                }
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

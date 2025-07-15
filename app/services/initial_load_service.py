@@ -6,7 +6,6 @@ from flask import current_app
 from ..core.extensions import db
 from .discount_service import process_discounts_from_excel
 
-# Обновленные импорты моделей
 from ..models import auth_models
 from ..models import planning_models
 from ..models.estate_models import EstateHouse, EstateSell, EstateDeal
@@ -17,10 +16,12 @@ CURRENT_DIR = os.path.dirname(__file__)
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, '..', '..'))
 DISCOUNTS_EXCEL_PATH = os.path.join(PROJECT_ROOT, 'data_sources', 'discounts_template.xlsx')
 
+CHUNK_SIZE = 60000  # Размер порции для коммитов
+
 
 def _migrate_mysql_estate_data_to_sqlite():
     """
-    Подключается к MySQL, извлекает данные и перезаписывает их в соответствующие базы данных SQLite.
+    Подключается к MySQL, извлекает данные и перезаписывает их в SQLite порциями.
     """
     print("[MIGRATE] 🔄 Начало миграции данных из MySQL...")
 
@@ -31,135 +32,133 @@ def _migrate_mysql_estate_data_to_sqlite():
 
     try:
         print("[MIGRATE] 🧹 Очистка существующих данных...")
-        # Очистка таблиц в основной БД
+        # (Код очистки без изменений)
         db.session.query(EstateDeal).delete()
         db.session.query(EstateSell).delete()
         db.session.query(EstateHouse).delete()
         db.session.query(FinanceOperation).delete()
         db.session.query(EstateBuysStatusLog).delete()
         db.session.query(EstateBuy).delete()
-
-        # Очистка таблиц в auth_db и planning_db
         db.session.query(auth_models.SalesManager).delete()
         db.session.query(planning_models.ManagerSalesPlan).delete()
-
         db.session.commit()
         print("[MIGRATE] ✔️ Данные очищены.")
 
-        # 1. Миграция таблицы estate_houses
-        print("[MIGRATE] 🏡 Загрузка данных из таблицы 'estate_houses'...")
-        mysql_houses = mysql_session.query(EstateHouse).filter(EstateHouse.complex_name.isnot(None)).all()
-        for house in mysql_houses:
-            new_house = EstateHouse(
-                id=house.id,
-                complex_name=house.complex_name,
-                name=house.name,
-                geo_house=house.geo_house
-            )
-            db.session.add(new_house)
-        print(f"[MIGRATE] ✔️ Найдено и подготовлено к записи домов: {len(mysql_houses)}")
+        # --- НАЧАЛО БЛОКА ИСПРАВЛЕНИЙ ---
 
-        print("[MIGRATE] funnel: Заявки из 'estate_buys'...")
-        mysql_buys = mysql_session.query(EstateBuy).all()
-        for buy in mysql_buys:
-            new_buy = EstateBuy(
-                id=buy.id,
-                date_added=buy.date_added,
-                created_at=buy.created_at,
-                status_name=buy.status_name,
-                custom_status_name=buy.custom_status_name
-            )
-            db.session.add(new_buy)
-        print(f"[MIGRATE] ✔️ Найдено и подготовлено к записи заявок: {len(mysql_buys)}")
+        # 1. Миграция estate_houses
+        print("[MIGRATE] 🏡 Загрузка 'estate_houses'...")
+        mysql_houses_query = mysql_session.query(EstateHouse).filter(
+            EstateHouse.complex_name.isnot(None)).execution_options(stream_results=True)
+        count = 0
+        for house in mysql_houses_query:
+            db.session.add(
+                EstateHouse(id=house.id, complex_name=house.complex_name, name=house.name, geo_house=house.geo_house))
+            count += 1
+            if count % CHUNK_SIZE == 0:
+                db.session.commit()
+                print(f"[MIGRATE]   - Записано {count} домов...")
+        db.session.commit()
+        print(f"[MIGRATE] ✔️ Миграция 'estate_houses' завершена. Всего: {count}.")
 
-        print("[MIGRATE] funnel: Лог статусов из 'estate_buys_statuses_log'...")
-        mysql_logs = mysql_session.query(EstateBuysStatusLog).all()
-        for log in mysql_logs:
-            new_log = EstateBuysStatusLog(
-                id=log.id,
-                log_date=log.log_date,
-                estate_buy_id=log.estate_buy_id,
-                status_to_name=log.status_to_name,
-                status_custom_to_name=log.status_custom_to_name
-            )
-            db.session.add(new_log)
-        print(f"[MIGRATE] ✔️ Найдено и подготовлено к записи логов: {len(mysql_logs)}")
+        # 2. Миграция estate_buys
+        print("[MIGRATE] 📈 Загрузка 'estate_buys'...")
+        mysql_buys_query = mysql_session.query(EstateBuy).execution_options(stream_results=True)
+        count = 0
+        for buy in mysql_buys_query:
+            db.session.add(
+                EstateBuy(id=buy.id, date_added=buy.date_added, created_at=buy.created_at, status_name=buy.status_name,
+                          custom_status_name=buy.custom_status_name))
+            count += 1
+            if count % CHUNK_SIZE == 0:
+                db.session.commit()
+                print(f"[MIGRATE]   - Записано {count} заявок...")
+        db.session.commit()
+        print(f"[MIGRATE] ✔️ Миграция 'estate_buys' завершена. Всего: {count}.")
 
-        # 2. Миграция таблицы estate_sells
-        print("[MIGRATE] 🏢 Загрузка данных из таблицы 'estate_sells'...")
-        mysql_sells = mysql_session.query(EstateSell).all()
-        ESTATE_SELL_CATEGORY_MAPPING = {
-            'flat': 'Квартира',
-            'comm': 'Коммерческое помещение',
-            'garage': 'Парковка',
-            'storageroom': 'Кладовое помещение',
-        }
-        for sell in mysql_sells:
-            new_sell = EstateSell(
-                id=sell.id,
-                house_id=sell.house_id,
-                estate_sell_category=ESTATE_SELL_CATEGORY_MAPPING.get(sell.estate_sell_category,
-                                                                      sell.estate_sell_category),
-                estate_floor=sell.estate_floor,
-                estate_rooms=sell.estate_rooms,
-                estate_price_m2=sell.estate_price_m2,
-                estate_sell_status_name=sell.estate_sell_status_name,
-                estate_price=sell.estate_price,
-                estate_area=sell.estate_area
-            )
-            db.session.add(new_sell)
-        print(f"[MIGRATE] ✔️ Найдено и подготовлено к записи объектов продажи: {len(mysql_sells)}")
+        # 3. Миграция estate_buys_statuses_log
+        print("[MIGRATE] 📜 Загрузка 'estate_buys_statuses_log'...")
+        mysql_logs_query = mysql_session.query(EstateBuysStatusLog).execution_options(stream_results=True)
+        count = 0
+        for log in mysql_logs_query:
+            db.session.add(EstateBuysStatusLog(id=log.id, log_date=log.log_date, estate_buy_id=log.estate_buy_id,
+                                               status_to_name=log.status_to_name,
+                                               status_custom_to_name=log.status_custom_to_name))
+            count += 1
+            if count % CHUNK_SIZE == 0:
+                db.session.commit()
+                print(f"[MIGRATE]   - Записано {count} логов статусов...")
+        db.session.commit()
+        print(f"[MIGRATE] ✔️ Миграция 'estate_buys_statuses_log' завершена. Всего: {count}.")
 
-        # 3. Миграция менеджеров
-        print("[MIGRATE] 🧑‍💼 Загрузка данных менеджеров из таблицы 'users'...")
+        # 4. Миграция estate_sells
+        print("[MIGRATE] 🏢 Загрузка 'estate_sells'...")
+        ESTATE_SELL_CATEGORY_MAPPING = {'flat': 'Квартира', 'comm': 'Коммерческое помещение', 'garage': 'Парковка',
+                                        'storageroom': 'Кладовое помещение'}
+        mysql_sells_query = mysql_session.query(EstateSell).execution_options(stream_results=True)
+        count = 0
+        for sell in mysql_sells_query:
+            db.session.add(EstateSell(id=sell.id, house_id=sell.house_id,
+                                      estate_sell_category=ESTATE_SELL_CATEGORY_MAPPING.get(sell.estate_sell_category,
+                                                                                            sell.estate_sell_category),
+                                      estate_floor=sell.estate_floor, estate_rooms=sell.estate_rooms,
+                                      estate_price_m2=sell.estate_price_m2,
+                                      estate_sell_status_name=sell.estate_sell_status_name,
+                                      estate_price=sell.estate_price, estate_area=sell.estate_area))
+            count += 1
+            if count % CHUNK_SIZE == 0:
+                db.session.commit()
+                print(f"[MIGRATE]   - Записано {count} объектов продажи...")
+        db.session.commit()
+        print(f"[MIGRATE] ✔️ Миграция 'estate_sells' завершена. Всего: {count}.")
+
+        # 5. Миграция менеджеров
+        print("[MIGRATE] 🧑‍💼 Загрузка менеджеров...")
         meta = MetaData()
         mysql_users_table = Table('users', meta, Column('id', Integer, primary_key=True), Column('users_name', String))
-        mysql_managers = mysql_session.query(mysql_users_table).all()
+        mysql_managers_query = mysql_session.query(mysql_users_table).execution_options(stream_results=True)
         processed_names = set()
-        added_count = 0
-        for manager in mysql_managers:
+        for manager in mysql_managers_query:
             cleaned_name = (manager.users_name or "").strip()
-            if not cleaned_name or cleaned_name in processed_names:
-                continue
-            processed_names.add(cleaned_name)
-            new_manager = auth_models.SalesManager(id=manager.id, full_name=cleaned_name)
-            db.session.add(new_manager)
-            added_count += 1
-        print(
-            f"[MIGRATE] ✔️ Найдено менеджеров в источнике: {len(mysql_managers)}. Добавлено уникальных: {added_count}")
-
-        # 4. Миграция таблицы estate_deals
-        print("[MIGRATE] 🤝 Загрузка данных из таблицы 'estate_deals'...")
-        mysql_deals = mysql_session.query(EstateDeal).all()
-        for deal in mysql_deals:
-            new_deal = EstateDeal(
-                id=deal.id,
-                estate_sell_id=deal.estate_sell_id,
-                deal_status_name=deal.deal_status_name,
-                deal_manager_id=deal.deal_manager_id,
-                agreement_date=deal.agreement_date,
-                preliminary_date=deal.preliminary_date,
-                deal_sum=deal.deal_sum
-            )
-            db.session.add(new_deal)
-        print(f"[MIGRATE] ✔️ Найдено и подготовлено к записи сделок: {len(mysql_deals)}")
-
-        # 5. Миграция таблицы finances
-        print("[MIGRATE] 💰 Загрузка данных из таблицы 'finances'...")
-        mysql_finances = mysql_session.query(FinanceOperation).all()
-        for fin_op in mysql_finances:
-            new_fin_op = FinanceOperation(
-                id=fin_op.id,
-                estate_sell_id=fin_op.estate_sell_id,
-                summa=fin_op.summa,
-                status_name=fin_op.status_name,
-                date_added=fin_op.date_added
-            )
-            db.session.add(new_fin_op)
-        print(f"[MIGRATE] ✔️ Найдено и подготовлено к записи фин. операций: {len(mysql_finances)}")
-
+            if cleaned_name and cleaned_name not in processed_names:
+                processed_names.add(cleaned_name)
+                db.session.add(auth_models.SalesManager(id=manager.id, full_name=cleaned_name))
         db.session.commit()
-        print("[MIGRATE] ✔️ Все данные успешно сохранены в SQLite.")
+        print(f"[MIGRATE] ✔️ Миграция 'sales_managers' завершена. Добавлено уникальных: {len(processed_names)}.")
+
+        # 6. Миграция estate_deals
+        print("[MIGRATE] 🤝 Загрузка 'estate_deals'...")
+        mysql_deals_query = mysql_session.query(EstateDeal).execution_options(stream_results=True)
+        count = 0
+        for deal in mysql_deals_query:
+            db.session.add(
+                EstateDeal(id=deal.id, estate_sell_id=deal.estate_sell_id, deal_status_name=deal.deal_status_name,
+                           deal_manager_id=deal.deal_manager_id, agreement_date=deal.agreement_date,
+                           preliminary_date=deal.preliminary_date, deal_sum=deal.deal_sum))
+            count += 1
+            if count % CHUNK_SIZE == 0:
+                db.session.commit()
+                print(f"[MIGRATE]   - Записано {count} сделок...")
+        db.session.commit()
+        print(f"[MIGRATE] ✔️ Миграция 'estate_deals' завершена. Всего: {count}.")
+
+        # 7. Миграция finances
+        print("[MIGRATE] 💰 Загрузка 'finances'...")
+        mysql_finances_query = mysql_session.query(FinanceOperation).execution_options(stream_results=True)
+        count = 0
+        for fin_op in mysql_finances_query:
+            db.session.add(FinanceOperation(id=fin_op.id, estate_sell_id=fin_op.estate_sell_id, summa=fin_op.summa,
+                                            status_name=fin_op.status_name, date_added=fin_op.date_added))
+            count += 1
+            if count % CHUNK_SIZE == 0:
+                db.session.commit()
+                print(f"[MIGRATE]   - Записано {count} фин. операций...")
+        db.session.commit()
+        print(f"[MIGRATE] ✔️ Миграция 'finances' завершена. Всего: {count}.")
+
+        # --- КОНЕЦ БЛОКА ИСПРАВЛЕНИЙ ---
+
+        print("[MIGRATE] ✅ Все данные успешно сохранены в SQLite.")
 
     except Exception as e:
         print(f"[MIGRATE] ❌ ОШИБКА во время миграции: {e}")

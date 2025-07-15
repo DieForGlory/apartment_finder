@@ -1,9 +1,18 @@
 # app/web/report_routes.py
+import json
 import os
-from werkzeug.utils import secure_filename
+from datetime import date, timedelta
+# --- ИЗМЕНЕНИЯ ЗДЕСЬ ---
+from datetime import datetime  # Добавлен timedelta
+
 from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app, abort, send_file
 from flask_login import login_required
+from werkzeug.utils import secure_filename
+
 from app.core.decorators import permission_required
+from app.models import auth_models
+# Импортируем модули вместо классов из удаленных файлов
+from app.models import planning_models
 from app.services import (
     report_service,
     selection_service,
@@ -12,14 +21,6 @@ from app.services import (
     manager_report_service, funnel_service
 )
 from app.web.forms import UploadPlanForm, UploadManagerPlanForm
-import json
-from app.core.extensions import db
-
-# --- ИЗМЕНЕНИЯ ЗДЕСЬ ---
-from datetime import date, datetime, timedelta # Добавлен timedelta
-# Импортируем модули вместо классов из удаленных файлов
-from app.models import planning_models
-from app.models import auth_models
 
 report_bp = Blueprint('report', __name__, template_folder='templates')
 
@@ -302,22 +303,7 @@ def download_manager_plan_template():
     )
 
 
-@report_bp.route('/sales-funnel')
-@login_required
-@permission_required('view_plan_fact_report')
-def sales_funnel():
-    # Устанавливаем диапазон по умолчанию (последние 30 дней), если даты не выбраны
-    end_date_str = request.args.get('end_date') or date.today().isoformat()
-    start_date_str = request.args.get('start_date') or (date.today() - timedelta(days=30)).isoformat()
 
-    funnel_data, _ = funnel_service.get_funnel_data(start_date_str, end_date_str)
-
-    return render_template(
-        'sales_funnel.html',
-        title="Активность по статусам",
-        funnel_data=funnel_data,
-        filters={'start_date': start_date_str, 'end_date': end_date_str}
-    )
 
 @report_bp.route('/hall-of-fame/<path:complex_name>')
 @login_required
@@ -336,4 +322,32 @@ def hall_of_fame(complex_name):
         ranking_data=ranking_data,
         filters={'start_date': start_date, 'end_date': end_date},
         usd_to_uzs_rate=usd_rate
+    )
+
+
+
+@report_bp.route('/sales-funnel')
+@login_required
+@permission_required('view_plan_fact_report')
+def sales_funnel():
+    # Даты по умолчанию
+    end_date_str = request.args.get('end_date') or date.today().isoformat()
+    start_date_str = request.args.get('start_date') or (date.today() - timedelta(days=30)).isoformat()
+
+    # Определяем активный вид (по умолчанию 'tree')
+    view_mode = request.args.get('view_mode', 'tree')
+
+    # Получаем данные для ОБОИХ отчетов
+    tree_data, _ = funnel_service.get_funnel_data(start_date_str, end_date_str)
+    metrics_data = funnel_service.get_target_funnel_metrics(start_date_str, end_date_str)
+
+    return render_template(
+        'sales_funnel.html',
+        title="Анализ воронки продаж",
+        # Передаем оба набора данных
+        tree_data=tree_data,
+        metrics_data=metrics_data,
+        # Передаем фильтры и активный вид
+        filters={'start_date': start_date_str, 'end_date': end_date_str},
+        active_view=view_mode
     )

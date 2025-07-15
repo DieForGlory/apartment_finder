@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="mb-2">Список заявок</h1>
+<p class="lead text-muted mb-4">Путь: {{ path_str }}</p>
+
+<div class="card card-glass">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>ID Объекта</th>
+                        <th>Комплекс</th>
+                        <th>Дом</th>
+                        <th>Статус объекта</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for lead in leads %}
+                    <tr>
+                        <td>
+                            <a href="{{ url_for('main.apartment_details', sell_id=lead.id) }}" target="_blank">
+                                {{ lead.id }}
+                            </a>
+                        </td>
+                        <td>{{ lead.complex_name }}</td>
+                        <td>{{ lead.house_name }}</td>
+                        <td><span class="badge bg-secondary">{{ lead.estate_sell_status_name }}</span></td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="text-center text-muted">Заявки не найдены.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
