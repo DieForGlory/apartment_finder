@@ -14,6 +14,77 @@ from ..models.estate_models import EstateDeal, EstateHouse, EstateSell
 from ..models.finance_models import FinanceOperation
 
 
+def generate_consolidated_report_by_period(year: int, period: str, property_type: str):
+    """
+    Генерирует сводный отчет за период (квартал, полугодие), суммируя данные по месяцам.
+    """
+    PERIOD_MONTHS = {
+        'q1': range(1, 4),  # 1-й квартал
+        'q2': range(4, 7),  # 2-й квартал
+        'q3': range(7, 10),  # 3-й квартал
+        'q4': range(10, 13),  # 4-й квартал
+        'h1': range(1, 7),  # 1-е полугодие
+        'h2': range(7, 13),  # 2-е полугодие
+    }
+
+    months_in_period = PERIOD_MONTHS.get(period)
+    if not months_in_period:
+        return [], {}
+
+    # Словари для агрегации данных по проектам и общих итогов
+    aggregated_data = defaultdict(lambda: defaultdict(float))
+    aggregated_totals = defaultdict(float)
+
+    # Цикл по месяцам в выбранном периоде
+    for month in months_in_period:
+        # Получаем стандартный отчет за один месяц
+        monthly_data, monthly_totals = generate_plan_fact_report(year, month, property_type)
+
+        # Суммируем данные по каждому проекту
+        for project_row in monthly_data:
+            complex_name = project_row['complex_name']
+            for key, value in project_row.items():
+                if key != 'complex_name' and isinstance(value, (int, float)):
+                    aggregated_data[complex_name][key] += value
+            aggregated_data[complex_name]['complex_name'] = complex_name
+
+        # Суммируем общие итоги
+        for key, value in monthly_totals.items():
+            if isinstance(value, (int, float)):
+                aggregated_totals[key] += value
+
+    # Формируем итоговый список, пересчитывая проценты
+    final_report_data = []
+    for complex_name, data in aggregated_data.items():
+        data['percent_fact_units'] = (data['fact_units'] / data['plan_units'] * 100) if data['plan_units'] > 0 else 0
+        data['percent_fact_volume'] = (data['fact_volume'] / data['plan_volume'] * 100) if data[
+                                                                                               'plan_volume'] > 0 else 0
+        data['percent_fact_income'] = (data['fact_income'] / data['plan_income'] * 100) if data[
+                                                                                               'plan_income'] > 0 else 0
+        # Прогнозные показатели для периода не имеют смысла, обнуляем
+        data['forecast_units'] = 0
+        data['forecast_volume'] = 0
+        final_report_data.append(dict(data))
+
+    # Пересчитываем итоговые проценты
+    aggregated_totals['percent_fact_units'] = (
+                aggregated_totals['fact_units'] / aggregated_totals['plan_units'] * 100) if aggregated_totals[
+                                                                                                'plan_units'] > 0 else 0
+    aggregated_totals['percent_fact_volume'] = (
+                aggregated_totals['fact_volume'] / aggregated_totals['plan_volume'] * 100) if aggregated_totals[
+                                                                                                  'plan_volume'] > 0 else 0
+    aggregated_totals['percent_fact_income'] = (
+                aggregated_totals['fact_income'] / aggregated_totals['plan_income'] * 100) if aggregated_totals[
+                                                                                                  'plan_income'] > 0 else 0
+    # Обнуляем прогнозы
+    aggregated_totals['forecast_units'] = 0
+    aggregated_totals['forecast_volume'] = 0
+
+    # Сортируем по названию проекта
+    final_report_data.sort(key=lambda x: x['complex_name'])
+
+    return final_report_data, dict(aggregated_totals)
+
 def get_fact_income_data(year: int, month: int, property_type: str):
     """Собирает ФАКТИЧЕСКИЕ поступления (статус 'Проведено')."""
     results = db.session.query(

@@ -78,13 +78,26 @@ def download_plan_template():
 def plan_fact_report():
     today = date.today()
     year = request.args.get('year', today.year, type=int)
+    # --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
+    # Получаем новый параметр 'period'
+    period = request.args.get('period', 'monthly')
     month = request.args.get('month', today.month, type=int)
-    # Используем planning_models.PropertyType
+
     prop_type = request.args.get('property_type', planning_models.PropertyType.FLAT.value)
     usd_rate = currency_service.get_current_effective_rate()
-    summary_data = report_service.get_monthly_summary_by_property_type(year, month)
-    report_data, totals = report_service.generate_plan_fact_report(year, month, prop_type)
-    grand_totals = report_service.calculate_grand_totals(year, month)
+
+    # --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
+    # В зависимости от периода вызываем нужную функцию
+    is_period_view = period != 'monthly'
+    if is_period_view:
+        report_data, totals = report_service.generate_consolidated_report_by_period(year, period, prop_type)
+        summary_data = []  # Сводка по другим типам не нужна в этом режиме
+        grand_totals = {}  # Общий итог тоже пока скроем для простоты
+    else:
+        summary_data = report_service.get_monthly_summary_by_property_type(year, month)
+        report_data, totals = report_service.generate_plan_fact_report(year, month, prop_type)
+        grand_totals = report_service.calculate_grand_totals(year, month)
+
     return render_template('plan_fact_report.html',
                            title="План-фактный отчет",
                            data=report_data,
@@ -96,6 +109,8 @@ def plan_fact_report():
                            property_types=list(planning_models.PropertyType),
                            selected_year=year,
                            selected_month=month,
+                           selected_period=period,  # <-- Передаем выбранный период в шаблон
+                           is_period_view=is_period_view,  # <-- Флаг для условного рендеринга
                            usd_to_uzs_rate=usd_rate,
                            selected_prop_type=prop_type)
 
@@ -325,6 +340,24 @@ def hall_of_fame(complex_name):
     )
 
 
+@report_bp.route('/funnel-leads')
+@login_required
+@permission_required('view_plan_fact_report')
+def funnel_leads():
+    """
+    Отображает список заявок для конкретного узла воронки.
+    """
+    lead_ids_str = request.args.get('ids', '')
+    node_name = request.args.get('name', 'Выбранные заявки')
+
+    leads = funnel_service.get_leads_details_by_ids(lead_ids_str)
+
+    return render_template(
+        'funnel_leads.html',  # Новый шаблон
+        title=f"Заявки из узла: {node_name}",
+        leads=leads,
+        node_name=node_name
+    )
 
 @report_bp.route('/sales-funnel')
 @login_required
