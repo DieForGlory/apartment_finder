@@ -32,7 +32,7 @@ def inventory_summary():
     summary_by_complex, overall_summary = inventory_service.get_inventory_summary_data()
     usd_rate = currency_service.get_current_effective_rate()
     return render_template(
-        'inventory_summary.html',
+        'reports/inventory_summary.html',
         title="Сводка по товарному запасу",
         summary=summary_by_complex,
         overall_summary=overall_summary,
@@ -98,7 +98,7 @@ def plan_fact_report():
         report_data, totals = report_service.generate_plan_fact_report(year, month, prop_type)
         grand_totals = report_service.calculate_grand_totals(year, month)
 
-    return render_template('plan_fact_report.html',
+    return render_template('reports/plan_fact_report.html',
                            title="План-фактный отчет",
                            data=report_data,
                            summary_data=summary_data,
@@ -135,7 +135,7 @@ def upload_plan():
         except Exception as e:
             flash(f"Произошла ошибка при обработке файла: {e}", "danger")
         return redirect(url_for('report.upload_plan'))
-    return render_template('upload_plan.html', title="Загрузка плана", form=form)
+    return render_template('reports/upload_plan.html', title="Загрузка плана", form=form)
 
 @report_bp.route('/commercial-offer/complex/<int:sell_id>')
 @login_required
@@ -158,7 +158,7 @@ def generate_complex_kp(sell_id):
     current_date = datetime.now().strftime("%d.%m.%Y %H:%M")
     usd_rate = currency_service.get_current_effective_rate()
     return render_template(
-        'commercial_offer_complex.html',
+        'main/commercial_offer_complex.html',
         title=f"КП (сложный расчет) по объекту ID {sell_id}",
         data=card_data,
         calc_type=calc_type,
@@ -179,7 +179,7 @@ def project_dashboard(complex_name):
     charts_json = json.dumps(data.get('charts', {}))
     usd_rate = currency_service.get_current_effective_rate()
     return render_template(
-        'project_dashboard.html',
+        'reports/project_dashboard.html',
         title=f"Аналитика по проекту {complex_name}",
         data=data,
         charts_json=charts_json,
@@ -206,7 +206,7 @@ def currency_settings():
                 flash("Неверное значение для ручного курса.", "danger")
         return redirect(url_for('report.currency_settings'))
     settings = currency_service._get_settings()
-    return render_template('currency_settings.html', settings=settings, title="Настройки курса валют")
+    return render_template('settings/currency_settings.html', settings=settings, title="Настройки курса валют")
 
 
 @report_bp.route('/export-plan-fact')
@@ -246,7 +246,7 @@ def manager_performance_report():
         query = query.join(planning_models.ManagerSalesPlan).distinct()
     managers = query.order_by(auth_models.SalesManager.full_name).all()
     return render_template(
-        'manager_performance_overview.html',
+        'reports/manager_performance_overview.html',
         title="Выполнение планов менеджерами",
         managers=managers,
         search_query=search_query,
@@ -271,7 +271,7 @@ def manager_performance_detail(manager_id):
         abort(404, "Менеджер не найден или данные отсутствуют.")
     complex_ranking = manager_report_service.get_manager_complex_ranking(manager_id)
     return render_template(
-        'manager_performance_detail.html',
+        'reports/manager_performance_detail.html',
         title=f"Детализация по {performance_data['manager_name']}",
         data=performance_data,
         kpi_data=kpi_data,
@@ -301,7 +301,7 @@ def upload_manager_plan():
         except Exception as e:
             flash(f"Произошла ошибка при обработке файла: {str(e)}", "danger")
         return redirect(url_for('report.manager_performance_report'))
-    return render_template('upload_manager_plan.html', title="Загрузка планов менеджеров", form=form)
+    return render_template('reports/upload_manager_plan.html', title="Загрузка планов менеджеров", form=form)
 
 
 @report_bp.route('/download-manager-plan-template')
@@ -331,7 +331,7 @@ def hall_of_fame(complex_name):
     usd_rate = currency_service.get_current_effective_rate()
 
     return render_template(
-        'hall_of_fame.html',
+        'reports/hall_of_fame.html',
         title=f"Зал славы: {complex_name}",
         complex_name=complex_name,
         ranking_data=ranking_data,
@@ -353,7 +353,7 @@ def funnel_leads():
     leads = funnel_service.get_leads_details_by_ids(lead_ids_str)
 
     return render_template(
-        'funnel_leads.html',  # Новый шаблон
+        'reports/funnel_leads.html',  # Новый шаблон
         title=f"Заявки из узла: {node_name}",
         leads=leads,
         node_name=node_name
@@ -375,7 +375,7 @@ def sales_funnel():
     metrics_data = funnel_service.get_target_funnel_metrics(start_date_str, end_date_str)
 
     return render_template(
-        'sales_funnel.html',
+        'reports/sales_funnel.html',
         title="Анализ воронки продаж",
         # Передаем оба набора данных
         tree_data=tree_data,

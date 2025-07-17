@@ -22,7 +22,8 @@ def setup_database():
 
         # Импортируем все модули с моделями, чтобы SQLAlchemy о них знала
         from app.models import (auth_models, planning_models, estate_models,
-                                finance_models, exclusion_models, funnel_models)
+                                finance_models, exclusion_models, funnel_models,
+                        special_offer_models)
 
         # Используем один вызов db.create_all(), который создаст таблицы
         # в основной базе и во всех базах, указанных вSQLALCHEMY_BINDS.
@@ -47,6 +48,7 @@ def setup_database():
                 'manage_settings': 'Управление настройками (калькуляторы, курс)',
                 'manage_users': 'Управление пользователями',
                 'upload_data': 'Загрузка данных (планы и т.д.)',
+                'manage_specials': 'Управление специальными предложениями (акции)'
             }
 
             roles_permissions = {
@@ -58,7 +60,8 @@ def setup_database():
                 'ADMIN': [
                     'view_selection', 'view_discounts', 'view_version_history', 'manage_discounts',
                     'manage_settings', 'manage_users', 'upload_data',
-                    'view_plan_fact_report', 'view_inventory_report', 'view_manager_report', 'view_project_dashboard'
+                    'view_plan_fact_report', 'view_inventory_report', 'view_manager_report', 'view_project_dashboard',
+                    'manage_specials'
                 ]
             }
 

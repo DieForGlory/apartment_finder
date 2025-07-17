@@ -34,8 +34,8 @@ def get_target_funnel_metrics(start_date_str: str, end_date_str: str):
     except (ValueError, TypeError):
         pass
 
-    initial_cohort_ids = {row[0] for row in cohort_query.all()}
-    total_leads_count = len(initial_cohort_ids)
+    # --- ИЗМЕНЕНИЕ: Используем подзапрос ---
+    total_leads_count = cohort_query.count()
 
     if not total_leads_count:
         return {'total_leads': 0}
@@ -44,7 +44,11 @@ def get_target_funnel_metrics(start_date_str: str, end_date_str: str):
         EstateBuysStatusLog.estate_buy_id,
         EstateBuysStatusLog.status_to_name,
         EstateBuysStatusLog.status_custom_to_name
-    ).filter(EstateBuysStatusLog.estate_buy_id.in_(initial_cohort_ids)).all()
+    ).filter(EstateBuysStatusLog.estate_buy_id.in_(cohort_query)).all() # <-- Передаем сам запрос
+
+    # --- ИЗМЕНЕНИЕ: Получаем ID для дальнейшей обработки ---
+    initial_cohort_ids = {row[0] for row in cohort_query.all()}
+
 
     statuses_by_lead = {}
     for lead_id, status, custom_status in logs:
@@ -183,23 +187,26 @@ def get_funnel_data(start_date_str: str, end_date_str: str):
         try:
             start_date = date.fromisoformat(start_date_str)
             cohort_query = cohort_query.filter(EstateBuy.date_added >= start_date)
-        except (ValueError, TypeError): pass
+        except (ValueError, TypeError):
+            pass
     if end_date_str:
         try:
             end_date = date.fromisoformat(end_date_str)
             cohort_query = cohort_query.filter(EstateBuy.date_added <= end_date)
-        except (ValueError, TypeError): pass
+        except (ValueError, TypeError):
+            pass
 
-    all_cohort_ids = {row[0] for row in cohort_query.all()}
-    if not all_cohort_ids:
+    # --- ИЗМЕНЕНИЕ: Не загружаем ID в память, оставляем как объект запроса ---
+    total_leads = cohort_query.count()
+    if not total_leads:
         return {'name': 'Заявки, созданные за период', 'count': 0, 'ids': [], 'children': []}, {}
 
-    # === Шаг 2: Получаем все логи для когорты ===
+    # === Шаг 2: Получаем все логи для когорты, используя подзапрос ===
     logs = db.session.query(
         EstateBuysStatusLog.estate_buy_id,
         EstateBuysStatusLog.status_to_name,
         EstateBuysStatusLog.status_custom_to_name
-    ).filter(EstateBuysStatusLog.estate_buy_id.in_(all_cohort_ids)).order_by(
+    ).filter(EstateBuysStatusLog.estate_buy_id.in_(cohort_query)).order_by(  # <-- Передаем сам запрос
         EstateBuysStatusLog.estate_buy_id, EstateBuysStatusLog.log_date
     ).all()
 
@@ -210,8 +217,11 @@ def get_funnel_data(start_date_str: str, end_date_str: str):
         if not paths_by_buy_id[log.estate_buy_id] or paths_by_buy_id[log.estate_buy_id][-1] != formatted_status:
             paths_by_buy_id[log.estate_buy_id].append(formatted_status)
 
+    # --- ИЗМЕНЕНИЕ: Получаем все ID когорты для корневого узла дерева ---
+    all_cohort_ids = [row[0] for row in cohort_query.all()]
+
     # === Шаг 4: Строим древовидную структуру С ID ===
-    tree = {'name': 'Заявки, созданные за период', 'ids': list(all_cohort_ids), 'children': {}}
+    tree = {'name': 'Заявки, созданные за период', 'ids': all_cohort_ids, 'children': {}}
     for buy_id, path in paths_by_buy_id.items():
         current_level = tree
         for stage in path:

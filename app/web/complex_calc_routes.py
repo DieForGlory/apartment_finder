@@ -16,7 +16,7 @@ def show_page(sell_id):
     if not card_data.get('apartment'):
         flash("Объект не найден.", "danger")
         return redirect(url_for('main.selection'))
-    return render_template('complex_calculations.html', title="Сложные расчёты", data=card_data)
+    return render_template('calc/complex_calculations.html', title="Сложные расчёты", data=card_data)
 
 
 @complex_calc_bp.route('/calculate-installment', methods=['POST'])

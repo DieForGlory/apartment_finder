@@ -144,11 +144,21 @@ def _migrate_mysql_estate_data_to_sqlite():
 
         # 7. Миграция finances
         print("[MIGRATE] 💰 Загрузка 'finances'...")
+        # SQLAlchemy теперь знает о 'respons_manager_id' благодаря модели
         mysql_finances_query = mysql_session.query(FinanceOperation).execution_options(stream_results=True)
         count = 0
         for fin_op in mysql_finances_query:
-            db.session.add(FinanceOperation(id=fin_op.id, estate_sell_id=fin_op.estate_sell_id, summa=fin_op.summa,
-                                            status_name=fin_op.status_name, date_added=fin_op.date_added))
+            # fin_op.manager_id теперь содержит значение из колонки 'respons_manager_id'
+            db.session.add(FinanceOperation(
+                id=fin_op.id,
+                estate_sell_id=fin_op.estate_sell_id,
+                summa=fin_op.summa,
+                status_name=fin_op.status_name,
+                date_added=fin_op.date_added,
+                payment_type=fin_op.payment_type,
+                # <-- ИЗМЕНЕНИЕ ЗДЕСЬ: Явно сохраняем ID менеджера
+                manager_id=fin_op.manager_id
+            ))
             count += 1
             if count % CHUNK_SIZE == 0:
                 db.session.commit()

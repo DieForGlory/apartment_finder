@@ -31,7 +31,7 @@ def login():
         else:
             flash('Неверный логин или пароль.', 'danger')
 
-    return render_template('login.html', title='Вход в систему')
+    return render_template('auth/login.html', title='Вход в систему')
 
 
 @auth_bp.route('/logout')
@@ -66,7 +66,7 @@ def user_management():
         return redirect(url_for('auth.user_management'))
 
     users = auth_models.User.query.order_by(auth_models.User.id).all()
-    return render_template('user_management.html', title="Управление пользователями", users=users, form=form)
+    return render_template('auth/user_management.html', title="Управление пользователями", users=users, form=form)
 
 
 @auth_bp.route('/users/delete/<int:user_id>', methods=['POST'])
@@ -97,7 +97,7 @@ def change_password():
             flash('Ваш пароль успешно изменен.', 'success')
             return redirect(url_for('main.selection'))
 
-    return render_template('change_password.html', title="Смена пароля", form=form)
+    return render_template('auth/change_password.html', title="Смена пароля", form=form)
 
 
 @auth_bp.route('/roles')
@@ -105,7 +105,7 @@ def change_password():
 @permission_required('manage_users')
 def manage_roles():
     roles = auth_models.Role.query.order_by(auth_models.Role.name).all()
-    return render_template('manage_roles.html', title="Управление ролями", roles=roles)
+    return render_template('auth/manage_roles.html', title="Управление ролями", roles=roles)
 
 
 @auth_bp.route('/role/edit/<int:role_id>', methods=['GET', 'POST'])
@@ -140,7 +140,7 @@ def role_form(role_id):
     selected_permission_ids = {p.id for p in role.permissions}
 
     return render_template(
-        'role_form.html',
+        'auth/role_form.html',
         title=title,
         form=form,
         all_permissions=all_permissions,

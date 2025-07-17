@@ -32,7 +32,7 @@ def get_inventory_summary_data():
     }
 
     # 3. Запрос к базе данных (без изменений, так как модели из main_db)
-    valid_statuses = ["Маркетинговый резерв", "Подбор"]
+    valid_statuses = ["Маркетинговый резерв", "Подбор", "Бронь"] # <-- Добавлен статус 'Бронь'
     unsold_sells_query = db.session.query(EstateSell).options(
         db.joinedload(EstateSell.house)
     ).filter(
@@ -70,7 +70,7 @@ def get_inventory_summary_data():
             deduction = 3_000_000 if prop_type_enum == PropertyType.FLAT else 0
             price_for_calc = sell.estate_price - deduction
             if price_for_calc > 0:
-                total_discount_rate = (discount.mpp or 0) + (discount.rop or 0) + (discount.action or 0)
+                total_discount_rate = (discount.mpp or 0) + (discount.rop or 0) # <-- 'action' заменено на 'kd'
                 bottom_price = price_for_calc * (1 - total_discount_rate)
 
         metrics = summary_by_complex[complex_name][sell.estate_sell_category]

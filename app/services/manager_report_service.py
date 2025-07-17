@@ -1,5 +1,5 @@
 # app/services/manager_report_service.py
-
+from sqlalchemy import or_
 import pandas as pd
 import re
 from datetime import datetime, date
@@ -78,6 +78,7 @@ def get_manager_performance_details(manager_id: int, year: int):
     plans_query = planning_models.ManagerSalesPlan.query.filter_by(manager_id=manager_id, year=year).all()
     plan_data = {p.month: p for p in plans_query}
 
+    # Этот запрос для "Контрактации" остается без изменений
     effective_date = func.coalesce(EstateDeal.agreement_date, EstateDeal.preliminary_date)
     fact_volume_query = db.session.query(
         extract('month', effective_date).label('month'),
@@ -89,16 +90,50 @@ def get_manager_performance_details(manager_id: int, year: int):
     ).group_by('month').all()
     fact_volume_data = {row.month: row.fact_volume or 0 for row in fact_volume_query}
 
-    fact_income_query = db.session.query(
+    # --- НАЧАЛО ОТЛАДОЧНОГО БЛОКА ---
+
+    print("\n" + "=" * 50)
+    print(f"🕵️ [ОТЛАДКА] Начинаем прямой поиск поступлений для Менеджера ID: {manager_id} за {year} год.")
+
+    # Этап 1: Ищем ВСЕ операции в таблице финансов для этого ID менеджера
+    base_query = db.session.query(FinanceOperation).filter(FinanceOperation.manager_id == manager_id)
+    print(f"✔️ [Этап 1] Найдено ВСЕГО финансовых операций для manager_id={manager_id}: {base_query.count()}")
+
+    # Этап 2: Добавляем фильтр по году
+    query_after_year_filter = base_query.filter(extract('year', FinanceOperation.date_added) == year)
+    print(f"✔️ [Этап 2] Осталось операций после фильтра по {year} году: {query_after_year_filter.count()}")
+
+    # Этап 3: Добавляем фильтр по статусу "Проведено"
+    query_after_status_filter = query_after_year_filter.filter(FinanceOperation.status_name == "Проведено")
+    print(f"✔️ [Этап 3] Осталось операций после фильтра по статусу 'Проведено': {query_after_status_filter.count()}")
+
+    # Этап 4: Проверим, какие типы платежей есть у найденных операций
+    if query_after_status_filter.count() > 0:
+        found_payment_types = [res[0] for res in
+                               query_after_status_filter.with_entities(FinanceOperation.payment_type).distinct().all()]
+        print(f"ℹ️ [ИНФО] У этих операций найдены следующие типы платежей: {found_payment_types}")
+
+    # Этап 5: Добавляем финальный фильтр, исключающий возвраты
+    final_query_before_grouping = query_after_status_filter.filter(
+        or_(
+            FinanceOperation.payment_type != "Возврат поступлений при отмене сделки",
+            FinanceOperation.payment_type.is_(None)
+        )
+    )
+    print(
+        f"✔️ [Этап 4] Осталось операций после исключения возвратов и добавления NULL: {final_query_before_grouping.count()}")
+
+    # Финальный запрос для получения данных
+    fact_income_query = final_query_before_grouping.with_entities(
         extract('month', FinanceOperation.date_added).label('month'),
         func.sum(FinanceOperation.summa).label('fact_income')
-    ).join(EstateSell, FinanceOperation.estate_sell_id == EstateSell.id) \
-        .join(EstateDeal, EstateSell.id == EstateDeal.estate_sell_id) \
-        .filter(
-        EstateDeal.deal_manager_id == manager_id,
-        extract('year', FinanceOperation.date_added) == year,
-        FinanceOperation.status_name == "Проведено"
     ).group_by('month').all()
+
+    print(f"✅ [РЕЗУЛЬТАТ] Итоговый запрос вернул {len(fact_income_query)} сгруппированных по месяцам записей.")
+    print("=" * 50 + "\n")
+
+    # --- КОНЕЦ ОТЛАДОЧНОГО БЛОКА ---
+
     fact_income_data = {row.month: row.fact_income or 0 for row in fact_income_query}
 
     report = []

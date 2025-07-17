@@ -4,7 +4,10 @@ import json
 from datetime import datetime
 from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app
 from flask_login import login_required, current_user
+from app.services import special_offer_service
+from flask import abort
 
+from ..models import auth_models
 # --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
 # Импортируем PropertyType и PaymentMethod из их нового местоположения
 from ..models.planning_models import PropertyType, PaymentMethod
@@ -20,6 +23,27 @@ from ..core.decorators import permission_required
 
 main_bp = Blueprint('main', __name__, template_folder='templates')
 
+
+@main_bp.route('/show-all-routes')
+@login_required
+def show_all_routes():
+    """Временная страница для отображения всех зарегистрированных маршрутов."""
+    rules = []
+    for rule in current_app.url_map.iter_rules():
+        rules.append(f"Endpoint: {rule.endpoint}, Path: {rule.rule}, Methods: {','.join(rule.methods)}")
+
+    rules.sort()
+
+    response_html = "<h1>Зарегистрированные URL-адреса</h1><ul>"
+    for r in rules:
+        # Выделим жирным маршруты нашего проблемного модуля
+        if 'special_offer' in r:
+            response_html += f"<li><strong>{r}</strong></li>"
+        else:
+            response_html += f"<li>{r}</li>"
+    response_html += "</ul>"
+
+    return response_html
 
 @main_bp.route('/search-by-id', methods=['POST'])
 @login_required
@@ -48,9 +72,9 @@ def index():
 
     if not sells_pagination:
         flash("Не удалось загрузить данные о продажах.", "danger")
-        return render_template('index.html', title='Ошибка', sells_pagination=None)
+        return render_template('main/index.html', title='Ошибка', sells_pagination=None)
 
-    return render_template('index.html', title='Главная', sells_pagination=sells_pagination)
+    return render_template('main/index.html', title='Главная', sells_pagination=sells_pagination)
 
 
 @main_bp.route('/selection', methods=['GET', 'POST'])
@@ -83,7 +107,7 @@ def selection():
         except (ValueError, TypeError):
             flash("Пожалуйста, введите корректную сумму бюджета.", "danger")
 
-    return render_template('selection.html',
+    return render_template('main/selection.html',
                            title="Подбор по бюджету",
                            results=results,
                            property_types=property_types,
@@ -99,7 +123,7 @@ def apartment_details(sell_id):
     all_discounts_data = card_data.pop('all_discounts_for_property_type', [])
 
     return render_template(
-        'apartment_details.html',
+        'main/apartment_details.html',
         data=card_data,
         all_discounts_for_property_type=all_discounts_data,
         title=f"Детали объекта ID {sell_id}"
@@ -167,7 +191,7 @@ def generate_commercial_offer(sell_id):
     actual_usd_rate = usd_rate_from_cbu if usd_rate_from_cbu is not None else fallback_usd_rate
 
     return render_template(
-        'commercial_offer.html',
+        'main/commercial_offer.html',
         data=card_data,
         current_date=current_date,
         usd_to_uzs_rate=actual_usd_rate,
@@ -219,9 +243,67 @@ def manage_exclusions():
     excluded_complexes_names = {c.complex_name for c in settings_service.get_all_excluded_complexes()}
 
     return render_template(
-        'manage_exclusions.html',
+        'settings/manage_exclusions.html',
         title="Управление исключениями",
         excluded_sells=excluded_sells,
         all_complexes=[c[0] for c in all_complexes],
         excluded_complex_names=excluded_complexes_names
     )
+
+
+@main_bp.route('/monthly-specials')
+@login_required
+def monthly_specials_list():
+    """Отображает галерею активных квартир месяца."""
+    active_offers = special_offer_service.get_active_special_offers()
+    return render_template('special_offers/monthly_specials_list.html',
+                           title="Квартиры месяца",
+                           offers=active_offers)
+
+
+@main_bp.route('/special-offer/<int:sell_id>')
+@login_required
+def special_offer_detail(sell_id):
+    """Отображает детальную страницу спец. предложения."""
+    offer_details = special_offer_service.get_special_offer_details_by_sell_id(sell_id)
+    if not offer_details:
+        abort(404)
+
+    # Дополнительно получаем стандартную карточку квартиры для полной информации
+    full_card_data = get_apartment_card_data(sell_id)
+
+    return render_template('special_offers/special_offer_detail.html',
+                           title=f"Спецпредложение: Квартира {sell_id}",
+                           offer=offer_details,
+                           card_data=full_card_data)
+
+
+@main_bp.route('/fix-permissions')
+@login_required
+def fix_permissions():
+    """Разовый маршрут для исправления прав доступа."""
+    if not current_user.role or current_user.role.name != 'ADMIN':
+        return "Доступ только для администраторов!", 403
+
+    # 1. Находим роль ADMIN
+    admin_role = auth_models.Role.query.filter_by(name='ADMIN').first()
+    if not admin_role:
+        return "Ошибка: роль 'ADMIN' не найдена."
+
+    # 2. Находим (или создаем) право 'manage_specials'
+    permission_to_add = auth_models.Permission.query.filter_by(name='manage_specials').first()
+    if not permission_to_add:
+        permission_to_add = auth_models.Permission(name='manage_specials', description='Управление квартирами месяца')
+        db.session.add(permission_to_add)
+        # Сразу коммитим, чтобы право появилось в БД
+        db.session.commit()
+
+    # 3. Проверяем, есть ли уже это право у роли
+    has_permission = any(p.id == permission_to_add.id for p in admin_role.permissions)
+
+    if not has_permission:
+        admin_role.permissions.append(permission_to_add)
+        db.session.commit()
+        return "Успех! Право 'manage_specials' было добавлено к роли ADMIN. Теперь страница должна открыться."
+    else:
+        return "Право 'manage_specials' уже было у роли ADMIN. Проблема может быть в другом."

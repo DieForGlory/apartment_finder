@@ -34,7 +34,7 @@ def manage_settings():
     if hasattr(settings, 'standard_installment_min_dp_percent'):
         form.standard_installment_min_dp_percent.data = settings.standard_installment_min_dp_percent
 
-    return render_template('calculator_settings.html', title="Настройки калькуляторов", form=form)
+    return render_template('settings/calculator_settings.html', title="Настройки калькуляторов", form=form)
 
 @settings_bp.route('/manage-inventory-exclusions', methods=['GET', 'POST'])
 @login_required
@@ -54,7 +54,7 @@ def manage_inventory_exclusions():
     excluded_names = {c.complex_name for c in excluded_complexes}
 
     return render_template(
-        'manage_exclusions.html',
+        'settings/manage_exclusions.html',
         title="Исключения в сводке по остаткам",
         all_complexes=[c[0] for c in all_complexes],
         excluded_names=excluded_names
@@ -86,7 +86,7 @@ def manage_email_recipients():
     subscribed_user_ids = {r.user_id for r in auth_models.EmailRecipient.query.all()}
 
     return render_template(
-        'manage_recipients.html',
+        'settings/manage_recipients.html',
         title="Получатели уведомлений",
         all_users=all_users,
         subscribed_user_ids=subscribed_user_ids

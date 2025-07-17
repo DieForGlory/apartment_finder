@@ -32,7 +32,7 @@ discount_bp = Blueprint('discount', __name__, template_folder='templates')
 def discounts_overview():
     # Сервис get_discounts_with_summary сам должен быть обновлен для работы с planning_models
     discounts_data = get_discounts_with_summary()
-    return render_template('discounts.html', title="Система скидок", structured_discounts=discounts_data)
+    return render_template('discounts/discounts.html', title="Система скидок", structured_discounts=discounts_data)
 
 
 @discount_bp.route('/download-template')
@@ -77,7 +77,7 @@ def upload_discounts():
             flash(f"Произошла ошибка при обработке файла: {e}", "danger")
             return redirect(url_for('discount.upload_discounts'))
 
-    return render_template('upload.html', title='Загрузка скидок', form=form)
+    return render_template('discounts/upload.html', title='Загрузка скидок', form=form)
 
 
 @discount_bp.route('/versions')
@@ -88,7 +88,7 @@ def versions_index():
     versions = planning_models.DiscountVersion.query.order_by(planning_models.DiscountVersion.version_number.desc()).all()
     active_version_obj = next((v for v in versions if v.is_active), None)
     return render_template(
-        'versions.html',
+        'discounts/versions.html',
         versions=versions,
         active_version_id=active_version_obj.id if active_version_obj else None,
         latest_version_id=versions[0].id if versions else None,
@@ -107,7 +107,7 @@ def view_version(version_id):
         planning_models.Discount.payment_method
     ).all()
     return render_template(
-        'view_version.html',
+        'discounts/view_version.html',
         version=version,
         discounts=discounts,
         title=f"Просмотр Версии №{version.version_number}"
@@ -145,7 +145,7 @@ def edit_version(version_id):
     complex_comments = {c.complex_name: c.comment for c in comments_for_version}
 
     return render_template(
-        'edit_version.html',
+        'discounts/edit_version.html',
         version=version,
         discounts=discounts,
         complex_comments=complex_comments,

@@ -6,11 +6,11 @@ from wtforms import (StringField, PasswordField, SubmitField, FileField, SelectF
                      SelectMultipleField, TextAreaField, IntegerField, FloatField)
 from wtforms.validators import DataRequired, Length, EqualTo, ValidationError, Email, NumberRange
 from wtforms.widgets import CheckboxInput
-
+from wtforms import FileField, TextAreaField, FloatField
 # --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
 # Импортируем сам модуль auth_models
 from ..models import auth_models
-
+from wtforms.validators import Optional
 
 class UploadExcelForm(FlaskForm):
     """Форма для загрузки Excel файла."""
@@ -97,3 +97,19 @@ class RoleForm(FlaskForm):
         widget=CheckboxInput()
     )
     submit = SubmitField('Сохранить')
+
+class MonthlySpecialForm(FlaskForm):
+    """Форма для добавления/редактирования 'Квартиры месяца'."""
+    sell_id = IntegerField('ID Квартиры (из estate_sells)', validators=[DataRequired(message="ID квартиры обязателен.")])
+    usp_text = TextAreaField('УТП (Уникальное Торговое Предложение)', validators=[DataRequired(message="Укажите УТП.")])
+    extra_discount = FloatField('Дополнительная скидка (%)', validators=[DataRequired(), NumberRange(min=0, max=50)])
+    floor_plan_image = FileField('Файл с планировкой (png, jpg, svg, webp)', validators=[DataRequired(message="Загрузите планировку.")])
+    submit = SubmitField('Добавить предложение')
+
+class EditMonthlySpecialForm(FlaskForm):
+    """Форма для РЕДАКТИРОВАНИЯ 'Квартиры месяца'."""
+    usp_text = TextAreaField('УТП (Уникальное Торговое Предложение)', validators=[DataRequired(message="Укажите УТП.")])
+    extra_discount = FloatField('Дополнительная скидка (%)', validators=[DataRequired(), NumberRange(min=0, max=50)])
+    # Делаем поле файла необязательным
+    floor_plan_image = FileField('Загрузить НОВУЮ планировку (необязательно)', validators=[Optional()])
+    submit = SubmitField('Сохранить изменения')
