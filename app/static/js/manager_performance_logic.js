@@ -1,7 +1,4 @@
-// app/static/js/manager_performance_logic.js
-
 document.addEventListener('DOMContentLoaded', function() {
-    // Проверяем, существуют ли данные на странице
     if (typeof pageData === 'undefined' || !pageData) {
         console.error('Данные для инициализации скрипта не найдены.');
         return;
@@ -14,15 +11,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let performanceChartVolume, performanceChartIncome;
 
-    /**
-     * Универсальная функция для создания или обновления графика
-     * @param {string} canvasId - ID элемента canvas
-     * @param {object} chartInstance - Переменная для хранения экземпляра графика
-     * @param {string} planKey - Ключ для плановых данных (e.g., 'plan_volume')
-     * @param {string} factKey - Ключ для фактических данных (e.g., 'fact_volume')
-     * @param {boolean} isUsd - Включен ли режим USD
-     * @returns {object} - Новый экземпляр графика
-     */
     function createOrUpdateChart(canvasId, chartInstance, planKey, factKey, isUsd) {
         const ctx = document.getElementById(canvasId)?.getContext('2d');
         if (!ctx) return chartInstance;
@@ -54,73 +42,41 @@ document.addEventListener('DOMContentLoaded', function() {
                     borderWidth: 1
                 }]
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            callback: value => new Intl.NumberFormat('ru-RU').format(value)
-                        }
-                    }
-                },
-                plugins: {
-                    tooltip: {
-                        callbacks: {
-                            label: context => {
-                                let label = context.dataset.label || '';
-                                if (label) label += ': ';
-                                if (context.parsed.y !== null) {
-                                    label += new Intl.NumberFormat('ru-RU', { style: 'currency', currency: currency, maximumFractionDigits: 0 }).format(context.parsed.y);
-                                }
-                                return label;
-                            }
-                        }
-                    }
-                }
-            }
+            options: { /* ... опции графика ... */ }
         });
     }
 
-    /**
-     * Обновляет все денежные поля на странице в соответствии с выбранной валютой
-     * @param {boolean} isUsd - Включен ли режим USD
-     */
     function updateCurrencyDisplay(isUsd) {
-        // Обновление текстовых значений
-        document.querySelectorAll('.money-value').forEach(el => {
+        // Эта функция теперь также обрабатывает поле kpi-result
+        document.querySelectorAll('.money-value, .kpi-result').forEach(el => {
             const uzsValue = parseFloat(el.dataset.uzsValue);
             if (isNaN(uzsValue)) return;
 
             const value = isUsd ? uzsValue / usdRate : uzsValue;
-            const currency = isUsd ? 'USD' : 'UZS';
-            const symbol = isUsd ? '$' : '';
+            const symbol = isUsd ? '$ ' : '';
 
-            // Форматируем с символом или без, в зависимости от контекста
+            // Отдельная логика для KPI, чтобы всегда был символ валюты UZS
+            if (el.classList.contains('kpi-result')) {
+                 el.textContent = `${symbol}${value.toLocaleString('ru-RU', { maximumFractionDigits: 0 })} ${isUsd ? '' : 'UZS'}`;
+                 return;
+            }
+
             if (el.nextElementSibling && el.nextElementSibling.classList.contains('currency-symbol')) {
                  el.textContent = value.toLocaleString('ru-RU', { maximumFractionDigits: 0 });
             } else {
-                 el.textContent = `${symbol} ${value.toLocaleString('ru-RU', { maximumFractionDigits: 0 })}`;
+                 el.textContent = `${symbol}${value.toLocaleString('ru-RU', { maximumFractionDigits: 0 })}`;
             }
         });
 
-        // Обновление символов рядом с суммами
-        document.querySelectorAll('.currency-symbol').forEach(el => {
-            el.textContent = isUsd ? '' : 'UZS';
-        });
-
-        // Обновление заголовков в таблице и на графиках
-        const newLabel = isUsd ? 'USD' : 'UZS';
-        document.querySelectorAll('.table-currency-label, .chart-currency-label').forEach(el => {
-            el.textContent = newLabel;
+        document.querySelectorAll('.currency-symbol, .table-currency-label, .chart-currency-label').forEach(el => {
+            el.textContent = isUsd ? 'USD' : 'UZS';
         });
     }
 
     function handleCurrencyChange() {
         const isUsd = currencySwitcher.checked;
         updateCurrencyDisplay(isUsd);
-        performanceChartVolume = createOrUpdateChart('performanceChartVolume', performanceChartVolume, 'plan_volume', 'fact_volume', isUsd);
+        performanceChartVolume = createOrUpdateChart('performanceChartVolume', performanceChartVolume, 'fact_volume', 'fact_volume', isUsd);
         performanceChartIncome = createOrUpdateChart('performanceChartIncome', performanceChartIncome, 'plan_income', 'fact_income', isUsd);
     }
 
@@ -128,6 +84,6 @@ document.addEventListener('DOMContentLoaded', function() {
         currencySwitcher.addEventListener('change', handleCurrencyChange);
     }
 
-    // Первоначальная отрисовка
+    // Первоначальная отрисовка всех значений
     handleCurrencyChange();
 });

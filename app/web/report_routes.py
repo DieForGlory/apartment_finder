@@ -4,9 +4,11 @@ import os
 from datetime import date, timedelta
 # --- ИЗМЕНЕНИЯ ЗДЕСЬ ---
 from datetime import datetime  # Добавлен timedelta
-
+from ..core.extensions import db
 from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app, abort, send_file
+from flask import jsonify
 from flask_login import login_required
+from sqlalchemy import or_, extract, func
 from werkzeug.utils import secure_filename
 
 from app.core.decorators import permission_required
@@ -21,6 +23,7 @@ from app.services import (
     manager_report_service, funnel_service
 )
 from app.web.forms import UploadPlanForm, UploadManagerPlanForm
+from ..models.finance_models import FinanceOperation
 
 report_bp = Blueprint('report', __name__, template_folder='templates')
 
@@ -238,21 +241,67 @@ def export_plan_fact():
 def manager_performance_report():
     search_query = request.args.get('q', '')
     show_only_with_plan = request.args.get('with_plan', 'false').lower() == 'true'
-    # Используем auth_models.SalesManager и planning_models.ManagerSalesPlan
+
     query = auth_models.SalesManager.query
     if search_query:
         query = query.filter(auth_models.SalesManager.full_name.ilike(f'%{search_query}%'))
-    if show_only_with_plan:
-        query = query.join(planning_models.ManagerSalesPlan).distinct()
+
     managers = query.order_by(auth_models.SalesManager.full_name).all()
+
+    # --- ГЛАВНОЕ ИСПРАВЛЕНИЕ ЗДЕСЬ ---
+    if show_only_with_plan:
+        # 1. Сначала получаем ID всех менеджеров, у которых ВООБЩЕ есть планы, из базы планирования
+        manager_ids_with_plans_query = db.session.query(
+            planning_models.ManagerSalesPlan.manager_id
+        ).distinct().all()
+        manager_ids_with_plans_set = {row[0] for row in manager_ids_with_plans_query}
+
+        # 2. Затем фильтруем наш список менеджеров в Python
+        managers = [m for m in managers if m.id in manager_ids_with_plans_set]
+
+    # Готовим данные для модального окна (как в прошлый раз)
+    today = date.today()
+    month_names = {
+        1: 'Январь', 2: 'Февраль', 3: 'Март', 4: 'Апрель', 5: 'Май', 6: 'Июнь',
+        7: 'Июль', 8: 'Август', 9: 'Сентябрь', 10: 'Октябрь', 11: 'Ноябрь', 12: 'Декабрь'
+    }
+
     return render_template(
         'reports/manager_performance_overview.html',
         title="Выполнение планов менеджерами",
         managers=managers,
         search_query=search_query,
-        show_only_with_plan=show_only_with_plan
+        show_only_with_plan=show_only_with_plan,
+        today=today,
+        month_names=month_names
     )
 
+
+@report_bp.route('/download-kpi-report')
+@login_required
+@permission_required('view_manager_report')
+def download_kpi_report():
+    today = date.today()
+    year = request.args.get('year', today.year, type=int)
+    month = request.args.get('month', today.month, type=int)
+
+    try:
+        excel_stream = manager_report_service.generate_kpi_report_excel(year, month)
+
+        if excel_stream is None:
+            flash("Нет менеджеров с заполненным планом поступлений за выбранный период.", "warning")
+            return redirect(url_for('report.manager_performance_report'))
+
+        filename = f"KPI_Report_{month:02d}_{year}.xlsx"
+        return send_file(
+            excel_stream,
+            download_name=filename,
+            as_attachment=True,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+    except ValueError as e:
+        flash(str(e), "danger")
+        return redirect(url_for('report.manager_performance_report'))
 
 @report_bp.route('/manager-performance-report/<int:manager_id>', methods=['GET'])
 @login_required

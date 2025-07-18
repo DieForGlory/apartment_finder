@@ -1,4 +1,5 @@
 # app/services/manager_report_service.py
+import openpyxl
 from sqlalchemy import or_
 import pandas as pd
 import re
@@ -14,6 +15,7 @@ from app.models import auth_models
 from app.models import planning_models
 from app.models.estate_models import EstateDeal, EstateSell, EstateHouse
 from app.models.finance_models import FinanceOperation
+from app.services import currency_service
 
 
 def process_manager_plans_from_excel(file_path: str):
@@ -22,9 +24,9 @@ def process_manager_plans_from_excel(file_path: str):
     """
     df = pd.read_excel(file_path)
     plans_to_save = defaultdict(lambda: defaultdict(float))
-    header_pattern = re.compile(r"(контрактация|поступления) (\d{2}\.\d{2}\.\d{4})", re.IGNORECASE)
+    # В регулярном выражении оставляем только "поступления"
+    header_pattern = re.compile(r"(поступления) (\d{2}\.\d{2}\.\d{4})", re.IGNORECASE)
 
-    # Используем auth_models.SalesManager
     managers_map = {m.full_name: m.id for m in auth_models.SalesManager.query.all()}
 
     for index, row in df.iterrows():
@@ -40,26 +42,28 @@ def process_manager_plans_from_excel(file_path: str):
             match = header_pattern.search(str(col_name))
             if not match:
                 continue
-            plan_type_str, date_str = match.groups()
+
+            # Логика упрощена, так как у нас только один тип плана
+            plan_type_str = match.group(1)
+            date_str = match.group(2)
             plan_date = datetime.strptime(date_str, '%d.%m.%Y')
             year, month = plan_date.year, plan_date.month
 
-            if 'контрактация' in plan_type_str.lower():
-                plans_to_save[(manager_id, year, month)]['plan_volume'] += float(value)
-            elif 'поступления' in plan_type_str.lower():
+            if 'поступления' in plan_type_str.lower():
                 plans_to_save[(manager_id, year, month)]['plan_income'] += float(value)
 
     updated_count, created_count = 0, 0
     for (manager_id, year, month), values in plans_to_save.items():
-        # Используем planning_models.ManagerSalesPlan
-        plan_entry = planning_models.ManagerSalesPlan.query.filter_by(manager_id=manager_id, year=year,
-                                                                      month=month).first()
+        plan_entry = planning_models.ManagerSalesPlan.query.filter_by(
+            manager_id=manager_id, year=year, month=month
+        ).first()
         if not plan_entry:
             plan_entry = planning_models.ManagerSalesPlan(manager_id=manager_id, year=year, month=month)
             db.session.add(plan_entry)
             created_count += 1
 
-        plan_entry.plan_volume = values.get('plan_volume', 0.0)
+        # Устанавливаем plan_volume в 0, обновляем только plan_income
+        plan_entry.plan_volume = 0.0
         plan_entry.plan_income = values.get('plan_income', 0.0)
         updated_count += 1
 
@@ -69,7 +73,8 @@ def process_manager_plans_from_excel(file_path: str):
 
 def get_manager_performance_details(manager_id: int, year: int):
     """
-    Собирает детальную информацию по выполнению плана для одного менеджера за год.
+    Собирает детальную информацию по выполнению плана для одного менеджера за год,
+    ЗАРАНЕЕ РАССЧИТЫВАЯ KPI ДЛЯ КАЖДОГО МЕСЯЦА.
     """
     manager = auth_models.SalesManager.query.get(manager_id)
     if not manager:
@@ -78,7 +83,6 @@ def get_manager_performance_details(manager_id: int, year: int):
     plans_query = planning_models.ManagerSalesPlan.query.filter_by(manager_id=manager_id, year=year).all()
     plan_data = {p.month: p for p in plans_query}
 
-    # Этот запрос для "Контрактации" остается без изменений
     effective_date = func.coalesce(EstateDeal.agreement_date, EstateDeal.preliminary_date)
     fact_volume_query = db.session.query(
         extract('month', effective_date).label('month'),
@@ -90,50 +94,18 @@ def get_manager_performance_details(manager_id: int, year: int):
     ).group_by('month').all()
     fact_volume_data = {row.month: row.fact_volume or 0 for row in fact_volume_query}
 
-    # --- НАЧАЛО ОТЛАДОЧНОГО БЛОКА ---
-
-    print("\n" + "=" * 50)
-    print(f"🕵️ [ОТЛАДКА] Начинаем прямой поиск поступлений для Менеджера ID: {manager_id} за {year} год.")
-
-    # Этап 1: Ищем ВСЕ операции в таблице финансов для этого ID менеджера
-    base_query = db.session.query(FinanceOperation).filter(FinanceOperation.manager_id == manager_id)
-    print(f"✔️ [Этап 1] Найдено ВСЕГО финансовых операций для manager_id={manager_id}: {base_query.count()}")
-
-    # Этап 2: Добавляем фильтр по году
-    query_after_year_filter = base_query.filter(extract('year', FinanceOperation.date_added) == year)
-    print(f"✔️ [Этап 2] Осталось операций после фильтра по {year} году: {query_after_year_filter.count()}")
-
-    # Этап 3: Добавляем фильтр по статусу "Проведено"
-    query_after_status_filter = query_after_year_filter.filter(FinanceOperation.status_name == "Проведено")
-    print(f"✔️ [Этап 3] Осталось операций после фильтра по статусу 'Проведено': {query_after_status_filter.count()}")
-
-    # Этап 4: Проверим, какие типы платежей есть у найденных операций
-    if query_after_status_filter.count() > 0:
-        found_payment_types = [res[0] for res in
-                               query_after_status_filter.with_entities(FinanceOperation.payment_type).distinct().all()]
-        print(f"ℹ️ [ИНФО] У этих операций найдены следующие типы платежей: {found_payment_types}")
-
-    # Этап 5: Добавляем финальный фильтр, исключающий возвраты
-    final_query_before_grouping = query_after_status_filter.filter(
+    fact_income_query = db.session.query(
+        extract('month', FinanceOperation.date_added).label('month'),
+        func.sum(FinanceOperation.summa).label('fact_income')
+    ).filter(
+        FinanceOperation.manager_id == manager_id,
+        extract('year', FinanceOperation.date_added) == year,
+        FinanceOperation.status_name == "Проведено",
         or_(
             FinanceOperation.payment_type != "Возврат поступлений при отмене сделки",
             FinanceOperation.payment_type.is_(None)
         )
-    )
-    print(
-        f"✔️ [Этап 4] Осталось операций после исключения возвратов и добавления NULL: {final_query_before_grouping.count()}")
-
-    # Финальный запрос для получения данных
-    fact_income_query = final_query_before_grouping.with_entities(
-        extract('month', FinanceOperation.date_added).label('month'),
-        func.sum(FinanceOperation.summa).label('fact_income')
     ).group_by('month').all()
-
-    print(f"✅ [РЕЗУЛЬТАТ] Итоговый запрос вернул {len(fact_income_query)} сгруппированных по месяцам записей.")
-    print("=" * 50 + "\n")
-
-    # --- КОНЕЦ ОТЛАДОЧНОГО БЛОКА ---
-
     fact_income_data = {row.month: row.fact_income or 0 for row in fact_income_query}
 
     report = []
@@ -141,17 +113,23 @@ def get_manager_performance_details(manager_id: int, year: int):
         plan = plan_data.get(month_num)
         fact_volume = fact_volume_data.get(month_num, 0)
         fact_income = fact_income_data.get(month_num, 0)
+        plan_income = plan.plan_income if plan else 0.0
+
+        # --- ГЛАВНОЕ ИЗМЕНЕНИЕ: РАССЧИТЫВАЕМ KPI ПРЯМО ЗДЕСЬ ---
+        kpi_bonus = calculate_manager_kpi(plan_income, fact_income)
+
         report.append({
             'month': month_num,
             'plan_volume': plan.plan_volume if plan else 0,
             'fact_volume': fact_volume,
             'volume_percent': (fact_volume / plan.plan_volume * 100) if (plan and plan.plan_volume > 0) else 0,
-            'plan_income': plan.plan_income if plan else 0,
+            'plan_income': plan_income,
             'fact_income': fact_income,
-            'income_percent': (fact_income / plan.plan_income * 100) if (plan and plan.plan_income > 0) else 0,
+            'income_percent': (fact_income / plan_income * 100) if (plan and plan_income > 0) else 0,
+            'kpi_bonus': kpi_bonus  # <-- И ДОБАВЛЯЕМ РЕЗУЛЬТАТ В ДАННЫЕ
         })
 
-    return {'manager_name': manager.full_name, 'performance': report}
+    return {'manager_id': manager_id, 'manager_name': manager.full_name, 'performance': report}
 
 
 def generate_manager_plan_template_excel():
@@ -163,9 +141,9 @@ def generate_manager_plan_template_excel():
 
     current_year = date.today().year
     headers = ['ФИО']
+    # В цикле убираем добавление столбца "Контрактация"
     for month in range(1, 13):
         date_str = f"01.{month:02d}.{current_year}"
-        headers.append(f"Контрактация {date_str}")
         headers.append(f"Поступления {date_str}")
 
     data = [{'ФИО': name, **{header: 0 for header in headers[1:]}} for name in manager_names]
@@ -177,11 +155,153 @@ def generate_manager_plan_template_excel():
         worksheet = writer.sheets['Шаблон планов']
         worksheet.column_dimensions['A'].width = 35
         for i in range(1, len(headers)):
-            col_letter = chr(ord('B') + i - 1)
+            col_letter = openpyxl.utils.get_column_letter(i + 1)
             worksheet.column_dimensions[col_letter].width = 25
     output.seek(0)
     return output
 
+
+def calculate_manager_kpi(plan_income: float, fact_income: float) -> float:
+    if not plan_income or plan_income == 0:
+        return 0.0  # Если плана не было, премии нет
+
+    completion_percentage = (fact_income / plan_income) * 100
+
+    if completion_percentage >= 100:
+        bonus = fact_income * 0.005
+    elif completion_percentage >= 90:
+        bonus = fact_income * 0.004
+    elif completion_percentage >= 80:
+        bonus = fact_income * 0.003
+    else:
+        bonus = 0.0
+
+    return bonus
+
+
+def generate_kpi_report_excel(year: int, month: int):
+    """
+    Создает детализированный и отформатированный отчет по KPI менеджеров в формате Excel.
+    (Исправленная версия с правильным порядком колонок и формулами)
+    """
+    # 1. Получаем актуальный курс доллара
+    usd_rate = currency_service.get_current_effective_rate()
+    if not usd_rate or usd_rate == 0:
+        raise ValueError("Не удалось получить актуальный курс USD.")
+
+    # 2. ШАГ А: Получаем все планы из базы `planning_db` за указанный период
+    plans = planning_models.ManagerSalesPlan.query.filter(
+        planning_models.ManagerSalesPlan.year == year,
+        planning_models.ManagerSalesPlan.month == month,
+        planning_models.ManagerSalesPlan.plan_income > 0
+    ).all()
+
+    if not plans:
+        return None  # Если нет планов, возвращаем None
+
+    manager_ids_with_plans = [p.manager_id for p in plans]
+    plans_map = {p.manager_id: p for p in plans}
+
+    # 3. ШАГ Б: Получаем из основной базы данных всех менеджеров, чьи ID мы нашли
+    managers = auth_models.SalesManager.query.filter(
+        auth_models.SalesManager.id.in_(manager_ids_with_plans)
+    ).order_by(auth_models.SalesManager.full_name).all()
+
+    # 4. Собираем исходные данные, объединяя результаты в Python
+    source_data = []
+    for manager in managers:
+        plan = plans_map.get(manager.id)
+        if not plan:
+            continue
+
+        fact_income_query = db.session.query(
+            func.sum(FinanceOperation.summa)
+        ).filter(
+            FinanceOperation.manager_id == manager.id,
+            extract('year', FinanceOperation.date_added) == year,
+            extract('month', FinanceOperation.date_added) == month,
+            FinanceOperation.status_name == "Проведено",
+            or_(
+                FinanceOperation.payment_type != "Возврат поступлений при отмене сделки",
+                FinanceOperation.payment_type.is_(None)
+            )
+        ).scalar()
+        fact_income = fact_income_query or 0.0
+        kpi_bonus_uzs = calculate_manager_kpi(plan.plan_income, fact_income)
+
+        source_data.append({
+            "full_name": manager.full_name,
+            "plan_uzs": plan.plan_income,
+            "fact_uzs": fact_income,
+            "kpi_bonus_uzs": kpi_bonus_uzs,
+            "kpi_bonus_usd": kpi_bonus_uzs / usd_rate
+        })
+
+    # 5. Формируем DataFrame в строгом соответствии с вашим ТЗ
+    final_report_rows = []
+    for i, data in enumerate(source_data):
+        final_report_rows.append({
+            '№': i + 1,
+            'ФИО менеджера': data['full_name'],
+            'Должность': 'Менеджер по продажам',
+            'Личный план продаж на период (долл. США)': data['plan_uzs'] / usd_rate,
+            'Факт выполнения личного плана продаж на период (долл. США)': data['fact_uzs'] / usd_rate,
+            '% выполнения личного плана продаж': (data['fact_uzs'] / data['plan_uzs']) if data['plan_uzs'] > 0 else 0,
+            'Удовлетворенность работой сотрудника (коэф.)': None,
+            'Итоговая сумма к выплате, NET (долл. США)': None,  # Placeholder
+            'Итоговая сумма к выплате, NET (сум)': None,  # Placeholder
+            'Итоговая сумма к выплате, GROSS (сум)': None  # Placeholder
+        })
+
+    df = pd.DataFrame(final_report_rows)
+
+    # 6. Создаем и форматируем Excel-файл
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, sheet_name='Ведомость KPI', index=False, startrow=1)
+
+        workbook = writer.book
+        worksheet = writer.sheets['Ведомость KPI']
+
+        # Форматы ячеек и заголовков
+        header_format = workbook.add_format(
+            {'bold': True, 'text_wrap': True, 'valign': 'top', 'fg_color': '#D7E4BC', 'border': 1, 'align': 'center'})
+        money_usd_format = workbook.add_format({'num_format': '$#,##0.00', 'border': 1})
+        money_uzs_format = workbook.add_format({'num_format': '#,##0', 'border': 1})
+        percent_format = workbook.add_format({'num_format': '0.0%', 'border': 1})
+        coef_format = workbook.add_format({'bg_color': '#FFFFCC', 'border': 1})
+        title_format = workbook.add_format({'bold': True, 'font_size': 14, 'align': 'center'})
+
+        month_names = {1: 'Январь', 2: 'Февраль', 3: 'Март', 4: 'Апрель', 5: 'Май', 6: 'Июнь', 7: 'Июль', 8: 'Август',
+                       9: 'Сентябрь', 10: 'Октябрь', 11: 'Ноябрь', 12: 'Декабрь'}
+        worksheet.merge_range('A1:J1', f'Ведомость по KPI за {month_names.get(month, "")} {year}', title_format)
+
+        for col_num, value in enumerate(df.columns):
+            worksheet.write(1, col_num, value, header_format)
+
+        # Ширина и формат колонок
+        worksheet.set_column('A:A', 5)
+        worksheet.set_column('B:B', 35)
+        worksheet.set_column('C:C', 25)
+        worksheet.set_column('D:E', 20, money_usd_format)
+        worksheet.set_column('F:F', 15, percent_format)
+        worksheet.set_column('G:G', 25, coef_format)
+        worksheet.set_column('H:H', 25, money_usd_format)
+        worksheet.set_column('I:I', 25, money_uzs_format)
+        worksheet.set_column('J:J', 25, money_uzs_format)
+
+        # 7. Вставляем формулы
+        for idx, data in enumerate(source_data):
+            row_num = idx + 3
+            kpi_usd = data['kpi_bonus_usd']
+            kpi_uzs = data['kpi_bonus_uzs']
+
+            worksheet.write_formula(f'H{row_num}', f'=IF(ISBLANK(G{row_num}),0,{kpi_usd}*G{row_num})')
+            worksheet.write_formula(f'I{row_num}', f'=IF(ISBLANK(G{row_num}),0,{kpi_uzs}*G{row_num})')
+            worksheet.write_formula(f'J{row_num}', f'=IF(ISBLANK(I{row_num}),0,I{row_num}/0.88)')
+
+    output.seek(0)
+    return output
 
 def get_manager_kpis(manager_id: int, year: int):
     """
