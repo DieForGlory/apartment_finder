@@ -48,6 +48,7 @@ def setup_database():
                 'manage_settings': 'Управление настройками (калькуляторы, курс)',
                 'manage_users': 'Управление пользователями',
                 'upload_data': 'Загрузка данных (планы и т.д.)',
+                'download_kpi_report': 'Выгрузка ведомости по KPI менеджеров',
                 'manage_specials': 'Управление специальными предложениями (акции)'
             }
 
@@ -61,7 +62,7 @@ def setup_database():
                     'view_selection', 'view_discounts', 'view_version_history', 'manage_discounts',
                     'manage_settings', 'manage_users', 'upload_data',
                     'view_plan_fact_report', 'view_inventory_report', 'view_manager_report', 'view_project_dashboard',
-                    'manage_specials'
+                    'manage_specials','download_kpi_report'
                 ]
             }
 

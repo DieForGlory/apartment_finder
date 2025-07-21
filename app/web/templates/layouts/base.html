@@ -55,39 +55,57 @@
                                 </a>
                             </li>
                             {% endif %}
-                            {% if current_user.role.name in ['ADMIN', 'MANAGER'] %}
+
+                            {# CHANGE: Replaced role check with permission check #}
+                            {% if current_user.can('view_plan_fact_report') %}
                             <li class="nav-item dropdown">
                                 <a class="nav-link dropdown-toggle {% if request.blueprint == 'report' %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                     Отчетность
                                 </a>
                                 <ul class="dropdown-menu">
+                                    {# Each item can have its own permission check if needed, but the parent one covers the dropdown #}
                                     <li><a class="dropdown-item" href="{{ url_for('report.plan_fact_report') }}">План-факт отчет</a></li>
                                     <li><a class="dropdown-item" href="{{ url_for('report.inventory_summary') }}">Сводка по остаткам</a></li>
                                     <li><a class="dropdown-item" href="{{ url_for('report.sales_funnel') }}">Воронка продаж</a></li>
                                     <li><a class="dropdown-item" href="{{ url_for('report.manager_performance_report') }}">Планы менеджеров</a></li>
                                 </ul>
                             </li>
+                            {% endif %}
 
+                            {# CHANGE: Replaced role check with permission check #}
+                            {% if current_user.can('manage_discounts') or current_user.can('manage_users') %}
                             <li class="nav-item dropdown">
                                 <a class="nav-link dropdown-toggle {% if request.blueprint in ['auth', 'settings'] or request.endpoint in ['discount.versions_index', 'discount.upload_discounts', 'report.upload_plan'] %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                     Администрирование
                                 </a>
                                 <ul class="dropdown-menu">
+                                    {% if current_user.can('manage_discounts') %}
                                     <li><a class="dropdown-item" href="{{ url_for('discount.versions_index') }}">Управление скидками</a></li>
+                                    {% endif %}
+
+                                    {% if current_user.can('manage_settings') %}
                                     <li><a class="dropdown-item" href="{{ url_for('main.manage_exclusions') }}">Управление исключениями</a></li>
+                                    {% endif %}
+
+                                    {% if current_user.can('manage_users') %}
                                     <li><a class="dropdown-item" href="{{ url_for('auth.manage_roles') }}">Управление ролями</a></li>
-                                    {% if current_user.role.name == 'ADMIN' %}
-                                    <li><hr class="dropdown-divider"></li>
-                                    <li><h6 class="dropdown-header">Загрузка данных</h6></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('report.upload_plan') }}">Загрузить план</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('discount.upload_discounts') }}">Загрузить скидки</a></li>
                                     <li><hr class="dropdown-divider"></li>
                                     <li><h6 class="dropdown-header">Системные настройки</h6></li>
                                     <li><a class="dropdown-item" href="{{ url_for('auth.user_management') }}">Пользователи</a></li>
                                     <li><a class="dropdown-item" href="{{ url_for('settings.manage_email_recipients') }}">Получатели уведомлений</a></li>
                                     <li><a class="dropdown-item" href="{{ url_for('settings.manage_settings') }}">Настройки калькуляторов</a></li>
                                     <li><a class="dropdown-item" href="{{ url_for('report.currency_settings') }}">Настройки курса</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('special_offer.manage_specials') }}">Настройки месяца предложений</a></li>
+                                    {% endif %}
+
+                                    {% if current_user.can('manage_specials') %}
+                                    <li><a class="dropdown-item" href="{{ url_for('special_offer.manage_specials') }}">Настройки спец. предложений</a></li>
+                                    {% endif %}
+
+                                    {% if current_user.can('upload_data') %}
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><h6 class="dropdown-header">Загрузка данных</h6></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('report.upload_plan') }}">Загрузить план</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('discount.upload_discounts') }}">Загрузить скидки</a></li>
                                     {% endif %}
                                 </ul>
                             </li>
@@ -99,7 +117,7 @@
                             <div class="nav-item dropdown">
                                 <a class="nav-link dropdown-toggle" href="#" id="navbarUserDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                     <i class="bi bi-person-circle me-1"></i>
-                                    {{ current_user.username }} ({{ current_user.role.value }})
+                                    {{ current_user.username }} ({{ current_user.role.name }})
                                 </a>
                                 <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarUserDropdown">
                                     <li><a class="dropdown-item" href="{{ url_for('auth.change_password') }}"><i class="bi bi-key-fill me-2"></i>Сменить пароль</a></li>

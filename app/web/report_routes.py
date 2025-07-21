@@ -279,7 +279,7 @@ def manager_performance_report():
 
 @report_bp.route('/download-kpi-report')
 @login_required
-@permission_required('view_manager_report')
+@permission_required('download_kpi_report')
 def download_kpi_report():
     today = date.today()
     year = request.args.get('year', today.year, type=int)
