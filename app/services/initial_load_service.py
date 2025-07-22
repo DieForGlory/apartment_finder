@@ -40,7 +40,6 @@ def _migrate_mysql_estate_data_to_sqlite():
         db.session.query(EstateBuysStatusLog).delete()
         db.session.query(EstateBuy).delete()
         db.session.query(auth_models.SalesManager).delete()
-        db.session.query(planning_models.ManagerSalesPlan).delete()
         db.session.commit()
         print("[MIGRATE] ✔️ Данные очищены.")
 

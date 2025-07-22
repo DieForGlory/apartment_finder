@@ -21,7 +21,7 @@ class Config:
     MAIL_PORT = int(os.environ.get('MAIL_SERVER_PORT', 587))
     MAIL_USE_TLS = True
     MAIL_USERNAME = os.environ.get('SEND_FROM_EMAIL', 'robot@gh.uz')
-    MAIL_PASSWORD = os.environ.get('SEND_FROM_EMAIL_PASSWORD', 'YourEmailPassword')
+    MAIL_PASSWORD = os.environ.get('SEND_FROM_EMAIL_PASSWORD', 'ABwHRMp1')
     MAIL_RECIPIENTS = ['d.plakhotnyi@gh.uz']
     USD_TO_UZS_RATE = 13050.0
 
