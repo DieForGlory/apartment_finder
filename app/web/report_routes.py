@@ -28,6 +28,51 @@ from ..models.finance_models import FinanceOperation
 report_bp = Blueprint('report', __name__, template_folder='templates')
 
 
+# app/web/report_routes.py
+
+@report_bp.route('/manager-kpi-calculate/<int:manager_id>/<int:year>/<int:month>')
+@login_required
+@permission_required('view_manager_report')
+def calculate_manager_kpi(manager_id, year, month):
+    """
+    API эндпоинт для расчета KPI менеджера.
+    """
+    # 1. Получаем данные по плану для этого менеджера
+    plan_entry = planning_models.ManagerSalesPlan.query.filter_by(
+        manager_id=manager_id, year=year, month=month
+    ).first()
+    plan_income = plan_entry.plan_income if plan_entry else 0.0
+
+    # 2. Получаем фактические поступления
+    fact_income_query = db.session.query(func.sum(FinanceOperation.summa)).filter(
+        FinanceOperation.manager_id == manager_id,
+        extract('year', FinanceOperation.date_added) == year,
+        extract('month', FinanceOperation.date_added) == month,
+        FinanceOperation.status_name == "Проведено",
+        or_(
+            FinanceOperation.payment_type != "Возврат поступлений при отмене сделки",
+            FinanceOperation.payment_type.is_(None)
+        )
+    ).scalar()
+    fact_income = fact_income_query or 0.0
+
+    # 3. Вызываем правильную функцию с правильными аргументами
+    payment = manager_report_service.calculate_manager_kpi(plan_income, fact_income)
+
+    # Формируем полный ответ для фронтенда
+    completion_percent = (fact_income / plan_income * 100) if plan_income > 0 else 0
+
+    result = {
+        'manager_id': manager_id,
+        'year': year,
+        'month': month,
+        'performance_percent': round(completion_percent, 2),
+        'fact_amount': fact_income,
+        'payment': payment
+    }
+
+    return jsonify({'success': True, 'data': result})
+
 @report_bp.route('/inventory-summary')
 @login_required
 @permission_required('view_inventory_report')
@@ -303,25 +348,31 @@ def download_kpi_report():
         flash(str(e), "danger")
         return redirect(url_for('report.manager_performance_report'))
 
+
 @report_bp.route('/manager-performance-report/<int:manager_id>', methods=['GET'])
 @login_required
 @permission_required('view_manager_report')
 def manager_performance_detail(manager_id):
     current_year = date.today().year
     year = request.args.get('year', current_year, type=int)
+
     performance_data = manager_report_service.get_manager_performance_details(manager_id, year)
     kpi_data = manager_report_service.get_manager_kpis(manager_id, year)
+    complex_ranking = manager_report_service.get_manager_complex_ranking(manager_id)
     usd_rate = currency_service.get_current_effective_rate()
+
     month_names = {
         1: 'Январь', 2: 'Февраль', 3: 'Март', 4: 'Апрель', 5: 'Май', 6: 'Июнь',
         7: 'Июль', 8: 'Август', 9: 'Сентябрь', 10: 'Октябрь', 11: 'Ноябрь', 12: 'Декабрь'
     }
+
     if not performance_data:
         abort(404, "Менеджер не найден или данные отсутствуют.")
-    complex_ranking = manager_report_service.get_manager_complex_ranking(manager_id)
+
     return render_template(
         'reports/manager_performance_detail.html',
         title=f"Детализация по {performance_data['manager_name']}",
+        manager_id=manager_id,  # <-- ВОТ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ
         data=performance_data,
         kpi_data=kpi_data,
         complex_ranking=complex_ranking,

@@ -303,56 +303,58 @@ def generate_kpi_report_excel(year: int, month: int):
     output.seek(0)
     return output
 
+
 def get_manager_kpis(manager_id: int, year: int):
     """
-    Рассчитывает расширенные KPI для одного менеджера.
+    Рассчитывает расширенные KPI для одного менеджера на основе ПОСТУПЛЕНИЙ.
     """
-    sold_statuses = ["Сделка в работе", "Сделка проведена"]
-
+    # Запрос для "Любимого ЖК" остается по количеству сделок
     best_complex_query = db.session.query(
         EstateHouse.complex_name, func.count(EstateDeal.id).label('deal_count')
     ).join(EstateSell, EstateHouse.sells).join(EstateDeal, EstateSell.deals) \
         .filter(
         EstateDeal.deal_manager_id == manager_id,
-        EstateDeal.deal_status_name.in_(sold_statuses)
+        EstateDeal.deal_status_name.in_(["Сделка в работе", "Сделка проведена"])
     ).group_by(EstateHouse.complex_name).order_by(func.count(EstateDeal.id).desc()).first()
 
+    # Запрос для "Продано юнитов" остается по количеству сделок
     units_by_type_query = db.session.query(
         EstateSell.estate_sell_category, func.count(EstateDeal.id).label('unit_count')
     ).join(EstateDeal, EstateSell.deals).filter(
         EstateDeal.deal_manager_id == manager_id,
-        EstateDeal.deal_status_name.in_(sold_statuses)
+        EstateDeal.deal_status_name.in_(["Сделка в работе", "Сделка проведена"])
     ).group_by(EstateSell.estate_sell_category).all()
 
-    effective_date = func.coalesce(EstateDeal.agreement_date, EstateDeal.preliminary_date)
+    # Все расчеты рекордов переведены на поступления
 
-    best_year_volume_query = db.session.query(
-        extract('year', effective_date).label('deal_year'),
-        func.sum(EstateDeal.deal_sum).label('total_volume')
+    # Лучший год по ПОСТУПЛЕНИЯМ
+    best_year_income_query = db.session.query(
+        extract('year', FinanceOperation.date_added).label('income_year'),
+        func.sum(FinanceOperation.summa).label('total_income')
     ).filter(
-        EstateDeal.deal_manager_id == manager_id,
-        effective_date.isnot(None),
-        EstateDeal.deal_status_name.in_(sold_statuses)
-    ).group_by('deal_year').order_by(func.sum(EstateDeal.deal_sum).desc()).first()
+        FinanceOperation.manager_id == manager_id,
+        FinanceOperation.status_name == 'Проведено'
+    ).group_by('income_year').order_by(func.sum(FinanceOperation.summa).desc()).first()
 
-    best_month_volume_query = db.session.query(
-        extract('year', effective_date).label('deal_year'),
-        extract('month', effective_date).label('deal_month'),
-        func.sum(EstateDeal.deal_sum).label('total_volume')
+    # Лучший месяц за все время по ПОСТУПЛЕНИЯМ
+    best_month_income_query = db.session.query(
+        extract('year', FinanceOperation.date_added).label('income_year'),
+        extract('month', FinanceOperation.date_added).label('income_month'),
+        func.sum(FinanceOperation.summa).label('total_income')
     ).filter(
-        EstateDeal.deal_manager_id == manager_id,
-        effective_date.isnot(None),
-        EstateDeal.deal_status_name.in_(sold_statuses)
-    ).group_by('deal_year', 'deal_month').order_by(func.sum(EstateDeal.deal_sum).desc()).first()
+        FinanceOperation.manager_id == manager_id,
+        FinanceOperation.status_name == 'Проведено'
+    ).group_by('income_year', 'income_month').order_by(func.sum(FinanceOperation.summa).desc()).first()
 
-    best_month_in_year_volume_query = db.session.query(
-        extract('month', effective_date).label('deal_month'),
-        func.sum(EstateDeal.deal_sum).label('total_volume')
+    # Лучший месяц в выбранном году по ПОСТУПЛЕНИЯМ
+    best_month_in_year_income_query = db.session.query(
+        extract('month', FinanceOperation.date_added).label('income_month'),
+        func.sum(FinanceOperation.summa).label('total_income')
     ).filter(
-        EstateDeal.deal_manager_id == manager_id,
-        extract('year', effective_date) == year,
-        EstateDeal.deal_status_name.in_(sold_statuses)
-    ).group_by('deal_month').order_by(func.sum(EstateDeal.deal_sum).desc()).first()
+        FinanceOperation.manager_id == manager_id,
+        extract('year', FinanceOperation.date_added) == year,
+        FinanceOperation.status_name == 'Проведено'
+    ).group_by('income_month').order_by(func.sum(FinanceOperation.summa).desc()).first()
 
     kpis = {
         'best_complex': {
@@ -361,20 +363,20 @@ def get_manager_kpis(manager_id: int, year: int):
         },
         'units_by_type': {row.estate_sell_category: row.unit_count for row in units_by_type_query},
         'best_month_in_year': {
-            'volume': {
-                'month': int(best_month_in_year_volume_query.deal_month) if best_month_in_year_volume_query else 0,
-                'total': best_month_in_year_volume_query.total_volume if best_month_in_year_volume_query else 0
+            'income': {
+                'month': int(best_month_in_year_income_query.income_month) if best_month_in_year_income_query else 0,
+                'total': best_month_in_year_income_query.total_income if best_month_in_year_income_query else 0
             }
         },
         'all_time_records': {
-            'best_year_volume': {
-                'year': int(best_year_volume_query.deal_year) if best_year_volume_query else 0,
-                'total': best_year_volume_query.total_volume if best_year_volume_query else 0
+            'best_year_income': {
+                'year': int(best_year_income_query.income_year) if best_year_income_query else 0,
+                'total': best_year_income_query.total_income if best_year_income_query else 0
             },
-            'best_month_volume': {
-                'year': int(best_month_volume_query.deal_year) if best_month_volume_query else 0,
-                'month': int(best_month_volume_query.deal_month) if best_month_volume_query else 0,
-                'total': best_month_volume_query.total_volume if best_month_volume_query else 0
+            'best_month_income': {
+                'year': int(best_month_income_query.income_year) if best_month_income_query else 0,
+                'month': int(best_month_income_query.income_month) if best_month_income_query else 0,
+                'total': best_month_income_query.total_income if best_month_income_query else 0
             }
         }
     }
@@ -383,23 +385,25 @@ def get_manager_kpis(manager_id: int, year: int):
 
 def get_manager_complex_ranking(manager_id: int):
     """
-    Возвращает рейтинг ЖК по количеству и объему сделок для конкретного менеджера.
+    Возвращает рейтинг ЖК по количеству сделок и объему ПОСТУПЛЕНИЙ для менеджера.
     """
-    sold_statuses = ["Сделка в работе", "Сделка проведена"]
     ranking = db.session.query(
         EstateHouse.complex_name,
-        func.sum(EstateDeal.deal_sum).label('total_volume'),
-        func.count(EstateDeal.id).label('deal_count')
-    ).join(EstateSell, EstateHouse.sells) \
-        .join(EstateDeal, EstateSell.deals) \
-        .filter(
+        func.sum(FinanceOperation.summa).label('total_income'),
+        func.count(func.distinct(EstateDeal.id)).label('deal_count')
+    ).join(EstateSell, EstateHouse.id == EstateSell.house_id) \
+     .join(EstateDeal, EstateSell.id == EstateDeal.estate_sell_id) \
+     .join(FinanceOperation, EstateSell.id == FinanceOperation.estate_sell_id) \
+     .filter(
         EstateDeal.deal_manager_id == manager_id,
-        EstateDeal.deal_status_name.in_(sold_statuses)
-    ) \
-        .group_by(EstateHouse.complex_name) \
-        .order_by(func.count(EstateDeal.id).desc()) \
-        .all()
-    return [{"name": r.complex_name, "total_volume": r.total_volume, "deal_count": r.deal_count} for r in ranking]
+        FinanceOperation.manager_id == manager_id, # Дополнительная связка для точности
+        FinanceOperation.status_name == "Проведено"
+     ) \
+     .group_by(EstateHouse.complex_name) \
+     .order_by(func.sum(FinanceOperation.summa).desc()) \
+     .all()
+
+    return [{"name": r.complex_name, "total_income": r.total_income, "deal_count": r.deal_count} for r in ranking]
 
 
 def get_complex_hall_of_fame(complex_name: str, start_date_str: str = None, end_date_str: str = None):

@@ -37,23 +37,15 @@ def create_app(config_class=DevelopmentConfig):
     Фабрика для создания и конфигурации экземпляра приложения Flask.
     """
     app = Flask(__name__, instance_relative_config=True)
-
-    # Загружаем конфигурацию из объекта (включая URI основной БД и BINDS)
     app.config.from_object(config_class)
-
-    # 2. Удалена строка, которая перезаписывала URI базы данных.
-    # Теперь приложение будет использовать настройки из config.py
 
     # Инициализируем расширения
     CORS(app)
     db.init_app(app)
-    Migrate(app, db)  # Migrate инициализируется после db
+    Migrate(app, db)
     login_manager.init_app(app)
-
-    # Устанавливаем кастомный JSON-кодировщик
     app.json_encoder = CustomJSONEncoder
 
-    # Создаем папку instance, если ее нет
     try:
         os.makedirs(app.instance_path, exist_ok=True)
     except OSError as e:
@@ -62,7 +54,21 @@ def create_app(config_class=DevelopmentConfig):
     # Инициализация планировщика
     scheduler = APScheduler()
     scheduler.init_app(app)
-    scheduler.start()
+
+    # --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
+    # Проверяем, что мы не в режиме отладки ИЛИ что мы в основном процессе reloader'а
+    if not app.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+        scheduler.start()
+        with app.app_context():
+            # Добавление задачи в планировщик
+            if not scheduler.get_job('update_cbu_rate_job'):
+                scheduler.add_job(
+                    id='update_cbu_rate_job',
+                    func='app.services.currency_service:fetch_and_update_cbu_rate',
+                    trigger='interval',
+                    hours=1
+                )
+    # --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
     with app.app_context():
         # 3. Импортируем все актуальные модули моделей
