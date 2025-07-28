@@ -101,19 +101,45 @@ def get_fact_income_data(year: int, month: int, property_type: str):
 
 
 def get_expected_income_data(year: int, month: int, property_type: str):
-    """Собирает ОЖИДАЕМЫЕ поступления (статус НЕ 'Проведено')."""
+    """
+    Собирает ОЖИДАЕМЫЕ поступления (ИСКЛЮЧАЯ возвраты), их сумму и ID операций.
+    """
     results = db.session.query(
-        EstateHouse.complex_name, func.sum(FinanceOperation.summa).label('expected_income')
+        EstateHouse.complex_name,
+        func.sum(FinanceOperation.summa).label('expected_income'),
+        func.group_concat(FinanceOperation.id).label('income_ids')
     ).join(EstateSell, FinanceOperation.estate_sell_id == EstateSell.id) \
         .join(EstateHouse, EstateSell.house_id == EstateHouse.id) \
         .filter(
         FinanceOperation.status_name == "К оплате",
-        extract('year', FinanceOperation.date_added) == year,
-        extract('month', FinanceOperation.date_added) == month,
-        EstateSell.estate_sell_category == property_type
+        extract('year', FinanceOperation.date_to) == year,
+        extract('month', FinanceOperation.date_to) == month,
+        EstateSell.estate_sell_category == property_type,
+        # --- ГЛАВНОЕ ИЗМЕНЕНИЕ: Исключаем возвраты ---
+        FinanceOperation.payment_type != "Возврат поступлений при отмене сделки"
     ).group_by(EstateHouse.complex_name).all()
-    return {row.complex_name: (row.expected_income or 0) for row in results}
 
+    data = {}
+    for row in results:
+        ids = [int(id_str) for id_str in row.income_ids.split(',')] if row.income_ids else []
+        data[row.complex_name] = {'sum': row.expected_income or 0, 'ids': ids}
+    return data
+def get_refund_data(year: int, month: int, property_type: str):
+    """
+    Собирает данные по ВОЗВРАТАМ, запланированным на указанный период.
+    """
+    results = db.session.query(
+        func.sum(FinanceOperation.summa).label('total_refunds')
+    ).join(EstateSell, FinanceOperation.estate_sell_id == EstateSell.id) \
+        .filter(
+        FinanceOperation.status_name == "К оплате",
+        extract('year', FinanceOperation.date_to) == year,
+        extract('month', FinanceOperation.date_to) == month,
+        EstateSell.estate_sell_category == property_type,
+        FinanceOperation.payment_type == "Возврат поступлений при отмене сделки"
+    ).scalar() # Получаем одно значение
+
+    return results or 0.0
 
 def get_plan_income_data(year: int, month: int, property_type: str):
     """Получает плановые данные по поступлениям."""
@@ -121,6 +147,20 @@ def get_plan_income_data(year: int, month: int, property_type: str):
     results = planning_models.SalesPlan.query.filter_by(year=year, month=month, property_type=property_type).all()
     return {row.complex_name: row.plan_income for row in results}
 
+def generate_ids_excel(ids_str: str):
+    """
+    Создает Excel-файл из списка ID.
+    """
+    try:
+        ids = [int(id_val) for id_val in ids_str.split(',')]
+    except (ValueError, AttributeError):
+        return None
+
+    df = pd.DataFrame(ids, columns=['ID Финансовой операции'])
+    output = io.BytesIO()
+    df.to_excel(output, index=False, sheet_name='IDs')
+    output.seek(0)
+    return output
 
 def get_fact_data(year: int, month: int, property_type: str):
     """Собирает фактические данные о продажах из БД."""
@@ -156,14 +196,17 @@ def get_plan_data(year: int, month: int, property_type: str):
 
 
 def generate_plan_fact_report(year: int, month: int, property_type: str):
-    """Основная функция для генерации отчета, возвращающая детализацию и итоги."""
+    """Основная функция для генерации отчета, возвращающая детализацию, итоги и возвраты."""
     plan_units_data = get_plan_data(year, month, property_type)
     fact_units_data = get_fact_data(year, month, property_type)
     plan_volume_data = get_plan_volume_data(year, month, property_type)
     fact_volume_data = get_fact_volume_data(year, month, property_type)
     plan_income_data = get_plan_income_data(year, month, property_type)
     fact_income_data = get_fact_income_data(year, month, property_type)
-    expected_income_data = get_expected_income_data(year, month, property_type)
+    all_expected_income_data = get_expected_income_data(year, month, property_type)
+
+    # --- НОВОЕ: Получаем данные по возвратам ---
+    total_refunds = get_refund_data(year, month, property_type)
 
     all_complexes = sorted(
         list(set(plan_units_data.keys()) | set(fact_units_data.keys()) | set(plan_income_data.keys())))
@@ -185,12 +228,11 @@ def generate_plan_fact_report(year: int, month: int, property_type: str):
         plan_units = plan_units_data.get(complex_name, 0)
         fact_units = fact_units_data.get(complex_name, 0)
         plan_volume = plan_volume_data.get(complex_name, 0)
-        fact_volume = fact_volume_data.get(complex_name, 0)  # <--- Используем старый подход
+        fact_volume = fact_volume_data.get(complex_name, 0)
         plan_income = plan_income_data.get(complex_name, 0)
-        fact_income = fact_income_data.get(complex_name, 0)  # <--- Используем старый подход
-        expected_income = expected_income_data.get(complex_name, 0)
+        fact_income = fact_income_data.get(complex_name, 0)
+        complex_expected_income = all_expected_income_data.get(complex_name, {'sum': 0, 'ids': []})
 
-        # ... остальной код функции без изменений ...
         percent_fact_units = (fact_units / plan_units) * 100 if plan_units > 0 else 0
         forecast_units = ((
                                       fact_units / passed_workdays) * workdays_in_month / plan_units) * 100 if plan_units > 0 else 0
@@ -205,7 +247,8 @@ def generate_plan_fact_report(year: int, month: int, property_type: str):
         totals['fact_volume'] += fact_volume
         totals['plan_income'] += plan_income
         totals['fact_income'] += fact_income
-        totals['expected_income'] += expected_income
+        totals['expected_income'] += complex_expected_income['sum']
+        totals.setdefault('expected_income_ids', []).extend(complex_expected_income['ids'])
 
         report_data.append({
             'complex_name': complex_name,
@@ -214,7 +257,7 @@ def generate_plan_fact_report(year: int, month: int, property_type: str):
             'plan_volume': plan_volume, 'fact_volume': fact_volume, 'percent_fact_volume': percent_fact_volume,
             'forecast_volume': forecast_volume,
             'plan_income': plan_income, 'fact_income': fact_income, 'percent_fact_income': percent_fact_income,
-            'expected_income': expected_income
+            'expected_income': complex_expected_income
         })
 
     totals['percent_fact_units'] = (totals['fact_units'] / totals['plan_units']) * 100 if totals[
@@ -228,7 +271,8 @@ def generate_plan_fact_report(year: int, month: int, property_type: str):
     totals['percent_fact_income'] = (totals['fact_income'] / totals['plan_income']) * 100 if totals[
                                                                                                  'plan_income'] > 0 else 0
 
-    return report_data, totals
+    # --- НОВОЕ: Возвращаем также сумму возвратов ---
+    return report_data, totals, total_refunds
 
 
 def process_plan_from_excel(file_path: str, year: int, month: int):
@@ -264,15 +308,16 @@ def generate_plan_template_excel():
 
 
 def get_monthly_summary_by_property_type(year: int, month: int):
+    """
+    Собирает сводку по каждому типу недвижимости, включая ID для ссылок.
+    """
     summary_data = []
-    # Используем planning_models.PropertyType
     property_types = list(planning_models.PropertyType)
     today = date.today()
     workdays_in_month = np.busday_count(f'{year}-{month:02d}-01',
                                         f'{year}-{month + 1:02d}-01' if month < 12 else f'{year + 1}-01-01')
-    passed_workdays = np.busday_count(f'{year}-{month:02d}-01',
-                                      today.strftime(
-                                          '%Y-%m-%d')) if today.month == month and today.year == year else workdays_in_month
+    passed_workdays = np.busday_count(f'{year}-{month:02d}-01', today.strftime(
+        '%Y-%m-%d')) if today.month == month and today.year == year else workdays_in_month
     passed_workdays = max(1, passed_workdays)
 
     for prop_type in property_types:
@@ -282,7 +327,12 @@ def get_monthly_summary_by_property_type(year: int, month: int):
         total_fact_volume = sum(get_fact_volume_data(year, month, prop_type.value).values())
         total_plan_income = sum(get_plan_income_data(year, month, prop_type.value).values())
         total_fact_income = sum(get_fact_income_data(year, month, prop_type.value).values())
-        total_expected_income = sum(get_expected_income_data(year, month, prop_type.value).values())
+
+        # --- ИЗМЕНЕНИЕ: Собираем и сумму, и ID ---
+        expected_income_data = get_expected_income_data(year, month, prop_type.value)
+        total_expected_income_sum = sum(v['sum'] for v in expected_income_data.values())
+        total_expected_income_ids = [id_val for v in expected_income_data.values() for id_val in v['ids']]
+        # --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
         if (
                 total_plan_units + total_fact_units + total_plan_volume + total_fact_volume + total_plan_income + total_fact_income) == 0:
@@ -309,7 +359,11 @@ def get_monthly_summary_by_property_type(year: int, month: int):
             'total_plan_income': total_plan_income,
             'total_fact_income': total_fact_income,
             'percent_fact_income': percent_fact_income,
-            'total_expected_income': total_expected_income
+            # --- ИЗМЕНЕНИЕ: Сохраняем в правильной структуре ---
+            'total_expected_income': {
+                'sum': total_expected_income_sum,
+                'ids': total_expected_income_ids
+            }
         })
     return summary_data
 
@@ -730,9 +784,8 @@ def get_price_dynamics_data(complex_name: str, property_type: str = None):
 
 def calculate_grand_totals(year, month):
     """
-    Рассчитывает общие итоговые показатели по всем типам недвижимости.
+    Рассчитывает общие итоговые показатели, включая ID для ссылок.
     """
-    # Эта функция уже считает итоги по каждому типу, мы их просто сложим
     summary_by_type = get_monthly_summary_by_property_type(year, month)
 
     if not summary_by_type:
@@ -745,7 +798,9 @@ def calculate_grand_totals(year, month):
         'fact_volume': sum(item.get('total_fact_volume', 0) for item in summary_by_type),
         'plan_income': sum(item.get('total_plan_income', 0) for item in summary_by_type),
         'fact_income': sum(item.get('total_fact_income', 0) for item in summary_by_type),
-        'expected_income': sum(item.get('total_expected_income', 0) for item in summary_by_type),
+        # --- ИЗМЕНЕНИЕ: Собираем сумму и ID для общего итога ---
+        'expected_income': sum(item['total_expected_income']['sum'] for item in summary_by_type),
+        'expected_income_ids': [id_val for item in summary_by_type for id_val in item['total_expected_income']['ids']]
     }
 
     # Пересчитываем проценты и прогнозы для итоговой строки

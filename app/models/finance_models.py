@@ -10,10 +10,10 @@ class FinanceOperation(db.Model):
     status_name = db.Column(db.String(100))
     payment_type = db.Column(db.String(100), name='types_name')
     date_added = db.Column(db.Date)
-
+    date_to = db.Column(db.Date, nullable=True)
     # <-- ИЗМЕНЕНИЕ ЗДЕСЬ: Указываем правильное имя колонки из MySQL
     manager_id = db.Column(db.Integer, name='respons_manager_id')
-
+    data_hash = db.Column(db.String(64), index=True, nullable=True)
     sell = db.relationship('EstateSell')
 
 class CurrencySettings(db.Model):

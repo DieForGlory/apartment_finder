@@ -7,7 +7,7 @@ from flask_cors import CORS
 from flask_migrate import Migrate
 import json
 from datetime import date, datetime
-
+from .models import auth_models, planning_models, estate_models, finance_models, exclusion_models, funnel_models, special_offer_models, system_models
 from .core.config import DevelopmentConfig
 from .core.extensions import db
 
@@ -83,6 +83,7 @@ def create_app(config_class=DevelopmentConfig):
         from .web.settings_routes import settings_bp
         from .web.api_routes import api_bp
         from .web.special_offer_routes import special_offer_bp
+        from .web.manager_analytics_routes import manager_analytics_bp
 
         app.register_blueprint(report_bp, url_prefix='/reports')
         app.register_blueprint(main_bp)
@@ -92,6 +93,7 @@ def create_app(config_class=DevelopmentConfig):
         app.register_blueprint(settings_bp)
         app.register_blueprint(api_bp, url_prefix='/api/v1')
         app.register_blueprint(special_offer_bp, url_prefix='/specials')
+        app.register_blueprint(manager_analytics_bp, url_prefix='/manager-analytics')
 
         # 4. Обновляем загрузчик пользователя для Flask-Login
         @login_manager.user_loader

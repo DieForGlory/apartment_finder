@@ -2,24 +2,24 @@
 
 import json
 from datetime import datetime
-from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app
-from flask_login import login_required, current_user
-from app.services import special_offer_service
-from flask import abort
 
+from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app
+from flask import abort
+from flask_login import login_required, current_user
+
+from app.services import special_offer_service
+from ..core.decorators import permission_required
+from ..core.extensions import db
 from ..models import auth_models
+from ..models.estate_models import EstateHouse
+from ..models.exclusion_models import ExcludedSell
 # --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
 # Импортируем PropertyType и PaymentMethod из их нового местоположения
 from ..models.planning_models import PropertyType, PaymentMethod
-
-from ..models.estate_models import EstateHouse
-from ..models.exclusion_models import ExcludedSell
-from ..services import selection_service, report_service, settings_service
-from ..services.selection_service import find_apartments_by_budget, get_apartment_card_data
+from ..services import settings_service
 from ..services.data_service import get_sells_with_house_info, get_filter_options
 from ..services.discount_service import get_current_usd_rate
-from ..core.extensions import db
-from ..core.decorators import permission_required
+from ..services.selection_service import find_apartments_by_budget, get_apartment_card_data
 
 main_bp = Blueprint('main', __name__, template_folder='templates')
 

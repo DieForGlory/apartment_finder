@@ -73,6 +73,25 @@ def calculate_manager_kpi(manager_id, year, month):
 
     return jsonify({'success': True, 'data': result})
 
+
+@report_bp.route('/export-expected-income-details')
+@login_required
+@permission_required('view_plan_fact_report')
+def export_expected_income_details():
+    ids_str = request.args.get('ids', '')
+    excel_stream = report_service.generate_ids_excel(ids_str)
+
+    if excel_stream is None:
+        flash("Нет данных для экспорта.", "warning")
+        return redirect(request.referrer or url_for('report.plan_fact_report'))
+
+    filename = f"expected_income_details_{date.today()}.xlsx"
+    return send_file(
+        excel_stream,
+        download_name=filename,
+        as_attachment=True,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
 @report_bp.route('/inventory-summary')
 @login_required
 @permission_required('view_inventory_report')
@@ -126,24 +145,28 @@ def download_plan_template():
 def plan_fact_report():
     today = date.today()
     year = request.args.get('year', today.year, type=int)
-    # --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
-    # Получаем новый параметр 'period'
     period = request.args.get('period', 'monthly')
     month = request.args.get('month', today.month, type=int)
-
     prop_type = request.args.get('property_type', planning_models.PropertyType.FLAT.value)
     usd_rate = currency_service.get_current_effective_rate()
 
-    # --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
-    # В зависимости от периода вызываем нужную функцию
     is_period_view = period != 'monthly'
+    total_refunds = 0 # Инициализируем
+
     if is_period_view:
+        # Примечание: для периодов логика возвратов может потребовать доработки,
+        # пока мы просто суммируем их.
         report_data, totals = report_service.generate_consolidated_report_by_period(year, period, prop_type)
-        summary_data = []  # Сводка по другим типам не нужна в этом режиме
-        grand_totals = {}  # Общий итог тоже пока скроем для простоты
+        summary_data = []
+        grand_totals = {}
+        # Суммируем возвраты за весь период
+        for m in report_service.PERIOD_MONTHS.get(period, []):
+             total_refunds += report_service.get_refund_data(year, m, prop_type)
+
     else:
         summary_data = report_service.get_monthly_summary_by_property_type(year, month)
-        report_data, totals = report_service.generate_plan_fact_report(year, month, prop_type)
+        # --- ИЗМЕНЕНИЕ: Получаем третье значение - возвраты ---
+        report_data, totals, total_refunds = report_service.generate_plan_fact_report(year, month, prop_type)
         grand_totals = report_service.calculate_grand_totals(year, month)
 
     return render_template('reports/plan_fact_report.html',
@@ -152,16 +175,17 @@ def plan_fact_report():
                            summary_data=summary_data,
                            totals=totals,
                            grand_totals=grand_totals,
+                           # --- НОВОЕ: Передаем возвраты в шаблон ---
+                           total_refunds=total_refunds,
                            years=[today.year - 1, today.year, today.year + 1],
                            months=range(1, 13),
                            property_types=list(planning_models.PropertyType),
                            selected_year=year,
                            selected_month=month,
-                           selected_period=period,  # <-- Передаем выбранный период в шаблон
-                           is_period_view=is_period_view,  # <-- Флаг для условного рендеринга
+                           selected_period=period,
+                           is_period_view=is_period_view,
                            usd_to_uzs_rate=usd_rate,
                            selected_prop_type=prop_type)
-
 
 @report_bp.route('/upload-plan', methods=['GET', 'POST'])
 @login_required

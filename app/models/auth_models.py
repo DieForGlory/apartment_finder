@@ -55,7 +55,8 @@ class SalesManager(db.Model):
     __tablename__ = 'sales_managers'
     id = db.Column(db.Integer, primary_key=True)
     full_name = db.Column(db.String(255), unique=True, nullable=False)
-
+    post_title = db.Column(db.String(255), nullable=True)
+    data_hash = db.Column(db.String(64), index=True, nullable=True)
     def __repr__(self):
         return f'<SalesManager {self.full_name}>'
 

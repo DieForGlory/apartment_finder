@@ -7,7 +7,7 @@ class EstateDeal(db.Model):
 
     # ИЗМЕНЕНИЕ: Заменяем house_id и property_type на estate_sell_id
     estate_sell_id = db.Column(db.Integer, db.ForeignKey('estate_sells.id'), nullable=False)
-
+    date_modified = db.Column(db.Date, nullable=True)
     deal_status_name = db.Column(db.String(100))
     agreement_date = db.Column(db.Date, nullable=True)
     preliminary_date = db.Column(db.Date, nullable=True)
@@ -16,6 +16,8 @@ class EstateDeal(db.Model):
     sell = db.relationship('EstateSell')
     deal_manager_id = db.Column(db.Integer, db.ForeignKey('sales_managers.id'), nullable=True, index=True)
     manager = db.relationship('SalesManager')
+    data_hash = db.Column(db.String(64), index=True, nullable=True)
+
 
 class EstateHouse(db.Model):
     __tablename__ = 'estate_houses'
@@ -27,7 +29,7 @@ class EstateHouse(db.Model):
     geo_house = db.Column(db.String(50))
 
     sells = db.relationship('EstateSell', back_populates='house')
-
+    data_hash = db.Column(db.String(64), index=True, nullable=True)
 
 class EstateSell(db.Model):
     __tablename__ = 'estate_sells'
@@ -43,7 +45,7 @@ class EstateSell(db.Model):
 
     estate_sell_status_name = db.Column(db.String(100), nullable=True)
     estate_price = db.Column(db.Float, nullable=True)
-
+    data_hash = db.Column(db.String(64), index=True, nullable=True)
     # --- НОВОЕ ПОЛЕ ---
     estate_area = db.Column(db.Float, nullable=True)  # Площадь объекта
     finance_operations = db.relationship('FinanceOperation', back_populates='sell', cascade="all, delete-orphan")
