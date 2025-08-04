@@ -95,6 +95,8 @@ def get_fact_income_data(year: int, month: int, property_type: str):
         FinanceOperation.status_name == "Проведено",
         extract('year', FinanceOperation.date_added) == year,
         extract('month', FinanceOperation.date_added) == month,
+        FinanceOperation.payment_type != "Возврат поступлений при отмене сделки",
+        FinanceOperation.payment_type != "Уступка права требования",
         EstateSell.estate_sell_category == property_type
     ).group_by(EstateHouse.complex_name).all()
     return {row.complex_name: (row.fact_income or 0) for row in results}
@@ -626,7 +628,8 @@ def generate_plan_fact_excel(year: int, month: int, property_type: str):
     """
     Генерирует Excel-файл с детальным план-фактным отчетом (ИСПРАВЛЕННАЯ ВЕРСИЯ).
     """
-    report_data, totals = generate_plan_fact_report(year, month, property_type)
+    # Теперь функция возвращает три значения: report_data, totals, total_refunds
+    report_data, totals, total_refunds = generate_plan_fact_report(year, month, property_type)
 
     if not report_data:
         return None

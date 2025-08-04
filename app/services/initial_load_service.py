@@ -1,12 +1,15 @@
 import os
-from sqlalchemy import create_engine, Table, Column, Integer, String, MetaData, Float, Date, DateTime
+import hashlib
+import json
+from sqlalchemy import create_engine, Table, MetaData
 from sqlalchemy.orm import sessionmaker
 from flask import current_app
+from datetime import datetime
 
 from ..core.extensions import db
 from .discount_service import process_discounts_from_excel
-
-from ..models import auth_models, planning_models
+from ..models.auth_models import SalesManager
+from ..models import planning_models, system_models
 from ..models.estate_models import EstateHouse, EstateSell, EstateDeal
 from ..models.finance_models import FinanceOperation
 from ..models.funnel_models import EstateBuy, EstateBuysStatusLog
@@ -15,214 +18,245 @@ CURRENT_DIR = os.path.dirname(__file__)
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, '..', '..'))
 DISCOUNTS_EXCEL_PATH = os.path.join(PROJECT_ROOT, 'data_sources', 'discounts_template.xlsx')
 
-CHUNK_SIZE = 60000
 
-def _migrate_mysql_estate_data_to_sqlite():
-    print("[MIGRATE] 🔄 Начало миграции данных из MySQL...")
+def _calculate_row_hash(data_dict):
+    """Вычисляет хеш SHA-256 для словаря данных."""
+    encoded_row = json.dumps(data_dict, sort_keys=True, default=str).encode('utf-8')
+    return hashlib.sha256(encoded_row).hexdigest()
 
-    mysql_uri = current_app.config['SOURCE_MYSQL_URI']
-    mysql_engine = create_engine(mysql_uri)
-    MySQLSession = sessionmaker(bind=mysql_engine)
-    mysql_session = MySQLSession()
+
+def _sync_table(mysql_session, source_table_name, local_model, columns_map):
+    """Универсальная функция для синхронизации одной таблицы с использованием хеширования."""
+    print(f"[SYNC] ⚙️  Начало синхронизации таблицы '{source_table_name}'...")
     meta = MetaData()
+    source_table = Table(source_table_name, meta, autoload_with=mysql_session.bind)
+    source_query = mysql_session.query(source_table)
+    if source_table_name == 'estate_houses':
+        print("[SYNC] -> Применяю фильтр для 'estate_houses': `complex_name` не должен быть NULL.")
+        source_query = source_query.filter(source_table.c.complex_name.isnot(None))
+    source_records_map = {row.id: row for row in source_query}
+    source_ids = set(source_records_map.keys())
+    print(f"[SYNC] -> Загружено {len(source_ids)} записей из MySQL (после фильтрации).")
+    local_hashes = dict(db.session.query(local_model.id, local_model.data_hash).all())
+    local_ids = set(local_hashes.keys())
+    print(f"[SYNC] -> Найдено {len(local_ids)} записей в локальной базе.")
+    ids_to_add = source_ids - local_ids
+    ids_to_delete = local_ids - source_ids
+    ids_to_check = source_ids.intersection(local_ids)
+    updates_count = 0
+    for item_id in ids_to_add:
+        row = source_records_map[item_id]
+        data_for_model = {model_col: getattr(row, source_col) for model_col, source_col in columns_map.items()}
+        data_for_hash = {model_col: getattr(row, source_col) for model_col, source_col in columns_map.items() if
+                         model_col != 'id'}
+        data_for_model['id'] = item_id
+        data_for_model['data_hash'] = _calculate_row_hash(data_for_hash)
+        db.session.add(local_model(**data_for_model))
+    for item_id in ids_to_check:
+        row = source_records_map[item_id]
+        data_for_hash = {model_col: getattr(row, source_col) for model_col, source_col in columns_map.items() if
+                         model_col != 'id'}
+        new_hash = _calculate_row_hash(data_for_hash)
+        if new_hash != local_hashes[item_id]:
+            instance = db.session.get(local_model, item_id)
+            if instance:
+                data_for_model = {model_col: getattr(row, source_col) for model_col, source_col in columns_map.items()}
+                for key, value in data_for_model.items():
+                    setattr(instance, key, value)
+                instance.data_hash = new_hash
+                updates_count += 1
+    if ids_to_delete:
+        db.session.query(local_model).filter(local_model.id.in_(ids_to_delete)).delete(synchronize_session=False)
+    db.session.commit()
+    print(f"[SYNC] ✅  Синхронизация '{source_table_name}' завершена. "
+          f"Добавлено: {len(ids_to_add)}, Обновлено: {updates_count}, Удалено: {len(ids_to_delete)}.")
 
+
+def _sync_managers(mysql_session):
+    """Специальная функция для синхронизации менеджеров, обрабатывающая дубликаты по имени."""
+    source_table_name = 'users'
+    local_model = SalesManager
+    print(f"[SYNC-MGR] ⚙️  Начало специальной синхронизации таблицы '{source_table_name}'...")
+    meta = MetaData()
+    source_table = Table(source_table_name, meta, autoload_with=mysql_session.bind)
+    source_records = {}
+    for row in mysql_session.query(source_table).order_by(source_table.c.id):
+        name = getattr(row, 'users_name', "").strip()
+        if name and name not in source_records:
+            source_records[name] = row
+    source_names = set(source_records.keys())
+    print(f"[SYNC-MGR] -> Загружено {len(source_names)} уникальных менеджеров из MySQL.")
+    local_records = {mgr.full_name: mgr for mgr in db.session.query(local_model).all()}
+    local_names = set(local_records.keys())
+    print(f"[SYNC-MGR] -> Найдено {len(local_names)} менеджеров в локальной базе.")
+    names_to_add = source_names - local_names
+    names_to_delete = local_names - source_names
+    names_to_check = source_names.intersection(local_names)
+    updates_count = 0
+    for name in names_to_add:
+        row = source_records[name]
+        data_for_hash = {'full_name': name, 'post_title': getattr(row, 'post_title', None)}
+        new_mgr = local_model(
+            id=row.id,
+            full_name=name,
+            post_title=getattr(row, 'post_title', None),
+            data_hash=_calculate_row_hash(data_for_hash)
+        )
+        db.session.add(new_mgr)
+    for name in names_to_check:
+        source_row = source_records[name]
+        local_mgr = local_records[name]
+        data_for_hash = {'full_name': name, 'post_title': getattr(source_row, 'post_title', None)}
+        new_hash = _calculate_row_hash(data_for_hash)
+        if new_hash != local_mgr.data_hash:
+            local_mgr.post_title = getattr(source_row, 'post_title', None)
+            local_mgr.data_hash = new_hash
+            updates_count += 1
+    if names_to_delete:
+        for name in names_to_delete:
+            db.session.delete(local_records[name])
+    db.session.commit()
+    print(f"[SYNC-MGR] ✅  Синхронизация '{source_table_name}' завершена. "
+          f"Добавлено: {len(names_to_add)}, Обновлено: {updates_count}, Удалено: {len(names_to_delete)}.")
+
+
+def incremental_update_from_mysql():
+    """Выполняет инкрементное обновление данных из MySQL на основе хешей."""
+    print(f"\n[HASH UPDATE] 🔄 НАЧАЛО ОБНОВЛЕНИЯ ПО ХЕШАМ ({datetime.now()})...")
     try:
-        print("[MIGRATE] 🧹 Очистка существующих данных...")
-        db.session.query(EstateDeal).delete()
-        db.session.query(FinanceOperation).delete()
-        db.session.query(EstateBuysStatusLog).delete()
-        db.session.query(EstateSell).delete()
-        db.session.query(EstateHouse).delete()
-        db.session.query(EstateBuy).delete()
-        db.session.query(auth_models.SalesManager).delete()
-        db.session.commit()
-        print("[MIGRATE] ✔️ Данные очищены.")
+        mysql_uri = current_app.config['SOURCE_MYSQL_URI']
+        mysql_engine = create_engine(mysql_uri)
+        MySQLSession = sessionmaker(bind=mysql_engine)
+        mysql_session = MySQLSession()
 
-        # --- НАЧАЛО БЛОКА ИСПРАВЛЕНИЙ: ЯВНОЕ ОПИСАНИЕ ВСЕХ ИСХОДНЫХ ТАБЛИЦ ---
+        # Вызовы для всех таблиц
+        _sync_table(mysql_session, 'estate_houses', EstateHouse,
+                    {'complex_name': 'complex_name', 'name': 'name', 'geo_house': 'geo_house'})
 
-        # 1. Миграция estate_houses
-        print("[MIGRATE] 🏡 Загрузка 'estate_houses'...")
-        source_houses_table = Table('estate_houses', meta,
-                                    Column('id', Integer, primary_key=True),
-                                    Column('complex_name', String),
-                                    Column('name', String),
-                                    Column('geo_house', String))
-        mysql_houses_query = mysql_session.query(source_houses_table).filter(source_houses_table.c.complex_name.isnot(None))
-        count = 0
-        for house in mysql_houses_query:
-            db.session.add(EstateHouse(id=house.id, complex_name=house.complex_name, name=house.name, geo_house=house.geo_house))
-            count += 1
-        db.session.commit()
-        print(f"[MIGRATE] ✔️ Миграция 'estate_houses' завершена. Всего: {count}.")
+        # <<< ИЗМЕНЕНИЕ: Вызываем специальную функцию для estate_sells >>>
+        _sync_sells(mysql_session)
 
-        # 2. Миграция estate_buys
-        print("[MIGRATE] 📈 Загрузка 'estate_buys'...")
-        source_buys_table = Table('estate_buys', meta,
-                                  Column('id', Integer, primary_key=True),
-                                  Column('date_added', Date),
-                                  Column('created_at', DateTime),
-                                  Column('status_name', String),
-                                  Column('custom_status_name', String))
-        mysql_buys_query = mysql_session.query(source_buys_table)
-        count = 0
-        for buy in mysql_buys_query:
-            db.session.add(EstateBuy(id=buy.id, date_added=buy.date_added, created_at=buy.created_at, status_name=buy.status_name, custom_status_name=buy.custom_status_name))
-            count += 1
-        db.session.commit()
-        print(f"[MIGRATE] ✔️ Миграция 'estate_buys' завершена. Всего: {count}.")
+        _sync_table(mysql_session, 'estate_buys', EstateBuy,
+                    {'date_added': 'date_added', 'created_at': 'created_at', 'status_name': 'status_name',
+                     'custom_status_name': 'custom_status_name'})
+        _sync_table(mysql_session, 'estate_buys_statuses_log', EstateBuysStatusLog,
+                    {'log_date': 'log_date', 'estate_buy_id': 'estate_buy_id', 'status_to_name': 'status_to_name',
+                     'status_custom_to_name': 'status_custom_to_name', 'manager_id': 'users_id'})
+        _sync_table(mysql_session, 'estate_deals', EstateDeal,
+                    {'estate_sell_id': 'estate_sell_id', 'deal_status_name': 'deal_status_name',
+                     'deal_manager_id': 'deal_manager_id', 'agreement_date': 'agreement_date',
+                     'preliminary_date': 'preliminary_date', 'deal_sum': 'deal_sum', 'date_modified': 'date_modified'})
+        _sync_table(mysql_session, 'finances', FinanceOperation,
+                    {'estate_sell_id': 'estate_sell_id', 'summa': 'summa', 'status_name': 'status_name',
+                     'payment_type': 'types_name', 'date_added': 'date_added', 'date_to': 'date_to',
+                     'manager_id': 'respons_manager_id'})
+        _sync_managers(mysql_session)
 
-        # 3. Миграция estate_buys_statuses_log
-        print("[MIGRATE] 📜 Загрузка 'estate_buys_statuses_log'...")
-        source_logs_table = Table('estate_buys_statuses_log', meta,
-                                  Column('id', Integer, primary_key=True),
-                                  Column('log_date', DateTime),
-                                  Column('estate_buy_id', Integer),
-                                  Column('status_to_name', String),
-                                  Column('status_custom_to_name', String),
-                                  Column('users_id', Integer))
-        mysql_logs_query = mysql_session.query(source_logs_table)
-        count = 0
-        for log in mysql_logs_query:
-            db.session.add(EstateBuysStatusLog(id=log.id, log_date=log.log_date, estate_buy_id=log.estate_buy_id, status_to_name=log.status_to_name, status_custom_to_name=log.status_custom_to_name, manager_id=log.users_id))
-            count += 1
-        db.session.commit()
-        print(f"[MIGRATE] ✔️ Миграция 'estate_buys_statuses_log' завершена. Всего: {count}.")
-
-        # 4. Миграция estate_sells
-        print("[MIGRATE] 🏢 Загрузка 'estate_sells'...")
-        source_sells_table = Table('estate_sells', meta,
-                                   Column('id', Integer, primary_key=True),
-                                   Column('house_id', Integer),
-                                   Column('estate_sell_category', String),
-                                   Column('estate_floor', Integer),
-                                   Column('estate_rooms', Integer),
-                                   Column('estate_price_m2', Float),
-                                   Column('estate_sell_status_name', String),
-                                   Column('estate_price', Float),
-                                   Column('estate_area', Float))
-        ESTATE_SELL_CATEGORY_MAPPING = {'flat': 'Квартира', 'comm': 'Коммерческое помещение', 'garage': 'Парковка', 'storageroom': 'Кладовое помещение'}
-        mysql_sells_query = mysql_session.query(source_sells_table)
-        count = 0
-        for sell in mysql_sells_query:
-            db.session.add(EstateSell(id=sell.id, house_id=sell.house_id, estate_sell_category=ESTATE_SELL_CATEGORY_MAPPING.get(sell.estate_sell_category, sell.estate_sell_category), estate_floor=sell.estate_floor, estate_rooms=sell.estate_rooms, estate_price_m2=sell.estate_price_m2, estate_sell_status_name=sell.estate_sell_status_name, estate_price=sell.estate_price, estate_area=sell.estate_area))
-            count += 1
-        db.session.commit()
-        print(f"[MIGRATE] ✔️ Миграция 'estate_sells' завершена. Всего: {count}.")
-
-        # 5. Миграция менеджеров
-        print("[MIGRATE] 🧑‍💼 Загрузка менеджеров...")
-        source_users_table = Table('users', meta, autoload_with=mysql_engine)
-        mysql_managers_query = mysql_session.query(source_users_table)
-        processed_names = set()
-        for manager in mysql_managers_query:
-            cleaned_name = getattr(manager, 'users_name', "").strip()
-            post_title_val = getattr(manager, 'post_title', None)
-            if cleaned_name and cleaned_name not in processed_names:
-                processed_names.add(cleaned_name)
-                db.session.add(auth_models.SalesManager(id=manager.id, full_name=cleaned_name, post_title=post_title_val))
-        db.session.commit()
-        print(f"[MIGRATE] ✔️ Миграция 'sales_managers' завершена. Добавлено уникальных: {len(processed_names)}.")
-
-        # 6. Миграция estate_deals
-        print("[MIGRATE] 🤝 Загрузка 'estate_deals'...")
-        source_deals_table = Table('estate_deals', meta,
-                                   Column('id', Integer, primary_key=True),
-                                   Column('estate_sell_id', Integer),
-                                   Column('deal_status_name', String),
-                                   Column('deal_manager_id', Integer),
-                                   Column('agreement_date', Date),
-                                   Column('preliminary_date', Date),
-                                   Column('deal_sum', Float),
-                                   Column('date_modified', Date)) # Предполагаем, что date_modified есть в источнике
-        mysql_deals_query = mysql_session.query(source_deals_table)
-        count = 0
-        for deal in mysql_deals_query:
-            db.session.add(EstateDeal(id=deal.id, estate_sell_id=deal.estate_sell_id, deal_status_name=deal.deal_status_name, deal_manager_id=deal.deal_manager_id, agreement_date=deal.agreement_date, preliminary_date=deal.preliminary_date, deal_sum=deal.deal_sum, date_modified=getattr(deal, 'date_modified', None)))
-            count += 1
-        db.session.commit()
-        print(f"[MIGRATE] ✔️ Миграция 'estate_deals' завершена. Всего: {count}.")
-
-        # 7. Миграция finances
-        print("[MIGRATE] 💰 Загрузка 'finances'...")
-        source_finances_table = Table('finances', meta,
-                                      Column('id', Integer, primary_key=True),
-                                      Column('estate_sell_id', Integer),
-                                      Column('summa', Float),
-                                      Column('status_name', String),
-                                      Column('types_name', String),
-                                      Column('date_added', Date),
-                                      Column('date_to', Date),
-                                      Column('respons_manager_id', Integer))
-        mysql_finances_query = mysql_session.query(source_finances_table)
-        count = 0
-        for fin_op in mysql_finances_query:
-            db.session.add(FinanceOperation(id=fin_op.id, estate_sell_id=fin_op.estate_sell_id,date_to=fin_op.date_to, summa=fin_op.summa, status_name=fin_op.status_name, date_added=fin_op.date_added, payment_type=fin_op.types_name, manager_id=fin_op.respons_manager_id))
-            count += 1
-        db.session.commit()
-        print(f"[MIGRATE] ✔️ Миграция 'finances' завершена. Всего: {count}.")
-
-        print("[MIGRATE] ✅ Все данные успешно сохранены в SQLite.")
-
+        print("[HASH UPDATE] ✅ ОБНОВЛЕНИЕ ПО ХЕШАМ ЗАВЕРШЕНО.\n")
+        return True
     except Exception as e:
-        print(f"[MIGRATE] ❌ ОШИБКА во время миграции: {e}")
         db.session.rollback()
-        raise e
+        print(f"[HASH UPDATE] ❌ ОШИБКА ПРИ ОБНОВЛЕНИИ ПО ХЕШАМ: {e}")
+        return False
     finally:
-        mysql_session.close()
-        print("[MIGRATE] 🔌 Соединение с MySQL закрыто.")
+        if 'mysql_session' in locals() and mysql_session.is_active:
+            mysql_session.close()
 
 
-def load_all_initial_data(is_initial_setup=False):
+def _sync_sells(mysql_session):
     """
-    Наполняет ВСЕ базы данных. Вызывается только при ПЕРВОНАЧАЛЬНОМ запуске.
+    Специальная функция для синхронизации estate_sells, которая выполняет
+    трансформацию поля estate_sell_category.
     """
-    print("\n[INITIAL LOAD] 🚀 НАЧАЛО ПРОЦЕССА ПЕРВОНАЧАЛЬНОЙ ЗАГРУЗКИ ДАННЫХ...")
+    source_table_name = 'estate_sells'
+    local_model = EstateSell
+    columns_map = {
+        'house_id': 'house_id', 'estate_sell_category': 'estate_sell_category',
+        'estate_floor': 'estate_floor', 'estate_rooms': 'estate_rooms',
+        'estate_price_m2': 'estate_price_m2', 'estate_sell_status_name': 'estate_sell_status_name',
+        'estate_price': 'estate_price', 'estate_area': 'estate_area'
+    }
+    # Словарь для маппинга, как в оригинальном коде
+    CATEGORY_MAPPING = {
+        'flat': 'Квартира', 'comm': 'Коммерческое помещение',
+        'garage': 'Парковка', 'storageroom': 'Кладовое помещение'
+    }
 
-    if is_initial_setup:
-        print("[INITIAL LOAD] 🛠️ Создание таблиц во всех базах...")
-        db.create_all()
-        print("[INITIAL LOAD] ✔️ Таблицы созданы.")
+    print(f"[SYNC-SELLS] ⚙️  Начало специальной синхронизации таблицы '{source_table_name}'...")
 
-    try:
-        _migrate_mysql_estate_data_to_sqlite()
+    meta = MetaData()
+    source_table = Table(source_table_name, meta, autoload_with=mysql_session.bind)
+    source_query = mysql_session.query(source_table)
+    source_records_map = {row.id: row for row in source_query}
+    source_ids = set(source_records_map.keys())
+    print(f"[SYNC-SELLS] -> Загружено {len(source_ids)} записей из MySQL.")
 
-        print("[INITIAL LOAD] 🧹 Очистка существующих версий скидок...")
-        db.session.query(planning_models.Discount).delete(synchronize_session=False)
-        db.session.query(planning_models.DiscountVersion).delete(synchronize_session=False)
-        db.session.commit()
-        print("[INITIAL LOAD] ✔️ Версии скидок очищены.")
+    local_hashes = dict(db.session.query(local_model.id, local_model.data_hash).all())
+    local_ids = set(local_hashes.keys())
+    print(f"[SYNC-SELLS] -> Найдено {len(local_ids)} записей в локальной базе.")
 
-        if os.path.exists(DISCOUNTS_EXCEL_PATH):
-            print(f"[INITIAL LOAD] 📥 Загрузка скидок из файла: {DISCOUNTS_EXCEL_PATH}")
-            initial_version = planning_models.DiscountVersion(
-                version_number=1,
-                comment="Начальная загрузка из Excel",
-                is_active=True
-            )
-            db.session.add(initial_version)
-            db.session.flush()
-            process_discounts_from_excel(DISCOUNTS_EXCEL_PATH, initial_version.id)
-            print("[INITIAL LOAD] ✔️ Скидки из Excel успешно подготовлены в 'Версию 1'.")
-        else:
-            print(f"[INITIAL LOAD] ⚠️  ВНИМАНИЕ: Файл со скидками не найден ({DISCOUNTS_EXCEL_PATH}).")
+    ids_to_add = source_ids - local_ids
+    ids_to_delete = local_ids - source_ids
+    ids_to_check = source_ids.intersection(local_ids)
+    updates_count = 0
 
-        db.session.commit()
-        print("[INITIAL LOAD] ✅ ПРОЦЕСС ПЕРВОНАЧАЛЬНОЙ ЗАГРУЗКИ ЗАВЕРШЕН.\n")
-    except Exception as e:
-        print(f"[INITIAL LOAD] ❌ Ошибка при полной загрузке данных: {e}")
-        db.session.rollback()
-        raise e
+    def get_mapped_data(row):
+        """Возвращает словарь с данными для модели, применяя маппинг категорий."""
+        data = {}
+        for model_col, source_col in columns_map.items():
+            value = getattr(row, source_col)
+            if model_col == 'estate_sell_category':
+                # Применяем трансформацию!
+                value = CATEGORY_MAPPING.get(value, value)
+            data[model_col] = value
+        return data
 
+    for item_id in ids_to_add:
+        row = source_records_map[item_id]
+        data_for_model = get_mapped_data(row)
+        data_for_model['id'] = item_id
+        data_for_model['data_hash'] = _calculate_row_hash(data_for_model)
+        db.session.add(local_model(**data_for_model))
+
+    for item_id in ids_to_check:
+        row = source_records_map[item_id]
+        data_for_model = get_mapped_data(row)
+        new_hash = _calculate_row_hash(data_for_model)
+        if new_hash != local_hashes[item_id]:
+            instance = db.session.get(local_model, item_id)
+            if instance:
+                for key, value in data_for_model.items():
+                    setattr(instance, key, value)
+                instance.data_hash = new_hash
+                updates_count += 1
+
+    if ids_to_delete:
+        db.session.query(local_model).filter(local_model.id.in_(ids_to_delete)).delete(synchronize_session=False)
+
+    db.session.commit()
+    print(f"[SYNC-SELLS] ✅  Синхронизация '{source_table_name}' завершена. "
+          f"Добавлено: {len(ids_to_add)}, Обновлено: {updates_count}, Удалено: {len(ids_to_delete)}.")
+# <<< ВОЗВРАЩЕННАЯ ФУНКЦИЯ >>>
 
 def refresh_estate_data_from_mysql():
     """
-    Обновляет данные из MySQL. НЕ ТРОГАЕТ СКИДКИ.
+    Выполняет ПОЛНУЮ очистку и последующую синхронизацию.
+    Используется для первоначальной настройки.
     """
-    print("\n[REFRESH DATA] 🔄 НАЧАЛО ПРОЦЕССА ОБНОВЛЕНИЯ ДАННЫХ ИЗ MySQL...")
-    try:
-        _migrate_mysql_estate_data_to_sqlite()
-        print("[REFRESH DATA] ✅ ДАННЫЕ УСПЕШНО ОБНОВЛЕНЫ ИЗ MySQL.\n")
-        return True
-    except Exception as e:
-        print(f"[REFRESH DATA] ❌ ОШИБКА ПРИ ОБНОВЛЕНИИ ДАННЫХ: {e}")
-        return False
+    print("\n[FULL REFRESH] 🔄 НАЧАЛО ПОЛНОЙ ОЧИСТКИ И СИНХРОНИЗАЦИИ...")
+
+    # Сначала очищаем таблицы в правильном порядке (дочерние -> родительские)
+    print("[FULL REFRESH] 🧹 Очистка существующих данных...")
+    db.session.query(FinanceOperation).delete()
+    db.session.query(EstateDeal).delete()
+    db.session.query(EstateBuysStatusLog).delete()
+    db.session.query(EstateSell).delete()
+    db.session.query(EstateHouse).delete()
+    db.session.query(EstateBuy).delete()
+    db.session.query(SalesManager).delete()
+    db.session.commit()
+    print("[FULL REFRESH] ✔️ Данные очищены.")
+
+    # Затем запускаем обычную инкрементную синхронизацию,
+    # которая в данном случае заполнит пустые таблицы.
+    return incremental_update_from_mysql()

@@ -14,7 +14,7 @@ from app.services.discount_service import get_current_usd_rate
 import math
 
 DEFAULT_RATE = 16.5 / 12 / 100
-MAX_MORTGAGE_BODY = 420_000_000
+MAX_MORTGAGE_BODY = 840_000_000
 
 
 def calculate_installment_plan(sell_id: int, term_months: int, additional_discounts: dict, start_date=None, dp_amount: float = 0, dp_type: str = 'uzs'):
