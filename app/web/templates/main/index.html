@@ -1,19 +1,20 @@
 {% extends "layouts/base.html" %}
 
 {% block content %}
-    <h1 class="mb-4">Каталог объектов недвижимости</h1>
+    <h1 class="mb-4">{{ _('Каталог объектов недвижимости') }}</h1>
 
     {% if sells_pagination and sells_pagination.items %}
     <div class="table-responsive">
         <table class="table table-striped table-hover">
            <thead class="thead-dark">
                 <tr>
-                    <th>ID объекта</th>
-                    <th>Тип объекта</th>
-                    <th>Название проекта</th>
-                    <th>Этаж</th>
-                    <th>Номер дома</th> <th>Кол-во комнат</th>
-                    <th>Цена за м² (прайс)</th>
+                    <th>{{ _('ID объекта') }}</th>
+                    <th>{{ _('Тип объекта') }}</th>
+                    <th>{{ _('Название проекта') }}</th>
+                    <th>{{ _('Этаж') }}</th>
+                    <th>{{ _('Номер дома') }}</th>
+                    <th>{{ _('Кол-во комнат') }}</th>
+                    <th>{{ _('Цена за м² (прайс)') }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -38,7 +39,7 @@
         <ul class="pagination justify-content-center">
             {# Ссылка "Назад" #}
             <li class="page-item {% if not sells_pagination.has_prev %}disabled{% endif %}">
-                <a class="page-link" href="{{ url_for('main.index', page=sells_pagination.prev_num) }}">Назад</a>
+                <a class="page-link" href="{{ url_for('main.index', page=sells_pagination.prev_num) }}">{{ _('Назад') }}</a>
             </li>
 
             {# Номера страниц #}
@@ -54,17 +55,17 @@
 
             {# Ссылка "Вперед" #}
             <li class="page-item {% if not sells_pagination.has_next %}disabled{% endif %}">
-                <a class="page-link" href="{{ url_for('main.index', page=sells_pagination.next_num) }}">Вперед</a>
+                <a class="page-link" href="{{ url_for('main.index', page=sells_pagination.next_num) }}">{{ _('Вперед') }}</a>
             </li>
         </ul>
     </nav>
     <div class="text-center text-muted">
-        <small>Показаны записи с {{ sells_pagination.first }} по {{ sells_pagination.last }} из {{ sells_pagination.total }}</small>
+        <small>{% trans first=sells_pagination.first, last=sells_pagination.last, total=sells_pagination.total %}Показаны записи с {{ first }} по {{ last }} из {{ total }}{% endtrans %}</small>
     </div>
 
     {% else %}
     <div class="alert alert-warning">
-        Данные не загружены или объекты отсутствуют.
+        {{ _('Данные не загружены или объекты отсутствуют.') }}
     </div>
     {% endif %}
 {% endblock %}

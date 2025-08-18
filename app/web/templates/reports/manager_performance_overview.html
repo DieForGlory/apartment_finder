@@ -2,15 +2,18 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1>Выполнение планов менеджерами</h1>
+    {# --- ИЗМЕНЕНИЕ 1 --- #}
+    <h1>{{ _('Выполнение планов менеджерами') }}</h1>
     <div class="d-flex gap-2">
         <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#kpiReportModal">
-            <i class="bi bi-download me-2"></i>Скачать ведомость KPI
+            {# --- ИЗМЕНЕНИЕ 2 --- #}
+            <i class="bi bi-download me-2"></i>{{ _('Скачать ведомость KPI') }}
         </button>
 
         {% if current_user.can('upload_data') %}
             <a href="{{ url_for('report.upload_manager_plan') }}" class="btn btn-golden-outline">
-                <i class="bi bi-upload me-2"></i>Загрузить планы
+                {# --- ИЗМЕНЕНИЕ 3 --- #}
+                <i class="bi bi-upload me-2"></i>{{ _('Загрузить планы') }}
             </a>
         {% endif %}
     </div>
@@ -21,17 +24,20 @@
         <form method="GET" action="{{ url_for('report.manager_performance_report') }}">
             <div class="row g-2 align-items-end">
                 <div class="col-md-8">
-                    <label for="search-input" class="form-label">Поиск по ФИО</label>
-                    <input type="text" name="q" id="search-input" class="form-control" value="{{ search_query or '' }}" placeholder="Введите часть имени...">
+                    {# --- ИЗМЕНЕНИЕ 4 --- #}
+                    <label for="search-input" class="form-label">{{ _('Поиск по ФИО') }}</label>
+                    <input type="text" name="q" id="search-input" class="form-control" value="{{ search_query or '' }}" placeholder="{{ _('Введите часть имени...') }}">
                 </div>
                 <div class="col-md-2">
                     <div class="form-check form-switch mb-1">
                         <input class="form-check-input" type="checkbox" name="with_plan" value="true" id="with-plan-switch" {% if show_only_with_plan %}checked{% endif %}>
-                        <label class="form-check-label" for="with-plan-switch">Только с планом</label>
+                        {# --- ИЗМЕНЕНИЕ 5 --- #}
+                        <label class="form-check-label" for="with-plan-switch">{{ _('Только с планом') }}</label>
                     </div>
                 </div>
                 <div class="col-md-2">
-                    <button type="submit" class="btn btn-primary w-100">Найти</button>
+                    {# --- ИЗМЕНЕНИЕ 6 --- #}
+                    <button type="submit" class="btn btn-primary w-100">{{ _('Найти') }}</button>
                 </div>
             </div>
         </form>
@@ -47,7 +53,8 @@
                     <i class="bi bi-chevron-right"></i>
                 </a>
             {% else %}
-                <div class="list-group-item text-center text-muted">Менеджеры, соответствующие вашему запросу, не найдены.</div>
+                {# --- ИЗМЕНЕНИЕ 7 --- #}
+                <div class="list-group-item text-center text-muted">{{ _('Менеджеры, соответствующие вашему запросу, не найдены.') }}</div>
             {% endfor %}
         </div>
     </div>
@@ -57,23 +64,26 @@
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="kpiReportModalLabel">Скачать ведомость по KPI</h5>
+        {# --- ИЗМЕНЕНИЕ 8 --- #}
+        <h5 class="modal-title" id="kpiReportModalLabel">{{ _('Скачать ведомость KPI') }}</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <form action="{{ url_for('report.download_kpi_report') }}" method="GET">
         <div class="modal-body">
             <div class="row">
-                {# ИСПОЛЬЗУЕМ ПЕРЕМЕННЫЕ, ПЕРЕДАННЫЕ ИЗ PYTHON #}
                 <div class="col-6">
-                    <label for="report-month" class="form-label">Месяц</label>
+                    {# --- ИЗМЕНЕНИЕ 9 --- #}
+                    <label for="report-month" class="form-label">{{ _('Месяц') }}</label>
                     <select name="month" id="report-month" class="form-select">
                         {% for i in range(1, 13) %}
-                            <option value="{{ i }}" {% if i == today.month %}selected{% endif %}>{{ month_names[i] }}</option>
+                            {# --- ИЗМЕНЕНИЕ 10: Перевод названий месяцев --- #}
+                            <option value="{{ i }}" {% if i == today.month %}selected{% endif %}>{{ _(month_names[i]) }}</option>
                         {% endfor %}
                     </select>
                 </div>
                 <div class="col-6">
-                    <label for="report-year" class="form-label">Год</label>
+                    {# --- ИЗМЕНЕНИЕ 11 --- #}
+                    <label for="report-year" class="form-label">{{ _('Год') }}</label>
                     <select name="year" id="report-year" class="form-select">
                         <option>{{ today.year - 1 }}</option>
                         <option selected>{{ today.year }}</option>
@@ -83,8 +93,9 @@
             </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-          <button type="submit" class="btn btn-primary"><i class="bi bi-download me-2"></i>Скачать</button>
+          {# --- ИЗМЕНЕНИЕ 12 --- #}
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _('Отмена') }}</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-download me-2"></i>{{ _('Скачать') }}</button>
         </div>
       </form>
     </div>

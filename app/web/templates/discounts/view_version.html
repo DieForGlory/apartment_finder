@@ -3,25 +3,25 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h1 class="mb-0">Просмотр Версии №{{ version.version_number }}</h1>
+        <h1 class="mb-0">{{ _('Просмотр Версии №') }}{{ version.version_number }}</h1>
         <p class="text-muted">{{ version.comment }}</p>
     </div>
     <a href="{{ url_for('discount.versions_index') }}" class="btn btn-secondary">
-        <i class="bi bi-arrow-left"></i> К списку версий
+        <i class="bi bi-arrow-left"></i> {{ _('К списку версий') }}
     </a>
 </div>
 
 <div class="row mb-3">
     <div class="col-md-6">
-        <input type="text" id="searchComplex" class="form-control" placeholder="Поиск по названию ЖК...">
+        <input type="text" id="searchComplex" class="form-control" placeholder="{{ _('Поиск по названию ЖК...') }}">
     </div>
     <div class="col-md-6">
         <select id="filterPropType" class="form-select">
-            <option value="">Все типы недвижимости</option>
-            <option value="flat">flat</option>
-            <option value="comm">comm</option>
-            <option value="garage">garage</option>
-            <option value="storageroom">storageroom</option>
+            <option value="">{{ _('Все типы недвижимости') }}</option>
+            <option value="flat">{{ _('Квартира') }}</option>
+            <option value="comm">{{ _('Коммерческое помещение') }}</option>
+            <option value="garage">{{ _('Парковка') }}</option>
+            <option value="storageroom">{{ _('Кладовое помещение') }}</option>
         </select>
     </div>
 </div>
@@ -30,13 +30,13 @@
     <table class="table table-bordered table-hover">
         <thead class="table-light">
             <tr>
-                <th>ЖК</th>
-                <th>Тип недв.</th>
-                <th>Тип оплаты</th>
-                <th>МПП (%)</th>
-                <th>РОП (%)</th>
-                <th>КД (%)</th>
-                <th>Акция (%)</th>
+                <th>{{ _('ЖК') }}</th>
+                <th>{{ _('Тип недв.') }}</th>
+                <th>{{ _('Тип оплаты') }}</th>
+                <th>{{ _('МПП (%)') }}</th>
+                <th>{{ _('РОП (%)') }}</th>
+                <th>{{ _('КД (%)') }}</th>
+                <th>{{ _('Акция (%)') }}</th>
             </tr>
         </thead>
         <tbody id="discountsTableBody">
@@ -52,7 +52,7 @@
             </tr>
             {% else %}
             <tr>
-                <td colspan="7" class="text-center">В этой версии нет данных о скидках.</td>
+                <td colspan="7" class="text-center">{{ _('В этой версии нет данных о скидках.') }}</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -74,6 +74,8 @@ document.addEventListener('DOMContentLoaded', function() {
         tableRows.forEach(row => {
             if (row.dataset.complex && row.dataset.propType) {
                 const complexMatch = row.dataset.complex.includes(searchTerm);
+                // Примечание: значения в фильтре 'flat', 'comm' и т.д. должны быть переведены в JS, если потребуется,
+                // либо сравнивать с оригинальными значениями, как здесь.
                 const propTypeMatch = propType === '' || row.dataset.propType === propType;
                 if (complexMatch && propTypeMatch) {
                     row.style.display = '';

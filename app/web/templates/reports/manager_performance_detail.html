@@ -3,7 +3,7 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <div>
-        <a href="{{ url_for('report.manager_performance_report') }}" class="text-muted text-decoration-none small mb-1 d-block"><i class="bi bi-arrow-left"></i> Ко всем менеджерам</a>
+        <a href="{{ url_for('report.manager_performance_report') }}" class="text-muted text-decoration-none small mb-1 d-block"><i class="bi bi-arrow-left"></i> {{ _('Ко всем менеджерам') }}</a>
         <h1 class="mb-0">{{ data.manager_name }}</h1>
     </div>
     <div class="d-flex align-items-center gap-3">
@@ -12,7 +12,7 @@
             <label class="form-check-label" for="currency-switcher">USD</label>
         </div>
         <form method="GET" class="d-flex align-items-center gap-2 mb-0">
-            <label for="year-select" class="col-form-label">Год:</label>
+            <label for="year-select" class="col-form-label">{{ _('Год:') }}</label>
             <select name="year" id="year-select" class="form-select w-auto" onchange="this.form.submit()">
                 {% for y in years_for_nav %}
                 <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
@@ -26,10 +26,10 @@
     <div class="col-md-6 col-lg-3">
         <div class="card card-glass h-100 text-center">
             <div class="card-body d-flex flex-column justify-content-center">
-                <h6 class="card-subtitle mb-2 text-muted">Любимый ЖК</h6>
+                <h6 class="card-subtitle mb-2 text-muted">{{ _('Любимый ЖК') }}</h6>
                 <h4 class="card-title text-primary mb-0">{{ kpi_data.best_complex.name or '–' }}</h4>
                 {% if kpi_data.best_complex.count > 0 %}
-                    <small class="text-muted">({{ kpi_data.best_complex.count }} сделок)</small>
+                    <small class="text-muted">({{ kpi_data.best_complex.count }} {{ _('сделок') }})</small>
                 {% endif %}
             </div>
         </div>
@@ -37,10 +37,10 @@
     <div class="col-md-6 col-lg-3">
         <div class="card card-glass h-100 text-center">
             <div class="card-body d-flex flex-column justify-content-center">
-                <h6 class="card-subtitle mb-2 text-muted">Лучший месяц ({{ selected_year }})</h6>
+                <h6 class="card-subtitle mb-2 text-muted">{{ _('Лучший месяц') }} ({{ selected_year }})</h6>
                 <h4 class="card-title text-primary mb-0"><span class="money-value" data-uzs-value="{{ kpi_data.best_month_in_year.income.total }}">{{ "{:,.0f}".format(kpi_data.best_month_in_year.income.total) }}</span> <small class="currency-symbol">UZS</small></h4>
                 {% if kpi_data.best_month_in_year.income.month %}
-                    <small class="text-muted">{{ month_names.get(kpi_data.best_month_in_year.income.month, '') }}</small>
+                    <small class="text-muted">{{ _(month_names.get(kpi_data.best_month_in_year.income.month, '')) }}</small>
                 {% endif %}
             </div>
         </div>
@@ -48,9 +48,9 @@
     <div class="col-md-6 col-lg-3">
         <div class="card card-glass h-100 text-center">
             <div class="card-body">
-                <h6 class="card-subtitle mb-2 text-muted">Продано юнитов</h6>
+                <h6 class="card-subtitle mb-2 text-muted">{{ _('Продано юнитов') }}</h6>
                 {% for type, count in kpi_data.units_by_type.items() %}
-                    <div><strong>{{ type }}:</strong> <span class="badge bg-secondary">{{ count }}</span></div>
+                    <div><strong>{{ _(type) }}:</strong> <span class="badge bg-secondary">{{ count }}</span></div>
                 {% else %}
                     <span>–</span>
                 {% endfor %}
@@ -60,12 +60,12 @@
     <div class="col-md-6 col-lg-3">
         <div class="card card-glass h-100 text-center bg-golden-gradient text-white">
             <div class="card-body">
-                 <h6 class="card-subtitle mb-2" style="opacity: 0.8;">Рекорды за все время</h6>
+                 <h6 class="card-subtitle mb-2" style="opacity: 0.8;">{{ _('Рекорды за все время') }}</h6>
                  <div>
-                     <strong>Год:</strong> <span class="money-value" data-uzs-value="{{ kpi_data.all_time_records.best_year_income.total }}">{{ "{:,.0f}".format(kpi_data.all_time_records.best_year_income.total) }}</span>
+                     <strong>{{ _('Год:') }}</strong> <span class="money-value" data-uzs-value="{{ kpi_data.all_time_records.best_year_income.total }}">{{ "{:,.0f}".format(kpi_data.all_time_records.best_year_income.total) }}</span>
                  </div>
                  <div>
-                     <strong>Месяц:</strong> <span class="money-value" data-uzs-value="{{ kpi_data.all_time_records.best_month_income.total }}">{{ "{:,.0f}".format(kpi_data.all_time_records.best_month_income.total) }}</span>
+                     <strong>{{ _('Месяц:') }}</strong> <span class="money-value" data-uzs-value="{{ kpi_data.all_time_records.best_month_income.total }}">{{ "{:,.0f}".format(kpi_data.all_time_records.best_month_income.total) }}</span>
                  </div>
             </div>
         </div>
@@ -74,13 +74,13 @@
 
 <ul class="nav nav-tabs mb-3" id="pills-tab" role="tablist">
   <li class="nav-item" role="presentation">
-    <button class="nav-link active" id="pills-table-tab" data-bs-toggle="pill" data-bs-target="#pills-table" type="button" role="tab" aria-controls="pills-table" aria-selected="true">Поступления (Таблица)</button>
+    <button class="nav-link active" id="pills-table-tab" data-bs-toggle="pill" data-bs-target="#pills-table" type="button" role="tab" aria-controls="pills-table" aria-selected="true">{{ _('Поступления (Таблица)') }}</button>
   </li>
   <li class="nav-item" role="presentation">
-    <button class="nav-link" id="pills-chart-income-tab" data-bs-toggle="pill" data-bs-target="#pills-chart-income" type="button" role="tab" aria-controls="pills-chart-income" aria-selected="false">Поступления (График)</button>
+    <button class="nav-link" id="pills-chart-income-tab" data-bs-toggle="pill" data-bs-target="#pills-chart-income" type="button" role="tab" aria-controls="pills-chart-income" aria-selected="false">{{ _('Поступления (График)') }}</button>
   </li>
   <li class="nav-item" role="presentation">
-    <button class="nav-link" id="pills-ranking-tab" data-bs-toggle="pill" data-bs-target="#pills-ranking" type="button" role="tab" aria-controls="pills-ranking" aria-selected="false">Рейтинг ЖК</button>
+    <button class="nav-link" id="pills-ranking-tab" data-bs-toggle="pill" data-bs-target="#pills-ranking" type="button" role="tab" aria-controls="pills-ranking" aria-selected="false">{{ _('Рейтинг ЖК') }}</button>
   </li>
 </ul>
 
@@ -92,31 +92,31 @@
                 <table class="table table-hover table-striped mb-0">
                     <thead>
                         <tr>
-                            <th rowspan="2" class="align-middle text-center">Месяц</th>
-                            <th colspan="3" class="text-center">Поступления</th>
-                            <th rowspan="2" class="align-middle text-center">Выплата по KPI</th>
+                            <th rowspan="2" class="align-middle text-center">{{ _('Месяц') }}</th>
+                            <th colspan="3" class="text-center">{{ _('Поступления') }}</th>
+                            <th rowspan="2" class="align-middle text-center">{{ _('Выплата по KPI') }}</th>
                         </tr>
                         <tr>
-                            <th class="text-end">План, <span class="table-currency-label">UZS</span></th>
-                            <th class="text-end">Факт, <span class="table-currency-label">UZS</span></th>
+                            <th class="text-end">{{ _('План,') }} <span class="table-currency-label">UZS</span></th>
+                            <th class="text-end">{{ _('Факт,') }} <span class="table-currency-label">UZS</span></th>
                             <th class="text-center">%</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for month_data in data.performance %}
                         <tr>
-                            <td class="text-center"><strong>{{ month_names.get(month_data.month, '') }}</strong></td>
+                            <td class="text-center"><strong>{{ _(month_names.get(month_data.month, '')) }}</strong></td>
                             <td class="text-end money-value" data-uzs-value="{{ month_data.plan_income }}">{{ "{:,.0f}".format(month_data.plan_income) }}</td>
                             <td class="text-end fw-bold {% if month_data.fact_income > 0 %}text-success{% endif %} money-value" data-uzs-value="{{ month_data.fact_income }}">{{ "{:,.0f}".format(month_data.fact_income) }}</td>
                             <td class="text-center"><span class="badge rounded-pill {% if month_data.income_percent >= 100 %}bg-success{% elif month_data.income_percent > 70 %}bg-warning{% elif month_data.income_percent > 0 %}bg-danger{% else %}bg-secondary{% endif %} bg-opacity-75">{{ "%.1f"|format(month_data.income_percent) }}%</span></td>
                             <td class="text-center" style="vertical-align: middle;">
                                 <div class="d-flex justify-content-center align-items-center gap-2">
-                                    <span id="kpi-result-{{ month_data.month }}" class="fw-bold text-primary" style="min-width: 100px; text-align: right; display: none;"></span>
+                                    <span id="kpi-result-{{ month_data.month }}" class="kpi-result fw-bold text-primary" style="min-width: 100px; text-align: right; display: none;"></span>
                                     <button class="btn btn-sm btn-outline-primary calculate-kpi-btn"
                                             data-manager-id="{{ manager_id }}"
                                             data-year="{{ selected_year }}"
                                             data-month="{{ month_data.month }}"
-                                            title="Рассчитать KPI за {{ month_names.get(month_data.month, '') }}">
+                                            title="{{ _('Рассчитать KPI за') }} {{ _(month_names.get(month_data.month, '')) }}">
                                         <i class="bi bi-calculator"></i>
                                     </button>
                                 </div>
@@ -132,7 +132,7 @@
   <div class="tab-pane fade" id="pills-chart-income" role="tabpanel" aria-labelledby="pills-chart-income-tab">
     <div class="card card-glass">
         <div class="card-body">
-            <h5 class="card-title">План/Факт по поступлениям, <span class="chart-currency-label">UZS</span></h5>
+            <h5 class="card-title">{{ _('План/Факт по поступлениям,') }} <span class="chart-currency-label">UZS</span></h5>
             <div style="position: relative; height:400px">
                 <canvas id="performanceChartIncome"></canvas>
             </div>
@@ -142,14 +142,14 @@
   <div class="tab-pane fade" id="pills-ranking" role="tabpanel" aria-labelledby="pills-ranking-tab">
     <div class="card card-glass">
         <div class="card-body">
-            <h5 class="card-title">Рейтинг ЖК по объему поступлений</h5>
+            <h5 class="card-title">{{ _('Рейтинг ЖК по объему поступлений') }}</h5>
             <div class="table-responsive">
                 <table class="table table-hover table-striped mb-0">
                     <thead>
                         <tr>
-                            <th>ЖК</th>
-                            <th class="text-end">Сумма поступлений, <span class="table-currency-label">UZS</span></th>
-                            <th class="text-end">Количество сделок</th>
+                            <th>{{ _('ЖК') }}</th>
+                            <th class="text-end">{{ _('Сумма поступлений,') }} <span class="table-currency-label">UZS</span></th>
+                            <th class="text-end">{{ _('Количество сделок') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -160,7 +160,7 @@
                             <td class="text-end">{{ item.deal_count }}</td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="3" class="text-center text-muted">Нет данных для рейтинга.</td></tr>
+                        <tr><td colspan="3" class="text-center text-muted">{{ _('Нет данных для рейтинга.') }}</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -176,80 +176,19 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <script>
+        // Передаем все необходимые данные, включая переводы, в JS
         window.pageData = {
             performance: {{ data.performance | tojson | safe }},
             usdRate: {{ usd_to_uzs_rate or 1 }},
-            monthNames: {{ month_names | tojson | safe }}
+            monthNames: {{ month_names | tojson | safe }},
+            i18n: {
+                error: "{{ _('Ошибка') }}",
+                networkError: "{{ _('Ошибка сети') }}",
+                loading: "{{ _('Загрузка...') }}",
+                plan: "{{ _('План') }}",
+                fact: "{{ _('Факт') }}"
+            }
         };
     </script>
     <script src="{{ url_for('static', filename='js/manager_performance_logic.js') }}" defer></script>
-
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const calculateButtons = document.querySelectorAll('.calculate-kpi-btn');
-
-            calculateButtons.forEach(button => {
-                button.addEventListener('click', function(e) {
-                    e.preventDefault();
-
-                    const managerId = this.dataset.managerId;
-                    const year = this.dataset.year;
-                    const month = this.dataset.month;
-                    const resultSpan = document.getElementById(`kpi-result-${month}`);
-                    const isCalculated = this.dataset.isCalculated === 'true';
-
-                    if (isCalculated) {
-                        resultSpan.style.display = resultSpan.style.display === 'none' ? 'inline-block' : 'none';
-                        return;
-                    }
-
-                    resultSpan.innerHTML = `<div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">Loading...</span></div>`;
-                    resultSpan.style.display = 'inline-block';
-                    this.disabled = true;
-
-                    const url = `/reports/manager-kpi-calculate/${managerId}/${year}/${month}`;
-
-                    fetch(url)
-                        .then(response => {
-                            if (!response.ok) throw new Error('Network response was not ok');
-                            return response.json();
-                        })
-                        .then(result => {
-                            if (result.success) {
-                                const payment = result.data.payment;
-                                const flooredPayment = Math.floor(payment);
-                                const formattedPaymentUzs = new Intl.NumberFormat('ru-RU').format(flooredPayment);
-
-                                const newHtml = `
-                                    <span class="money-value" data-uzs-value="${flooredPayment}">${formattedPaymentUzs}</span>
-                                    <small class="currency-symbol">UZS</small>
-                                `;
-                                resultSpan.innerHTML = newHtml;
-                                this.dataset.isCalculated = 'true';
-
-                                const isUsd = document.getElementById('currency-switcher').checked;
-                                if (isUsd) {
-                                    const usdRate = pageData.usdRate || 1;
-                                    const valueInUsd = flooredPayment / usdRate;
-                                    const moneySpan = resultSpan.querySelector('.money-value');
-                                    const currencySmall = resultSpan.querySelector('.currency-symbol');
-
-                                    moneySpan.textContent = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(valueInUsd);
-                                    currencySmall.textContent = 'USD';
-                                }
-                            } else {
-                                resultSpan.textContent = 'Ошибка';
-                            }
-                        })
-                        .catch(error => {
-                            resultSpan.textContent = 'Ошибка сети';
-                            console.error('Ошибка выполнения fetch:', error);
-                        })
-                        .finally(() => {
-                            this.disabled = false;
-                        });
-                });
-            });
-        });
-    </script>
 {% endblock %}

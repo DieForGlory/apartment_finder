@@ -11,25 +11,30 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h1 class="gradient-heading mb-0">{{ data.complex_name }}</h1>
-        <p class="text-muted mb-0">Аналитический дашборд проекта</p>
+        {# --- ИЗМЕНЕНИЕ 1 --- #}
+        <p class="text-muted mb-0">{{ _('Аналитический дашборд проекта') }}</p>
         <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-            <h1 class="mb-0">Аналитика по проекту: {{ data.complex_name }}</h1>
+            {# --- ИЗМЕНЕНИЕ 2 --- #}
+            <h1 class="mb-0">{{ _('Аналитика по проекту:') }} {{ data.complex_name }}</h1>
 
             <div>
                 <a href="{{ url_for('report.hall_of_fame', complex_name=data.complex_name) }}" class="btn btn-golden-outline">
-                    <i class="bi bi-trophy-fill me-2"></i>Зал славы
+                    {# --- ИЗМЕНЕНИЕ 3 --- #}
+                    <i class="bi bi-trophy-fill me-2"></i>{{ _('Зал славы') }}
                 </a>
             </div>
         </div>
     </div>
     <div class="d-flex align-items-center">
         <div class="ms-4 text-center">
-            <label class="form-label">Валюта</label>
+            {# --- ИЗМЕНЕНИЕ 4 --- #}
+            <label class="form-label">{{ _('Валюта') }}</label>
             <div class="form-check form-switch fs-4"><input class="form-check-input" type="checkbox" role="switch" id="currencyToggle"><label class="form-check-label" for="currencyToggle" id="currencyLabel">UZS</label></div>
         </div>
         <a href="{{ url_for('report.plan_fact_report') }}" class="btn btn-outline-secondary ms-4">
             <i class="bi bi-arrow-left me-2"></i>
-            Назад к отчету
+            {# --- ИЗМЕНЕНИЕ 5 --- #}
+            {{ _('Назад к отчету') }}
         </a>
     </div>
 </div>
@@ -37,53 +42,59 @@
 <div class="row g-4 mb-4">
     <div class="col-lg-6 col-md-6">
         <div class="kpi-card text-center">
-            <div class="kpi-label">Всего законтрактовано (за все время)</div>
+            {# --- ИЗМЕНЕНИЕ 6 --- #}
+            <div class="kpi-label">{{ _('Всего законтрактовано (за все время)') }}</div>
             <div class="kpi-value currency-value" data-uzs-value="{{ data.kpi.total_deals_volume }}">{{ "{:,.0f}".format(data.kpi.total_deals_volume) }}</div>
         </div>
     </div>
     <div class="col-lg-6 col-md-6">
         <div class="kpi-card text-center">
-            <div class="kpi-label">Всего поступлений (за все время)</div>
+            {# --- ИЗМЕНЕНИЕ 7 --- #}
+            <div class="kpi-label">{{ _('Всего поступлений (за все время)') }}</div>
             <div class="kpi-value currency-value" data-uzs-value="{{ data.kpi.total_income }}">{{ "{:,.0f}".format(data.kpi.total_income) }}</div>
         </div>
     </div>
 </div>
 
-<h4 class="mb-3">Стоимость остатков (с учетом скидок)</h4>
+{# --- ИЗМЕНЕНИЕ 8 --- #}
+<h4 class="mb-3">{{ _('Стоимость остатков (с учетом скидок)') }}</h4>
 <div class="row g-4 mb-4">
     {% for prop_type, values in data.kpi.remainders_by_type.items() %}
     <div class="col-lg-3 col-md-6">
         <div class="kpi-card text-center">
-            <div class="kpi-label">{{ prop_type }}</div>
+            <div class="kpi-label">{{ _(prop_type) }}</div>
+            {# --- ИЗМЕНЕНИЕ 9 --- #}
             <div class="kpi-value currency-value" data-uzs-value="{{ values.total_price }}">{{ "{:,.0f}".format(values.total_price) }}</div>
-            <div class="kpi-sub-value">{{ values.count }} шт.</div>
+            <div class="kpi-sub-value">{{ values.count }} {{ _('шт.') }}</div>
         </div>
     </div>
     {% else %}
     <div class="col-12">
-        <div class="alert alert-secondary">Нет свободных остатков для расчета.</div>
+        {# --- ИЗМЕНЕНИЕ 10 --- #}
+        <div class="alert alert-secondary">{{ _('Нет свободных остатков для расчета.') }}</div>
     </div>
     {% endfor %}
 </div>
 
 <ul class="nav nav-tabs mb-4" id="projectDashboardTab" role="tablist">
   <li class="nav-item" role="presentation">
-    <button class="nav-link active" id="dynamics-tab" data-bs-toggle="tab" data-bs-target="#dynamics-pane" type="button" role="tab">Динамика продаж</button>
+    {# --- ИЗМЕНЕНИЕ 11 (вкладки) --- #}
+    <button class="nav-link active" id="dynamics-tab" data-bs-toggle="tab" data-bs-target="#dynamics-pane" type="button" role="tab">{{ _('Динамика продаж') }}</button>
   </li>
   <li class="nav-item" role="presentation">
-    <button class="nav-link" id="remainders-tab" data-bs-toggle="tab" data-bs-target="#remainders-pane" type="button" role="tab">Структура остатков</button>
+    <button class="nav-link" id="remainders-tab" data-bs-toggle="tab" data-bs-target="#remainders-pane" type="button" role="tab">{{ _('Структура остатков') }}</button>
   </li>
   <li class="nav-item" role="presentation">
-    <button class="nav-link" id="analysis-tab" data-bs-toggle="tab" data-bs-target="#analysis-pane" type="button" role="tab">Анализ спроса</button>
+    <button class="nav-link" id="analysis-tab" data-bs-toggle="tab" data-bs-target="#analysis-pane" type="button" role="tab">{{ _('Анализ спроса') }}</button>
   </li>
   <li class="nav-item" role="presentation">
-     <button class="nav-link" id="pricing-tab" data-bs-toggle="tab" data-bs-target="#pricing-pane" type="button" role="tab">Анализ цен</button>
+     <button class="nav-link" id="pricing-tab" data-bs-toggle="tab" data-bs-target="#pricing-pane" type="button" role="tab">{{ _('Анализ цен') }}</button>
   </li>
   <li class="nav-item" role="presentation">
-    <button class="nav-link" id="deals-tab" data-bs-toggle="tab" data-bs-target="#deals-pane" type="button" role="tab">Последние сделки</button>
+    <button class="nav-link" id="deals-tab" data-bs-toggle="tab" data-bs-target="#deals-pane" type="button" role="tab">{{ _('Последние сделки') }}</button>
   </li>
   <li class="nav-item" role="presentation">
-    <button class="nav-link" id="houses-tab" data-bs-toggle="tab" data-bs-target="#houses-pane" type="button" role="tab">По домам</button>
+    <button class="nav-link" id="houses-tab" data-bs-toggle="tab" data-bs-target="#houses-pane" type="button" role="tab">{{ _('По домам') }}</button>
   </li>
 </ul>
 
@@ -92,11 +103,13 @@
     <div class="card card-glass h-100">
         <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="card-title mb-0">Выполнение плана за текущий год</h5>
+                {# --- ИЗМЕНЕНИЕ 12 --- #}
+                <h5 class="card-title mb-0">{{ _('Выполнение плана за текущий год') }}</h5>
                 <div class="prop-type-filter">
-                    <a href="{{ url_for('report.project_dashboard', complex_name=data.complex_name) }}" class="btn btn-sm {{ 'btn-primary' if not selected_prop_type else 'btn-outline-secondary' }}">Все типы</a>
+                    {# --- ИЗМЕНЕНИЕ 13 --- #}
+                    <a href="{{ url_for('report.project_dashboard', complex_name=data.complex_name) }}" class="btn btn-sm {{ 'btn-primary' if not selected_prop_type else 'btn-outline-secondary' }}">{{ _('Все типы') }}</a>
                     {% for pt in property_types %}
-                    <a href="{{ url_for('report.project_dashboard', complex_name=data.complex_name, property_type=pt) }}" class="btn btn-sm {{ 'btn-primary' if selected_prop_type == pt else 'btn-outline-secondary' }}">{{ pt }}</a>
+                    <a href="{{ url_for('report.project_dashboard', complex_name=data.complex_name, property_type=pt) }}" class="btn btn-sm {{ 'btn-primary' if selected_prop_type == pt else 'btn-outline-secondary' }}">{{ _(pt) }}</a>
                     {% endfor %}
                 </div>
             </div>
@@ -110,7 +123,8 @@
   <div class="tab-pane fade" id="remainders-pane" role="tabpanel">
      <div class="card card-glass h-100">
         <div class="card-body">
-            <h5 class="card-title mb-3">Структура непроданных юнитов (шт.)</h5>
+            {# --- ИЗМЕНЕНИЕ 14 --- #}
+            <h5 class="card-title mb-3">{{ _('Структура непроданных юнитов (шт.)') }}</h5>
             <div class="dashboard-chart-container" style="height: 350px;">
                 <canvas id="remaindersChart"></canvas>
             </div>
@@ -123,7 +137,8 @@
       <div class="col-lg-4">
         <div class="card card-glass h-100">
           <div class="card-body d-flex flex-column">
-            <h5 class="card-title mb-3">Продажи по этажам</h5>
+            {# --- ИЗМЕНЕНИЕ 15 --- #}
+            <h5 class="card-title mb-3">{{ _('Продажи по этажам') }}</h5>
             <div class="dashboard-chart-container flex-grow-1">
               <canvas id="floorChart"></canvas>
             </div>
@@ -133,7 +148,8 @@
       <div class="col-lg-4">
         <div class="card card-glass h-100">
           <div class="card-body d-flex flex-column">
-            <h5 class="card-title mb-3">Продажи по комнатности</h5>
+            {# --- ИЗМЕНЕНИЕ 16 --- #}
+            <h5 class="card-title mb-3">{{ _('Продажи по комнатности') }}</h5>
             <div class="dashboard-chart-container flex-grow-1">
               <canvas id="roomsChart"></canvas>
             </div>
@@ -143,7 +159,8 @@
       <div class="col-lg-4">
         <div class="card card-glass h-100">
           <div class="card-body d-flex flex-column">
-            <h5 class="card-title mb-3">Продажи по площадям</h5>
+            {# --- ИЗМЕНЕНИЕ 17 --- #}
+            <h5 class="card-title mb-3">{{ _('Продажи по площадям') }}</h5>
             <div class="dashboard-chart-container flex-grow-1">
               <canvas id="areaChart"></canvas>
             </div>
@@ -156,7 +173,8 @@
   <div class="tab-pane fade" id="pricing-pane" role="tabpanel">
     <div class="card card-glass h-100">
         <div class="card-body">
-            <h5 class="card-title mb-3">Динамика средней цены продажи, UZS/м²</h5>
+            {# --- ИЗМЕНЕНИЕ 18 --- #}
+            <h5 class="card-title mb-3">{{ _('Динамика средней цены продажи, UZS/м²') }}</h5>
             <div class="dashboard-chart-container">
                 <canvas id="priceDynamicsChart"></canvas>
             </div>
@@ -171,21 +189,23 @@
                 <table class="table modern-table">
                     <thead>
                         <tr>
-                            <th>Дата сделки</th>
-                            <th>Тип недвижимости</th>
-                            <th class="text-end">Сумма сделки</th>
+                            {# --- ИЗМЕНЕНИЕ 19 (заголовки таблицы) --- #}
+                            <th>{{ _('Дата сделки') }}</th>
+                            <th>{{ _('Тип недвижимости') }}</th>
+                            <th class="text-end">{{ _('Сумма сделки') }}</th>
                         </tr>
                     </thead>
                     <tbody>
                     {% for deal in data.recent_deals %}
                         <tr>
                             <td>{{ deal.deal_date.strftime('%d.%m.%Y') if deal.deal_date else '-' }}</td>
-                            <td>{{ deal.property_type }}</td>
+                            <td>{{ _(deal.property_type) }}</td>
                             <td class="text-end currency-value" data-uzs-value="{{ deal.deal_sum }}">{{ "{:,.0f}".format(deal.deal_sum) }}</td>
                         </tr>
                     {% else %}
                         <tr>
-                            <td colspan="3" class="text-center text-muted p-4">Нет данных о сделках.</td>
+                            {# --- ИЗМЕНЕНИЕ 20 --- #}
+                            <td colspan="3" class="text-center text-muted p-4">{{ _('Нет данных о сделках.') }}</td>
                         </tr>
                     {% endfor %}
                     </tbody>
@@ -209,16 +229,17 @@
                   <table class="table house-details-table">
                     <thead>
                       <tr>
-                        <th>Тип недвижимости</th>
-                        <th class="text-center">Осталось, шт.</th>
-                        <th class="text-center">Всего, шт.</th>
-                        <th class="text-end">Сред. цена/м² (дно)</th>
+                        {# --- ИЗМЕНЕНИЕ 21 (заголовки таблицы) --- #}
+                        <th>{{ _('Тип недвижимости') }}</th>
+                        <th class="text-center">{{ _('Осталось, шт.') }}</th>
+                        <th class="text-center">{{ _('Всего, шт.') }}</th>
+                        <th class="text-end">{{ _('Сред. цена/м² (дно)') }}</th>
                       </tr>
                     </thead>
                     <tbody>
                     {% for prop_type, details in house.property_types_data.items() %}
                       <tr>
-                        <td class="fw-bold">{{ prop_type }}</td>
+                        <td class="fw-bold">{{ _(prop_type) }}</td>
                         <td class="text-center fs-5 fw-bold">{{ details.remaining_count }}</td>
                         <td class="text-center text-muted">{{ details.total_count }}</td>
                         <td class="text-end fs-5 fw-bold currency-value" data-uzs-value="{{ details.avg_price_per_sqm }}">{{ "{:,.0f}".format(details.avg_price_per_sqm) }}</td>
@@ -231,7 +252,8 @@
             </div>
           {% else %}
             <div class="col-12">
-                <div class="alert alert-secondary text-center">Нет данных по отдельным домам в этом комплексе.</div>
+                {# --- ИЗМЕНЕНИЕ 22 --- #}
+                <div class="alert alert-secondary text-center">{{ _('Нет данных по отдельным домам в этом комплексе.') }}</div>
             </div>
           {% endfor %}
         </div>
@@ -247,6 +269,16 @@
 <script>
     document.body.dataset.usdRate = "{{ usd_to_uzs_rate or 12650 }}";
     const charts_json_data = JSON.parse('{{ charts_json|safe }}');
+    // ИЗМЕНЕНИЕ: Передаём полные, переведённые фразы для графиков
+    window.i18n = {
+        plan_contracting: "{{ _('План контрактации') }}",
+        fact_contracting: "{{ _('Факт контрактации') }}",
+        plan_income: "{{ _('План поступлений') }}",
+        fact_income: "{{ _('Факт поступлений') }}",
+        remaining_qty: "{{ _('Кол-во остатков, шт.') }}",
+        units_sold: "{{ _('Продано квартир, шт.') }}",
+        avg_price: "{{ _('Средняя цена за м²') }}"
+    };
 </script>
 <script src="{{ url_for('static', filename='js/report_script.js') }}"></script>
 <script src="{{ url_for('static', filename='js/project_dashboard_script.js') }}"></script>

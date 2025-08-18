@@ -8,6 +8,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const pricingData = cardData.pricing || [];
     const allDiscountsForPropertyType = cardData.all_discounts_for_property_type || [];
     const apartmentData = cardData.apartment || {};
+    // --- ИЗМЕНЕНИЕ 1: Получаем объект с переводами ---
+    const i18n = cardData.i18n || {};
+
 
     const appliedAdditionalDiscounts = {};
     pricingData.forEach(option => {
@@ -98,12 +101,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         const toggleButton = optionElement.querySelector('.btn-additional-discounts-toggle');
+        // --- ИЗМЕНЕНИЕ 2: Используем переводы для текста кнопки ---
         if (anyAdditionalDiscountApplied) {
             toggleButton.classList.add('active');
-            toggleButton.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> Доп. скидки (${totalAppliedPercent.toFixed(1)}%)`;
+            toggleButton.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> ${i18n.appliedDiscounts || 'Доп. скидки'} (${totalAppliedPercent.toFixed(1)}%)`;
         } else {
             toggleButton.classList.remove('active');
-            toggleButton.innerHTML = `<i class="bi bi-percent me-1"></i> Применить доп. скидки`;
+            toggleButton.innerHTML = `<i class="bi bi-percent me-1"></i> ${i18n.applyDiscounts || 'Применить доп. скидки'}`;
         }
     }
 
@@ -116,7 +120,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const paymentOptionCard = this.closest('.payment-option-card');
             const typeKey = paymentOptionCard.dataset.typeKey;
 
-            if (appliedAdditionalDiscounts[typeKey].details[discountType]) {
+            // Используем in для проверки наличия свойства, а не его значения
+            if (discountType in appliedAdditionalDiscounts[typeKey].details) {
                 delete appliedAdditionalDiscounts[typeKey].details[discountType];
                 this.classList.remove('active');
             } else {
@@ -130,14 +135,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     document.querySelectorAll('.payment-option-card').forEach(card => updateOptionUI(card));
 
-    // --- НАЧАЛО ИЗМЕНЕНИЙ: ОБНОВЛЕННАЯ ЛОГИКА КНОПКИ ПЕЧАТИ ---
     const printKpBtn = document.getElementById('printKpBtn');
     if (printKpBtn) {
         printKpBtn.addEventListener('click', function() {
             const sellId = this.dataset.sellId;
             if (!sellId) return;
 
-            // Собираем только те скидки, которые действительно применены (значение > 0)
             const selectionsForUrl = {};
             for (const typeKey in appliedAdditionalDiscounts) {
                 const applied = {};
@@ -147,13 +150,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         applied[discountName] = value;
                     }
                 }
-                // Добавляем в итоговый объект, только если есть примененные скидки
                 if (Object.keys(applied).length > 0) {
                     selectionsForUrl[typeKey] = applied;
                 }
             }
 
-            // Создаем URL-параметр, содержащий JSON со всеми выбранными скидками
             const selectionsJson = JSON.stringify(selectionsForUrl);
             const queryParams = new URLSearchParams({
                 selections: selectionsJson
@@ -163,5 +164,4 @@ document.addEventListener('DOMContentLoaded', function() {
             window.open(printUrl, '_blank');
         });
     }
-    // --- КОНЕЦ ИЗМЕНЕНИЙ ---
 });

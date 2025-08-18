@@ -27,10 +27,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 data: {
                     labels: dynamics.labels,
                     datasets: [
-                        { type: 'line', label: 'План контрактации', data: dynamics.plan_volume.map(v => v / divisor), borderColor: 'rgba(54, 162, 235, 1)', fill: false, tension: 0.1 },
-                        { type: 'bar', label: 'Факт контрактации', data: dynamics.fact_volume.map(v => v / divisor), backgroundColor: 'rgba(75, 192, 192, 0.7)' },
-                        { type: 'line', label: 'План поступлений', data: dynamics.plan_income.map(v => v / divisor), borderColor: 'rgba(255, 99, 132, 1)', fill: false, tension: 0.1 },
-                        { type: 'bar', label: 'Факт поступлений', data: dynamics.fact_income.map(v => v / divisor), backgroundColor: 'rgba(255, 206, 86, 0.7)' }
+                        // ИЗМЕНЕНИЕ: Используем переводы из window.i18n
+                        { type: 'line', label: window.i18n.plan_contracting, data: dynamics.plan_volume.map(v => v / divisor), borderColor: 'rgba(54, 162, 235, 1)', fill: false, tension: 0.1 },
+                        { type: 'bar', label: window.i18n.fact_contracting, data: dynamics.fact_volume.map(v => v / divisor), backgroundColor: 'rgba(75, 192, 192, 0.7)' },
+                        { type: 'line', label: window.i18n.plan_income, data: dynamics.plan_income.map(v => v / divisor), borderColor: 'rgba(255, 99, 132, 1)', fill: false, tension: 0.1 },
+                        { type: 'bar', label: window.i18n.fact_income, data: dynamics.fact_income.map(v => v / divisor), backgroundColor: 'rgba(255, 206, 86, 0.7)' }
                     ]
                 },
                 options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { callback: value => formatCurrency(value, isUsd) } } }, plugins: { tooltip: { callbacks: { label: context => `${context.dataset.label}: ${formatCurrency(context.parsed.y, isUsd)}` } } } }
@@ -48,17 +49,19 @@ document.addEventListener('DOMContentLoaded', function () {
                 type: 'doughnut',
                 data: {
                     labels: remaindersData.labels,
-                    datasets: [{ label: 'Кол-во остатков, шт.', data: remaindersData.data, backgroundColor: ['rgba(255, 99, 132, 0.7)', 'rgba(54, 162, 235, 0.7)', 'rgba(255, 206, 86, 0.7)', 'rgba(75, 192, 192, 0.7)'], borderColor: 'var(--bs-tertiary-bg)', borderWidth: 3 }]
+                    // ИЗМЕНЕНИЕ: Используем перевод из window.i18n
+                    datasets: [{ label: window.i18n.remaining_qty, data: remaindersData.data, backgroundColor: ['rgba(255, 99, 132, 0.7)', 'rgba(54, 162, 235, 0.7)', 'rgba(255, 206, 86, 0.7)', 'rgba(75, 192, 192, 0.7)'], borderColor: 'var(--bs-tertiary-bg)', borderWidth: 3 }]
                 },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
             });
         },
         'analysisCharts': () => { // Эта функция инициализирует все 3 графика спроса
             if (!charts_json_data.sales_analysis) return;
+            // ИЗМЕНЕНИЕ: Используем перевод из window.i18n
             const analysisChartsToRender = [
-                { id: 'floorChart', data: charts_json_data.sales_analysis.by_floor, label: 'Продано квартир, шт.' },
-                { id: 'roomsChart', data: charts_json_data.sales_analysis.by_rooms, label: 'Продано квартир, шт.' },
-                { id: 'areaChart', data: charts_json_data.sales_analysis.by_area, label: 'Продано квартир, шт.' }
+                { id: 'floorChart', data: charts_json_data.sales_analysis.by_floor, label: window.i18n.units_sold },
+                { id: 'roomsChart', data: charts_json_data.sales_analysis.by_rooms, label: window.i18n.units_sold },
+                { id: 'areaChart', data: charts_json_data.sales_analysis.by_area, label: window.i18n.units_sold }
             ];
             analysisChartsToRender.forEach(chartInfo => {
                 const ctx = document.getElementById(chartInfo.id);
@@ -85,7 +88,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 type: 'line',
                 data: {
                     labels: chartData.labels,
-                    datasets: [{ label: 'Средняя цена за м²', data: chartData.data.map(p => p / divisor), borderColor: 'rgba(153, 102, 255, 1)', backgroundColor: 'rgba(153, 102, 255, 0.2)', fill: true, tension: 0.1 }]
+                    // ИЗМЕНЕНИЕ: Используем перевод из window.i18n
+                    datasets: [{ label: window.i18n.avg_price, data: chartData.data.map(p => p / divisor), borderColor: 'rgba(153, 102, 255, 1)', backgroundColor: 'rgba(153, 102, 255, 0.2)', fill: true, tension: 0.1 }]
                 },
                 options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: false, ticks: { callback: value => formatCurrency(value, isUsd) } } }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: context => `${context.dataset.label}: ${formatCurrency(context.parsed.y, isUsd)}` } } } }
             });

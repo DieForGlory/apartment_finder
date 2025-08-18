@@ -8,10 +8,12 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1 class="mb-0">Сводный план-фактный отчет</h1>
+    {# --- ИЗМЕНЕНИЕ 1 --- #}
+    <h1 class="mb-0">{{ _('Сводный план-фактный отчет') }}</h1>
     <div>
         <a id="export-link" href="{{ url_for('report.export_plan_fact', year=selected_year, month=selected_month, property_type=selected_prop_type, period=selected_period) }}" class="btn btn-outline-success">
-            <i class="bi bi-file-earmark-excel me-2"></i>Экспорт
+            {# --- ИЗМЕНЕНИЕ 2 --- #}
+            <i class="bi bi-file-earmark-excel me-2"></i>{{ _('Экспорт') }}
         </a>
     </div>
 </div>
@@ -20,31 +22,33 @@
     <div class="d-flex justify-content-between align-items-center">
         <form method="GET" action="{{ url_for('report.plan_fact_report') }}" class="flex-grow-1">
              <div class="row g-3 align-items-end">
-                <div class="col-md-2"><label for="year" class="form-label">Год</label><select name="year" id="year" class="form-select">{% for y in years %}<option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>{% endfor %}</select></div>
+                {# --- ИЗМЕНЕНИЕ 3 (фильтры) --- #}
+                <div class="col-md-2"><label for="year" class="form-label">{{ _('Год') }}</label><select name="year" id="year" class="form-select">{% for y in years %}<option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>{% endfor %}</select></div>
                 <div class="col-md-3">
-                    <label for="period" class="form-label">Период</label>
+                    <label for="period" class="form-label">{{ _('Период') }}</label>
                     <select name="period" id="period" class="form-select">
-                        <option value="monthly" {% if selected_period == 'monthly' %}selected{% endif %}>По месяцам</option>
-                        <option value="q1" {% if selected_period == 'q1' %}selected{% endif %}>1-й квартал (Янв-Мар)</option>
-                        <option value="q2" {% if selected_period == 'q2' %}selected{% endif %}>2-й квартал (Апр-Июн)</option>
-                        <option value="q3" {% if selected_period == 'q3' %}selected{% endif %}>3-й квартал (Июл-Сен)</option>
-                        <option value="q4" {% if selected_period == 'q4' %}selected{% endif %}>4-й квартал (Окт-Дек)</option>
-                        <option value="h1" {% if selected_period == 'h1' %}selected{% endif %}>1-е полугодие (Янв-Июн)</option>
-                        <option value="h2" {% if selected_period == 'h2' %}selected{% endif %}>2-е полугодие (Июл-Дек)</option>
+                        <option value="monthly" {% if selected_period == 'monthly' %}selected{% endif %}>{{ _('По месяцам') }}</option>
+                        <option value="q1" {% if selected_period == 'q1' %}selected{% endif %}>{{ _('1-й квартал (Янв-Мар)') }}</option>
+                        <option value="q2" {% if selected_period == 'q2' %}selected{% endif %}>{{ _('2-й квартал (Апр-Июн)') }}</option>
+                        <option value="q3" {% if selected_period == 'q3' %}selected{% endif %}>{{ _('3-й квартал (Июл-Сен)') }}</option>
+                        <option value="q4" {% if selected_period == 'q4' %}selected{% endif %}>{{ _('4-й квартал (Окт-Дек)') }}</option>
+                        <option value="h1" {% if selected_period == 'h1' %}selected{% endif %}>{{ _('1-е полугодие (Янв-Июн)') }}</option>
+                        <option value="h2" {% if selected_period == 'h2' %}selected{% endif %}>{{ _('2-е полугодие (Июл-Дек)') }}</option>
                     </select>
                 </div>
                 <div class="col-md-2">
-                    <label for="month" class="form-label">Месяц</label>
+                    <label for="month" class="form-label">{{ _('Месяц') }}</label>
                     <select name="month" id="month" class="form-select">
                         {% for m in months %}<option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ '%02d'|format(m) }}</option>{% endfor %}
                     </select>
                 </div>
-                <div class="col-md-3"><label for="property_type" class="form-label">Тип недвижимости</label><select name="property_type" id="property_type" class="form-select">{% for pt in property_types %}<option value="{{ pt.value }}" {% if pt.value == selected_prop_type %}selected{% endif %}>{{ pt.value }}</option>{% endfor %}</select></div>
-                <div class="col-md-2"><button type="submit" class="btn btn-primary w-100">Показать</button></div>
+                <div class="col-md-3"><label for="property_type" class="form-label">{{ _('Тип недвижимости') }}</label><select name="property_type" id="property_type" class="form-select">{% for pt in property_types %}<option value="{{ pt.value }}" {% if pt.value == selected_prop_type %}selected{% endif %}>{{ _(pt.value) }}</option>{% endfor %}</select></div>
+                <div class="col-md-2"><button type="submit" class="btn btn-primary w-100">{{ _('Показать') }}</button></div>
             </div>
         </form>
         <div class="ms-4 text-center">
-            <label class="form-label">Валюта</label>
+            {# --- ИЗМЕНЕНИЕ 4 --- #}
+            <label class="form-label">{{ _('Валюта') }}</label>
             <div class="form-check form-switch fs-4"><input class="form-check-input" type="checkbox" role="switch" id="currencyToggle"><label class="form-check-label" for="currencyToggle" id="currencyLabel">UZS</label></div>
         </div>
     </div>
@@ -53,7 +57,8 @@
 <div class="row g-4 mb-4">
     <div class="col-lg-3 col-md-6">
         <div class="kpi-card">
-            <div class="kpi-label">Контрактация (Факт / План)</div>
+            {# --- ИЗМЕНЕНИЕ 5 (карточки KPI) --- #}
+            <div class="kpi-label">{{ _('Контрактация (Факт / План)') }}</div>
             <div class="kpi-value currency-value" data-uzs-value="{{ totals.fact_volume }}">{{ "{:,.0f}".format(totals.fact_volume)|replace(',', '.') }}</div>
             <div class="kpi-sub-value currency-value" data-uzs-value="{{ totals.plan_volume }}">{{ "{:,.0f}".format(totals.plan_volume)|replace(',', '.') }}</div>
             <div class="progress-bar-kpi">
@@ -64,7 +69,7 @@
     </div>
     <div class="col-lg-3 col-md-6">
         <div class="kpi-card">
-            <div class="kpi-label">Поступления (Факт / План)</div>
+            <div class="kpi-label">{{ _('Поступления (Факт / План)') }}</div>
             <div class="kpi-value currency-value" data-uzs-value="{{ totals.fact_income }}">{{ "{:,.0f}".format(totals.fact_income)|replace(',', '.') }}</div>
             <div class="kpi-sub-value currency-value" data-uzs-value="{{ totals.plan_income }}">{{ "{:,.0f}".format(totals.plan_income)|replace(',', '.') }}</div>
             <div class="progress-bar-kpi">
@@ -74,13 +79,13 @@
         </div>
     </div>
     <div class="col-lg-3 col-md-6">
-        <div class="kpi-card kpi-card-refund"> <div class="kpi-label">Ожидаемые возвраты</div>
+        <div class="kpi-card kpi-card-refund"> <div class="kpi-label">{{ _('Ожидаемые возвраты') }}</div>
             <div class="kpi-value currency-value" data-uzs-value="{{ total_refunds }}">{{ "{:,.0f}".format(total_refunds)|replace(',', '.') }}</div>
             <div class="kpi-sub-value">&nbsp;</div> </div>
     </div>
     <div class="col-lg-3 col-md-6">
         <div class="kpi-card">
-            <div class="kpi-label">Продано, шт. (Факт / План)</div>
+            <div class="kpi-label">{{ _('Продано, шт. (Факт / План)') }}</div>
             <div class="kpi-value">{{ totals.fact_units }}</div>
             <div class="kpi-sub-value">{{ totals.plan_units }}</div>
             <div class="progress-bar-kpi">
@@ -93,10 +98,11 @@
 
 <ul class="nav nav-tabs mb-4" id="reportTab" role="tablist">
     <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="summary-tab" data-bs-toggle="tab" data-bs-target="#summary-pane" type="button" role="tab">Сводка по проектам</button>
+        {# --- ИЗМЕНЕНИЕ 6 (вкладки) --- #}
+        <button class="nav-link active" id="summary-tab" data-bs-toggle="tab" data-bs-target="#summary-pane" type="button" role="tab">{{ _('Сводка по проектам') }}</button>
     </li>
     <li class="nav-item" role="presentation">
-        <button class="nav-link" id="details-tab" data-bs-toggle="tab" data-bs-target="#details-pane" type="button" role="tab">Детальный отчет</button>
+        <button class="nav-link" id="details-tab" data-bs-toggle="tab" data-bs-target="#details-pane" type="button" role="tab">{{ _('Детальный отчет') }}</button>
     </li>
 </ul>
 
@@ -105,7 +111,8 @@
     <div class="card card-glass">
         <div class="card-header d-flex justify-content-end">
             <div class="w-25">
-                <input type="text" id="projectSearchInput" class="form-control" placeholder="🔎 Поиск по проекту...">
+                {# --- ИЗМЕНЕНИЕ 7 --- #}
+                <input type="text" id="projectSearchInput" class="form-control" placeholder="{{ _('🔎 Поиск по проекту...') }}">
             </div>
         </div>
         <div class="card-body p-0">
@@ -113,11 +120,12 @@
                 <table class="table table-hover simplified-summary" id="summaryTable">
                     <thead>
                         <tr>
-                            <th>Проект</th>
-                            <th class="text-center">Продано, шт.</th>
-                            <th class="text-center">Контрактация</th>
-                            <th class="text-center">Поступления</th>
-                            <th class="text-center">Ожидаемые поступления</th>
+                            {# --- ИЗМЕНЕНИЕ 8 (заголовки таблицы) --- #}
+                            <th>{{ _('Проект') }}</th>
+                            <th class="text-center">{{ _('Продано, шт.') }}</th>
+                            <th class="text-center">{{ _('Контрактация') }}</th>
+                            <th class="text-center">{{ _('Поступления') }}</th>
+                            <th class="text-center">{{ _('Ожидаемые поступления') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -171,7 +179,8 @@
                     </tbody>
                     <tfoot>
                         <tr class="fw-bold">
-                            <td>Итого</td>
+                            {# --- ИЗМЕНЕНИЕ 9 --- #}
+                            <td>{{ _('Итого') }}</td>
                             <td class="text-center">
                                 <div class="metric-value">{{ "{:,.0f}".format(totals.fact_units) }} / <span class="plan-value">{{ "{:,.0f}".format(totals.plan_units) }}</span></div>
                                 <div class="progress-bar-container-simplified">
@@ -224,24 +233,24 @@
             <table class="table table-hover details-table">
                 <thead>
                     <tr>
-                        <th rowspan="2">Проекты ({{ selected_prop_type }})</th>
-                        <th colspan="{{ 3 if is_period_view else 4 }}" class="group-header"><abbr title="Количество">Кол-во, шт.</abbr></th>
-                        <th colspan="{{ 3 if is_period_view else 4 }}" class="group-header"><abbr title="Контрактация">Контрактация</abbr></th>
-                        <th colspan="{{ 4 if not is_period_view else 3 }}" class="group-header"><abbr title="Поступления">Поступления</abbr></th>
+                        {# --- ИЗМЕНЕНИЕ 10 (заголовки детальной таблицы) --- #}
+                        <th rowspan="2">{{ _('Проекты') }} ({{ _(selected_prop_type) }})</th>
+                        <th colspan="{{ 3 if is_period_view else 4 }}" class="group-header"><abbr title="{{ _('Количество') }}">{{ _('Кол-во, шт.') }}</abbr></th>
+                        <th colspan="{{ 3 if is_period_view else 4 }}" class="group-header"><abbr title="{{ _('Контрактация') }}">{{ _('Контрактация') }}</abbr></th>
+                        <th colspan="{{ 4 if not is_period_view else 3 }}" class="group-header"><abbr title="{{ _('Поступления') }}">{{ _('Поступления') }}</abbr></th>
                     </tr>
                     <tr>
-                        <th class="group-divider">План</th><th>Факт</th><th>% <abbr title="Факт">факт</abbr></th>
-                        {% if not is_period_view %}<th class="group-divider">% <abbr title="Прогноз">прогноз</abbr></th>{% endif %}
-                        <th>План</th><th>Факт</th><th>% <abbr title="Факт">факт</abbr></th>
-                        {% if not is_period_view %}<th class="group-divider">% <abbr title="Прогноз">прогноз</abbr></th>{% endif %}
-                        <th>План</th><th>Факт</th>
-                        {% if is_period_view %}<th class="group-divider">% <abbr title="Факт">факт</abbr></th>
-                        {% else %}<th>% <abbr title="Факт">факт</abbr></th><th><abbr title="Ожидаемые">Ожидаемые</abbr></th>{% endif %}
+                        <th class="group-divider">{{ _('План') }}</th><th>{{ _('Факт') }}</th><th>% <abbr title="{{ _('Факт') }}">{{ _('факт') }}</abbr></th>
+                        {% if not is_period_view %}<th class="group-divider">% <abbr title="{{ _('Прогноз') }}">{{ _('прогноз') }}</abbr></th>{% endif %}
+                        <th>{{ _('План') }}</th><th>{{ _('Факт') }}</th><th>% <abbr title="{{ _('Факт') }}">{{ _('факт') }}</abbr></th>
+                        {% if not is_period_view %}<th class="group-divider">% <abbr title="{{ _('Прогноз') }}">{{ _('прогноз') }}</abbr></th>{% endif %}
+                        <th>{{ _('План') }}</th><th>{{ _('Факт') }}</th>
+                        {% if is_period_view %}<th class="group-divider">% <abbr title="{{ _('Факт') }}">{{ _('факт') }}</abbr></th>
+                        {% else %}<th>% <abbr title="{{ _('Факт') }}">{{ _('факт') }}</abbr></th><th><abbr title="{{ _('Ожидаемые') }}">{{ _('Ожидаемые') }}</abbr></th>{% endif %}
                     </tr>
                 </thead>
                 <tbody>
                 {% for row in data %}
-                    {# --- ИЗМЕНЕНИЕ: Добавляем в условие проверку на ожидаемые поступления --- #}
                     {% if row.plan_units > 0 or row.fact_units > 0 or row.plan_volume > 0 or row.fact_volume > 0 or row.plan_income > 0 or row.fact_income > 0 or row.expected_income.sum > 0 %}
                     <tr>
                         <td class="group-divider"><a href="{{ url_for('report.project_dashboard', complex_name=row.complex_name) }}">{{ row.complex_name }}</a></td>
@@ -268,7 +277,8 @@
             </tbody>
                 <tfoot>
                     <tr>
-                        <td class="group-divider">Итого ({{ selected_prop_type }})</td>
+                        {# --- ИЗМЕНЕНИЕ 11 --- #}
+                        <td class="group-divider">{{ _('Итого') }} ({{ _(selected_prop_type) }})</td>
                         <td>{{ totals.plan_units }}</td><td>{{ totals.fact_units }}</td>
                         <td><span class="percent-bar {% if totals.percent_fact_units >= 95 %}high-perf{% elif totals.percent_fact_units >= 75 %}good-perf{% else %}low-perf{% endif %}">{{ "%.0f"|format(totals.percent_fact_units) }}%</span></td>
                         {% if not is_period_view %}<td class="group-divider"><span class="percent-bar forecast-perf">{{ "%.0f"|format(totals.forecast_units) }}%</span></td>{% endif %}
@@ -282,7 +292,6 @@
                             <td class="group-divider"><span class="percent-bar {% if totals.percent_fact_income >= 95 %}high-perf{% elif totals.percent_fact_income >= 75 %}good-perf{% else %}low-perf{% endif %}">{{ "%.0f"|format(totals.percent_fact_income) }}%</span></td>
                         {% else %}
                             <td><span class="percent-bar {% if totals.percent_fact_income >= 95 %}high-perf{% elif totals.percent_fact_income >= 75 %}good-perf{% else %}low-perf{% endif %}">{{ "%.0f"|format(totals.percent_fact_income) }}%</span></td>
-                            {# --- ИСПРАВЛЕННЫЙ БЛОК ДЛЯ ИТОГОВ ПО ТИПУ --- #}
                            <td class="currency-value text-end" data-uzs-value="{{ totals.expected_income }}">
                                 {% if totals.expected_income > 0 %}
                                     <a href="{{ url_for('report.export_expected_income_details', ids=totals.expected_income_ids|join(',')) }}">
@@ -298,7 +307,7 @@
                         {% for summary_row in summary_data %}
                             {% if summary_row.property_type != selected_prop_type %}
                             <tr>
-                                <td class="group-divider">Итого ({{ summary_row.property_type }})</td>
+                                <td class="group-divider">{{ _('Итого') }} ({{ _(summary_row.property_type) }})</td>
                                 <td>{{ summary_row.total_plan_units }}</td><td>{{ summary_row.total_fact_units }}</td>
                                 <td><span class="percent-bar {% if summary_row.percent_fact_units >= 95 %}high-perf{% elif summary_row.percent_fact_units >= 75 %}good-perf{% else %}low-perf{% endif %}">{{ "%.0f"|format(summary_row.percent_fact_units) }}%</span></td>
                                 <td class="group-divider"><span class="percent-bar forecast-perf">{{ "%.0f"|format(summary_row.forecast_units) }}%</span></td>
@@ -309,7 +318,6 @@
                                 <td class="currency-value" data-uzs-value="{{ summary_row.total_plan_income }}">{{ "{:,.0f}".format(summary_row.total_plan_income)|replace(',', '.') }}</td>
                                 <td class="currency-value" data-uzs-value="{{ summary_row.total_fact_income }}">{{ "{:,.0f}".format(summary_row.total_fact_income)|replace(',', '.') }}</td>
                                 <td><span class="percent-bar {% if summary_row.percent_fact_income >= 95 %}high-perf{% elif summary_row.percent_fact_income >= 75 %}good-perf{% else %}low-perf{% endif %}">{{ "%.0f"|format(summary_row.percent_fact_income) }}%</span></td>
-                                {# --- ИСПРАВЛЕННЫЙ БЛОК ДЛЯ СВОДКИ ПО ДРУГИМ ТИПАМ --- #}
                                 <td class="currency-value text-end" data-uzs-value="{{ summary_row.total_expected_income.sum }}">
                                     {% if summary_row.total_expected_income.sum > 0 %}<a href="{{ url_for('report.export_expected_income_details', ids=summary_row.total_expected_income.ids|join(',')) }}">{{ "{:,.0f}".format(summary_row.total_expected_income.sum) }}</a>{% else %}0{% endif %}
                                 </td>
@@ -320,7 +328,8 @@
 
                     {% if not is_period_view and grand_totals %}
                     <tr style="background-color: rgba(var(--bs-warning-rgb), 0.15); font-weight: bold;">
-                        <td class="group-divider">ОБЩИЙ ИТОГ (ВСЕ)</td>
+                        {# --- ИЗМЕНЕНИЕ 12 --- #}
+                        <td class="group-divider">{{ _('ОБЩИЙ ИТОГ (ВСЕ)') }}</td>
                         <td>{{ grand_totals.plan_units }}</td><td>{{ grand_totals.fact_units }}</td>
                         <td><span class="percent-bar high-perf">{{ "%.0f"|format(grand_totals.percent_fact_units) }}%</span></td>
                         <td class="group-divider"><span class="percent-bar forecast-perf">{{ "%.0f"|format(grand_totals.forecast_units) }}%</span></td>
@@ -331,7 +340,6 @@
                         <td class="currency-value" data-uzs-value="{{ grand_totals.plan_income }}">{{ "{:,.0f}".format(grand_totals.plan_income)|replace(',', '.') }}</td>
                         <td class="currency-value" data-uzs-value="{{ grand_totals.fact_income }}">{{ "{:,.0f}".format(grand_totals.fact_income)|replace(',', '.') }}</td>
                         <td><span class="percent-bar high-perf">{{ "%.0f"|format(grand_totals.percent_fact_income) }}%</span></td>
-                        {# --- ИСПРАВЛЕННЫЙ БЛОК ДЛЯ ОБЩЕГО ИТОГА --- #}
                         <td class="currency-value text-end" data-uzs-value="{{ grand_totals.expected_income }}">
                             {% if grand_totals.expected_income > 0 %}<a href="{{ url_for('report.export_expected_income_details', ids=grand_totals.expected_income_ids|join(',')) }}">{{ "{:,.0f}".format(grand_totals.expected_income) }}</a>{% else %}0{% endif %}
                         </td>

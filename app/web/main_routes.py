@@ -2,11 +2,11 @@
 
 import json
 from datetime import datetime
-
+from flask import session
 from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app
 from flask import abort
 from flask_login import login_required, current_user
-
+from flask_babel import gettext as _
 from app.services import special_offer_service
 from ..core.decorators import permission_required
 from ..core.extensions import db
@@ -23,6 +23,10 @@ from ..services.selection_service import find_apartments_by_budget, get_apartmen
 
 main_bp = Blueprint('main', __name__, template_folder='templates')
 
+@main_bp.route('/language/<lang>')
+def set_language(lang=None):
+    session['language'] = lang
+    return redirect(request.referrer)
 
 @main_bp.route('/show-all-routes')
 @login_required
@@ -83,9 +87,17 @@ def index():
 def selection():
     results = None
     filter_options = get_filter_options()
-    # Здесь используются импортированные PropertyType и PaymentMethod, теперь они придут из правильного файла
-    property_types = list(PropertyType)
-    payment_methods = list(PaymentMethod)
+
+    # --- НАЧАЛО ИЗМЕНЕНИЙ ---
+
+    # Создаем переведенные списки для передачи в шаблон
+    translated_property_types = [
+        {'value': pt.value, 'display': _(pt.value)} for pt in PropertyType
+    ]
+    translated_payment_methods = [
+        # Экранируем '%' для gettext
+        {'value': pm.value, 'display': _(pm.value.replace('%', '%%'))} for pm in PaymentMethod
+    ]
 
     if request.method == 'POST':
         try:
@@ -108,11 +120,13 @@ def selection():
             flash("Пожалуйста, введите корректную сумму бюджета.", "danger")
 
     return render_template('main/selection.html',
-                           title="Подбор по бюджету",
+                           title=_("Подбор по бюджету"),  # <-- Тоже переводим заголовок
                            results=results,
-                           property_types=property_types,
-                           filter_options=filter_options,
-                           payment_methods=payment_methods)
+                           # --- НАЧАЛО ИЗМЕНЕНИЙ: Передаем новые списки в шаблон ---
+                           property_types=translated_property_types,
+                           payment_methods=translated_payment_methods,
+                           # --- КОНЕЦ ИЗМЕНЕНИЙ ---
+                           filter_options=filter_options)
 
 
 @main_bp.route('/apartment/<int:sell_id>')

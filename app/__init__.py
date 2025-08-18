@@ -1,24 +1,26 @@
 # app/__init__.py
 import os
-from flask import Flask, request, render_template
+import json
+from datetime import date, datetime
+from flask import Flask, request, render_template, g, session, current_app
 from flask_login import LoginManager
 from flask_apscheduler import APScheduler
 from flask_cors import CORS
 from flask_migrate import Migrate
-import json
-from datetime import date, datetime
-from .models import auth_models, planning_models, estate_models, finance_models, exclusion_models, funnel_models, special_offer_models, system_models
+from flask_babel import Babel
+
 from .core.config import DevelopmentConfig
 from .core.extensions import db
 
-# 1. Создаем экземпляр LoginManager один раз
+# 1. Инициализация расширений
 login_manager = LoginManager()
 login_manager.login_view = 'auth.login'
 login_manager.login_message = "Пожалуйста, войдите в систему для доступа к этой странице."
 login_manager.login_message_category = "info"
+babel = Babel()
+scheduler = APScheduler()
 
-
-# Пользовательский кодировщик для преобразования дат в JSON
+# 2. Пользовательский кодировщик для JSON
 class CustomJSONEncoder(json.JSONEncoder):
     def default(self, obj):
         try:
@@ -31,6 +33,14 @@ class CustomJSONEncoder(json.JSONEncoder):
             return list(iterable)
         return json.JSONEncoder.default(self, obj)
 
+# 3. Функция для выбора языка (определяется до create_app)
+def select_locale():
+    # Пытаемся получить язык из сессии
+    if 'language' in session and session['language'] in current_app.config['LANGUAGES'].keys():
+        return session['language']
+    # Если нет, используем лучший вариант на основе заголовков запроса
+    return request.accept_languages.best_match(current_app.config['LANGUAGES'].keys())
+
 
 def create_app(config_class=DevelopmentConfig):
     """
@@ -39,39 +49,32 @@ def create_app(config_class=DevelopmentConfig):
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_object(config_class)
 
-    # Инициализируем расширения
+    # Конфигурация для мультиязычности
+    app.config['BABEL_DEFAULT_LOCALE'] = 'ru'
+    app.config['LANGUAGES'] = {'en': 'English', 'ru': 'Русский'}
+
+    # Инициализация всех расширений
     CORS(app)
     db.init_app(app)
     Migrate(app, db)
     login_manager.init_app(app)
+    babel.init_app(app, locale_selector=select_locale)
+    scheduler.init_app(app)
     app.json_encoder = CustomJSONEncoder
 
+    # Создание директории instance, если ее нет
     try:
         os.makedirs(app.instance_path, exist_ok=True)
     except OSError as e:
         print(f"Ошибка при создании папки instance: {e}")
 
-    # Инициализация планировщика
-    scheduler = APScheduler()
-    scheduler.init_app(app)
-
-    # --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
-    # Проверяем, что мы не в режиме отладки ИЛИ что мы в основном процессе reloader'а
+    # Запуск планировщика задач (только в основном процессе)
     if not app.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
         scheduler.start()
-        with app.app_context():
-            # Добавление задачи в планировщик
-            if not scheduler.get_job('update_cbu_rate_job'):
-                scheduler.add_job(
-                    id='update_cbu_rate_job',
-                    func='app.services.currency_service:fetch_and_update_cbu_rate',
-                    trigger='interval',
-                    hours=1
-                )
-    # --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
+    # Контекст приложения для регистрации Blueprints и других операций
     with app.app_context():
-        # 3. Импортируем все актуальные модули моделей
+        # Импорт моделей
         from .models import auth_models, planning_models, estate_models, finance_models, exclusion_models, funnel_models, special_offer_models
 
         # Регистрация Blueprints
@@ -95,14 +98,13 @@ def create_app(config_class=DevelopmentConfig):
         app.register_blueprint(special_offer_bp, url_prefix='/specials')
         app.register_blueprint(manager_analytics_bp, url_prefix='/manager-analytics')
 
-        # 4. Обновляем загрузчик пользователя для Flask-Login
+        # Загрузчик пользователя для Flask-Login
         @login_manager.user_loader
         def load_user(user_id):
-            # Используем auth_models для поиска пользователя
             return auth_models.User.query.get(int(user_id))
 
         # Добавление задачи в планировщик
-        if not scheduler.get_job('update_cbu_rate_job'):
+        if scheduler.running and not scheduler.get_job('update_cbu_rate_job'):
             scheduler.add_job(
                 id='update_cbu_rate_job',
                 func='app.services.currency_service:fetch_and_update_cbu_rate',
@@ -110,8 +112,13 @@ def create_app(config_class=DevelopmentConfig):
                 hours=1
             )
 
+    # Единая функция, выполняемая перед каждым запросом
     @app.before_request
-    def check_for_update():
+    def before_request_tasks():
+        # Установка языка для шаблонов
+        g.lang = str(select_locale())
+
+        # Проверка на файл блокировки обновления
         lock_file_path = os.path.join(app.instance_path, 'update.lock')
         if os.path.exists(lock_file_path) and request.endpoint != 'static':
             return render_template('standolone/update_in_progress.html')

@@ -2,16 +2,16 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1>Аналитика по менеджерам</h1>
+    <h1>{{ _('Аналитика по менеджерам') }}</h1>
 </div>
 
 {# --- ВКЛАДКИ --- #}
 <ul class="nav nav-tabs mb-4">
     <li class="nav-item">
-        <a class="nav-link {% if active_tab == 'general' %}active{% endif %}" href="{{ url_for('manager_analytics.show_report') }}">Общий отчет</a>
+        <a class="nav-link {% if active_tab == 'general' %}active{% endif %}" href="{{ url_for('manager_analytics.show_report') }}">{{ _('Общий отчет') }}</a>
     </li>
     <li class="nav-item">
-        <a class="nav-link {% if active_tab == 'yearly' %}active{% endif %}" href="{{ url_for('manager_analytics.yearly_report') }}">Годовой отчет по менеджеру</a>
+        <a class="nav-link {% if active_tab == 'yearly' %}active{% endif %}" href="{{ url_for('manager_analytics.yearly_report') }}">{{ _('Годовой отчет по менеджеру') }}</a>
     </li>
 </ul>
 
@@ -20,16 +20,16 @@
         <form method="GET" action="{{ url_for('manager_analytics.yearly_report') }}">
             <div class="row g-3 align-items-end">
                 <div class="col-md-6">
-                    <label for="manager-select" class="form-label">Выберите менеджера</label>
+                    <label for="manager-select" class="form-label">{{ _('Выберите менеджера') }}</label>
                     <select name="manager_id" id="manager-select" class="form-select" required>
-                        <option value="">-- Менеджер --</option>
+                        <option value="">{{ _('-- Менеджер --') }}</option>
                         {% for manager in all_managers %}
                             <option value="{{ manager.id }}" {% if manager.id == selected_manager_id %}selected{% endif %}>{{ manager.full_name }}</option>
                         {% endfor %}
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <label for="year-select" class="form-label">Год</label>
+                    <label for="year-select" class="form-label">{{ _('Год') }}</label>
                     <select name="year" id="year-select" class="form-select">
                         {% for y in years %}
                             <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
@@ -37,7 +37,7 @@
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <button type="submit" class="btn btn-primary w-100">Показать</button>
+                    <button type="submit" class="btn btn-primary w-100">{{ _('Показать') }}</button>
                 </div>
             </div>
         </form>
@@ -47,7 +47,7 @@
 {% if report_data %}
 <div class="card card-glass mb-4">
     <div class="card-header">
-        <h4>График показателей: {{ selected_manager.full_name }} ({{ selected_year }} г.)</h4>
+        <h4>{{ _('График показателей:') }} {{ selected_manager.full_name }} ({{ selected_year }} {{ _('г.') }})</h4>
     </div>
     <div class="card-body">
         <canvas id="managerYearlyChart"></canvas>
@@ -60,11 +60,11 @@
             <table class="table table-hover">
                 <thead class="table-light">
                     <tr>
-                        <th>Месяц</th>
-                        <th class="text-center">Бронь</th>
-                        <th class="text-center">Сделка в работе</th>
-                        <th class="text-center">Сделка проведена</th>
-                        <th class="text-center">Отказы / Отмены</th>
+                        <th>{{ _('Месяц') }}</th>
+                        <th class="text-center">{{ _('Бронь') }}</th>
+                        <th class="text-center">{{ _('Сделка в работе') }}</th>
+                        <th class="text-center">{{ _('Сделка проведена') }}</th>
+                        <th class="text-center">{{ _('Отказы / Отмены') }}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -80,7 +80,7 @@
                 </tbody>
                 <tfoot>
                     <tr class="table-light fw-bold">
-                        <td>Итого за год</td>
+                        <td>{{ _('Итого за год') }}</td>
                         <td class="text-center">{{ annual_totals.bookings }}</td>
                         <td class="text-center">{{ annual_totals.deals_in_progress }}</td>
                         <td class="text-center">{{ annual_totals.deals_completed }}</td>
@@ -99,28 +99,42 @@
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     {% if report_data %}
+
+    // Передаем переводы в JavaScript
+    window.i18n = {
+        months: [
+            "{{ _('Янв') }}", "{{ _('Фев') }}", "{{ _('Мар') }}", "{{ _('Апр') }}",
+            "{{ _('Май') }}", "{{ _('Июн') }}", "{{ _('Июл') }}", "{{ _('Авг') }}",
+            "{{ _('Сен') }}", "{{ _('Окт') }}", "{{ _('Ноя') }}", "{{ _('Дек') }}"
+        ],
+        bookings: "{{ _('Бронь') }}",
+        deals_in_progress: "{{ _('Сделка в работе') }}",
+        deals_completed: "{{ _('Сделка проведена') }}"
+    };
+
     const ctx = document.getElementById('managerYearlyChart').getContext('2d');
     const monthlyData = {{ report_data|tojson }};
 
-    const labels = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
+    // Используем переводы
+    const labels = window.i18n.months;
 
     const datasets = [
         {
-            label: 'Бронь',
+            label: window.i18n.bookings,
             data: monthlyData.map(d => d.bookings.count),
             backgroundColor: 'rgba(54, 162, 235, 0.6)',
             borderColor: 'rgba(54, 162, 235, 1)',
             borderWidth: 1
         },
         {
-            label: 'Сделка в работе',
+            label: window.i18n.deals_in_progress,
             data: monthlyData.map(d => d.deals_in_progress.count),
             backgroundColor: 'rgba(255, 206, 86, 0.6)',
             borderColor: 'rgba(255, 206, 86, 1)',
             borderWidth: 1
         },
         {
-            label: 'Сделка проведена',
+            label: window.i18n.deals_completed,
             data: monthlyData.map(d => d.deals_completed.count),
             backgroundColor: 'rgba(75, 192, 192, 0.6)',
             borderColor: 'rgba(75, 192, 192, 1)',

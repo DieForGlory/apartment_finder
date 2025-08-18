@@ -2,17 +2,17 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1>Действующая система скидок</h1>
+    <h1>{{ _('Действующая система скидок') }}</h1>
 </div>
 
 <div class="row mb-4">
     <div class="col-md-8">
-        <input type="text" id="searchInput" class="form-control form-control-lg" placeholder="🔍 Введите название ЖК для поиска...">
+        <input type="text" id="searchInput" class="form-control form-control-lg" placeholder="{{ _('🔍 Введите название ЖК для поиска...') }}">
     </div>
     <div class="col-md-4 d-flex align-items-center">
         <div class="form-check form-switch fs-5">
             <input class="form-check-input" type="checkbox" id="showOnlyCadastreSwitch">
-            <label class="form-check-label text-muted" for="showOnlyCadastreSwitch" style="font-size: 0.9rem;">Показывать только с датой кадастра</label>
+            <label class="form-check-label text-muted" for="showOnlyCadastreSwitch" style="font-size: 0.9rem;">{{ _('Показывать только с датой кадастра') }}</label>
         </div>
     </div>
 </div>
@@ -98,28 +98,30 @@
                                             {% if current_user.role.name in ['ADMIN', 'MANAGER'] %}
                                                 {% if data.summary.avg_remainder_price_sqm > 0 %}
                                                     <div class="fw-bold fs-5" style="color: var(--gh-gold);">${{ "{:,.0f}".format(data.summary.avg_remainder_price_sqm) }}</div>
-                                                    <small class="text-muted" style="font-size: 0.7rem;">ср. цена дна за м²</small>
+                                                    <small class="text-muted" style="font-size: 0.7rem;">{{ _('ср. цена дна за м²') }}</small>
                                                 {% else %}
-                                                    <div class="fw-bold fs-6 text-warning" style="height: 35px; display: flex; align-items-center; justify-content: center;">Квартиры<br>распроданы</div>
+                                                    {# --- ИЗМЕНЕНИЕ 1: Использование trans для многострочного текста с HTML --- #}
+                                                    <div class="fw-bold fs-6 text-warning" style="height: 35px; display: flex; align-items-center; justify-content: center;">{% trans %}Квартиры<br>распроданы{% endtrans %}</div>
                                                 {% endif %}
                                             {% endif %}
                                         </div>
                                         <div class="col-3">
                                         {% if data.summary.months_to_cadastre is not none %}
                                             <div class="fw-bold fs-5" style="color: var(--gh-gold);">{{ data.summary.months_to_cadastre }}</div>
-                                            <small class="text-muted" style="font-size: 0.7rem;">мес. до кадастра</small>
+                                            <small class="text-muted" style="font-size: 0.7rem;">{{ _('мес. до кадастра') }}</small>
                                         {% endif %}
                                         </div>
                                         <div class="col-5">
-                                             <small class="text-muted" style="font-size: 0.8rem;">Стандартные скидки</small>
+                                             <small class="text-muted" style="font-size: 0.8rem;">{{ _('Стандартные скидки') }}</small>
                                             <div class="d-flex justify-content-center mt-1">
                                                 <div class="px-2">
                                                     <div class="fw-bold fs-5" style="color: var(--gh-gold);">{{ "%.1f"|format(data.summary.sum_100_payment * 100) }}%</div>
-                                                    <small class="text-muted" style="font-size: 0.7rem;">100% Оплата</small>
+                                                    {# --- ИЗМЕНЕНИЕ 2: Правильный перевод строки с процентом --- #}
+                                                    <small class="text-muted" style="font-size: 0.7rem;">{{ _('100%% оплата') }}</small>
                                                 </div>
                                                 <div class="px-2">
                                                     <div class="fw-bold fs-5" style="color: var(--gh-gold);">{{ "%.1f"|format(data.summary.sum_mortgage * 100) }}%</div>
-                                                    <small class="text-muted" style="font-size: 0.7rem;">Ипотека</small>
+                                                    <small class="text-muted" style="font-size: 0.7rem;">{{ _('Ипотека') }}</small>
                                                 </div>
                                             </div>
                                         </div>
@@ -131,7 +133,7 @@
                                 {% if data.summary.max_action_discount > 0 %}
                                     <span class="badge rounded-pill bg-danger-subtle border border-danger-subtle text-danger-emphasis fs-6 me-1">
                                         <i class="bi bi-star-fill"></i>
-                                        Акция: {{ "%.1f"|format(data.summary.max_action_discount * 100) }}%
+                                        {{ _('Акция') }}: {{ "%.1f"|format(data.summary.max_action_discount * 100) }}%
                                     </span>
                                 {% endif %}
                                 {% for tag in data.summary.available_tags|sort %}
@@ -155,20 +157,21 @@
                 <div id="collapse-{{ loop.index }}" class="accordion-collapse collapse" aria-labelledby="heading-{{ loop.index }}">
                     <div class="accordion-body">
                         {% for prop_type, discounts in data.details.items() if discounts %}
-                            <h5 class="mt-3">Тип недвижимости: <span class="badge bg-info-subtle border border-info-subtle text-info-emphasis rounded-pill">{{ prop_type }}</span></h5>
+                            {# --- ИЗМЕНЕНИЕ 3: Перевод типа недвижимости --- #}
+                            <h5 class="mt-3">{{ _('Тип недвижимости') }}: <span class="badge bg-info-subtle border border-info-subtle text-info-emphasis rounded-pill">{{ _(prop_type) }}</span></h5>
                             <div class="table-responsive">
                                 <table class="table table-sm table-bordered mt-2">
                                     <thead class="table-light">
                                         <tr>
-                                            <th>Тип оплаты</th>
-                                            <th>Дата кадастра</th>
-                                            <th>МПП</th>
-                                            <th>РОП</th>
-                                            <th>КД</th>
-                                            <th>ОПТ</th>
-                                            <th>ГД</th>
-                                            <th>Холдинг</th>
-                                            <th>Акция</th>
+                                            <th>{{ _('Тип оплаты') }}</th>
+                                            <th>{{ _('Дата кадастра') }}</th>
+                                            <th>{{ _('МПП') }}</th>
+                                            <th>{{ _('РОП') }}</th>
+                                            <th>{{ _('КД') }}</th>
+                                            <th>{{ _('ОПТ') }}</th>
+                                            <th>{{ _('ГД') }}</th>
+                                            <th>{{ _('Холдинг') }}</th>
+                                            <th>{{ _('Акция') }}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -181,7 +184,16 @@
 
                                             {% if show_row %}
                                             <tr>
-                                                <td><strong>{{ payment_method_value }}</strong></td>
+                                                {# --- ИЗМЕНЕНИЕ 4: Перевод типа оплаты в таблице --- #}
+                                                <td>
+                                                    <strong>
+                                                        {% if payment_method_value == '100% оплата' %}
+                                                            {{ _('100%% оплата') }}
+                                                        {% else %}
+                                                            {{ _(payment_method_value) }}
+                                                        {% endif %}
+                                                    </strong>
+                                                </td>
                                                 <td>{{ discount.cadastre_date.strftime('%d.%m.%Y') if discount.cadastre_date else '—' }}</td>
                                                 <td>{% if discount.mpp > 0 %}{{ "%.1f"|format(discount.mpp * 100) }}%{% else %}—{% endif %}</td>
                                                 <td>{% if discount.rop > 0 %}{{ "%.1f"|format(discount.rop * 100) }}%{% else %}—{% endif %}</td>
@@ -204,7 +216,7 @@
         {% endfor %}
     </div>
 {% else %}
-    <div class="alert alert-warning">В системе пока нет настроенных скидок.</div>
+    <div class="alert alert-warning">{{ _('В системе пока нет настроенных скидок.') }}</div>
 {% endif %}
 {% endblock %}
 
