@@ -47,12 +47,10 @@ def _update_cbu_rate_logic():
         return False
 
 
-def fetch_and_update_cbu_rate():
-    """Публичная функция, которую вызывает планировщик. Не принимает аргументов."""
-    from app import create_app
-    # Создаем временный экземпляр приложения, чтобы получить контекст
-    temp_app = create_app()
-    with temp_app.app_context():
+def fetch_and_update_cbu_rate(app):
+    """Публичная функция, которую вызывает планировщик. Принимает экземпляр приложения."""
+    # Убираем создание временного приложения и используем переданный app
+    with app.app_context():
         _update_cbu_rate_logic()
 
 

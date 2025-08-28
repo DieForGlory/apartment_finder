@@ -11,6 +11,7 @@ from flask_babel import Babel
 
 from .core.config import DevelopmentConfig
 from .core.extensions import db
+from .services.currency_service import fetch_and_update_cbu_rate
 
 # 1. Инициализация расширений
 login_manager = LoginManager()
@@ -107,7 +108,8 @@ def create_app(config_class=DevelopmentConfig):
         if scheduler.running and not scheduler.get_job('update_cbu_rate_job'):
             scheduler.add_job(
                 id='update_cbu_rate_job',
-                func='app.services.currency_service:fetch_and_update_cbu_rate',
+                func=fetch_and_update_cbu_rate,  # Передаем саму функцию
+                args=[app],  # Передаем экземпляр 'app' в качестве аргумента
                 trigger='interval',
                 hours=1
             )

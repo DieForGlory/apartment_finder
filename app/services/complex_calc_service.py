@@ -17,7 +17,10 @@ DEFAULT_RATE = 16.5 / 12 / 100
 MAX_MORTGAGE_BODY = 840_000_000
 
 
-def calculate_installment_plan(sell_id: int, term_months: int, additional_discounts: dict, start_date=None, dp_amount: float = 0, dp_type: str = 'uzs'):
+# app/services/complex_calc_service.py
+
+def calculate_installment_plan(sell_id: int, term_months: int, additional_discounts: dict, start_date=None,
+                               dp_amount: float = 0, dp_type: str = 'uzs'):
     """
     Рассчитывает сложную рассрочку с округлением скидки.
     """
@@ -31,8 +34,8 @@ def calculate_installment_plan(sell_id: int, term_months: int, additional_discou
 
     card_data = selection_service.get_apartment_card_data(sell_id)
     apartment_price = card_data.get('apartment', {}).get('estate_price', 0)
-    # Здесь используется PaymentMethod, который мы теперь импортируем из правильного места
-    discounts_100_payment = next((d for d in card_data.get('all_discounts_for_property_type', []) if d['payment_method'] == PaymentMethod.FULL_PAYMENT.value), None)
+    discounts_100_payment = next((d for d in card_data.get('all_discounts_for_property_type', []) if
+                                  d['payment_method'] == PaymentMethod.FULL_PAYMENT.value), None)
 
     if not discounts_100_payment:
         raise ValueError("Скидки для 100% оплаты не найдены для этого объекта.")
@@ -40,7 +43,8 @@ def calculate_installment_plan(sell_id: int, term_months: int, additional_discou
     cadastre_date_str = discounts_100_payment.get('cadastre_date')
     if cadastre_date_str:
         cadastre_date = date.fromisoformat(cadastre_date_str)
-        months_to_cadastre = relativedelta(cadastre_date, date.today()).months + relativedelta(cadastre_date, date.today()).years * 12
+        months_to_cadastre = relativedelta(cadastre_date, date.today()).months + relativedelta(cadastre_date,
+                                                                                               date.today()).years * 12
         if term_months > months_to_cadastre:
             raise ValueError(f"Срок рассрочки не может превышать {months_to_cadastre} мес. (до кадастра)")
     elif term_months > 0:
@@ -50,20 +54,7 @@ def calculate_installment_plan(sell_id: int, term_months: int, additional_discou
     if price_for_calc <= 0:
         raise ValueError("Базовая цена для расчета должна быть положительной.")
 
-    dp_uzs = 0
-    if dp_amount > 0:
-        if dp_type == 'percent':
-            dp_uzs = price_for_calc * (dp_amount / 100.0)
-        elif dp_type == 'usd':
-            usd_rate = currency_service.get_current_effective_rate()
-            if not usd_rate: raise ValueError("Не удалось получить курс USD для расчета ПВ.")
-            dp_uzs = dp_amount * usd_rate
-        else:  # 'uzs'
-            dp_uzs = dp_amount
-
-    min_dp_percent = settings.standard_installment_min_dp_percent
-    min_dp_uzs = price_for_calc * (min_dp_percent / 100.0)
-
+    # --- ИЗМЕНЕНИЕ 1: Сначала считаем все скидки ---
     total_discount_rate = 0
     for key in ['mpp', 'rop', 'action']:
         total_discount_rate += discounts_100_payment.get(key, 0)
@@ -74,14 +65,39 @@ def calculate_installment_plan(sell_id: int, term_months: int, additional_discou
             raise ValueError(f"Скидка {disc_key.upper()} превышает максимум ({max_discount * 100}%)")
         total_discount_rate += disc_value
 
+    # --- ИЗМЕНЕНИЕ 2: Считаем стоимость после применения всех скидок ---
+    price_after_discounts = price_for_calc * (1 - total_discount_rate)
+
+    # --- ИЗМЕНЕНИЕ 3: Теперь считаем ПВ от правильной суммы ---
+    dp_uzs = 0
+    if dp_amount > 0:
+        if dp_type == 'percent':
+            # Вот исправленная строка
+            dp_uzs = price_after_discounts * (dp_amount / 100.0)
+        elif dp_type == 'usd':
+            usd_rate = currency_service.get_current_effective_rate()
+            if not usd_rate: raise ValueError("Не удалось получить курс USD для расчета ПВ.")
+            dp_uzs = dp_amount * usd_rate
+        else:  # 'uzs'
+            dp_uzs = dp_amount
+
+    min_dp_percent = settings.standard_installment_min_dp_percent
+    # --- ИЗМЕНЕНИЕ 4: Минимальный ПВ также считаем от цены со скидкой ---
+    min_dp_uzs = price_after_discounts * (min_dp_percent / 100.0)
+
+    # --- Добавлена проверка на минимальный ПВ ---
+    if dp_uzs < min_dp_uzs:
+        raise ValueError(
+            f"Первоначальный взнос ({dp_uzs:,.0f} UZS) меньше минимально допустимого ({min_dp_uzs:,.0f} UZS).")
+
     if term_months <= 0:
         raise ValueError("Срок рассрочки должен быть больше нуля.")
 
-    price_after_discounts_theoretical = price_for_calc * (1 - total_discount_rate)
-    remaining_for_installment = price_after_discounts_theoretical - dp_uzs
+    remaining_for_installment = price_after_discounts - dp_uzs
     if remaining_for_installment <= 0:
         raise ValueError("Сумма первоначального взноса равна или превышает стоимость квартиры после скидок.")
 
+    # Логика расчета ежемесячного платежа и итоговой стоимости остается прежней
     monthly_payment_theoretical = npf.pmt(monthly_rate, term_months, -remaining_for_installment)
     contract_value_theoretical = (monthly_payment_theoretical * term_months) + dp_uzs
     discount_percent_theoretical = (1 - (contract_value_theoretical / price_for_calc)) * 100
@@ -90,7 +106,7 @@ def calculate_installment_plan(sell_id: int, term_months: int, additional_discou
     final_discount_rate = final_discount_percent / 100.0
     final_contract_value = price_for_calc * (1 - final_discount_rate)
     final_installment_part = final_contract_value - dp_uzs
-    final_monthly_payment = final_installment_part / term_months
+    final_monthly_payment = final_installment_part / term_months if term_months > 0 else 0
 
     payment_schedule = []
     start_date_obj = date.fromisoformat(start_date) if start_date else date.today()
