@@ -12,6 +12,50 @@ from app.models import planning_models
 from .data_service import get_all_complex_names
 from ..models.estate_models import EstateDeal, EstateHouse, EstateSell
 from ..models.finance_models import FinanceOperation
+from . import currency_service
+def generate_zero_mortgage_template_excel():
+    """
+    Генерирует Excel-шаблон для матрицы "Ипотеки под 0%" в формате как на изображении.
+    """
+    # Создаем структуру данных как на вашем изображении
+    data = {
+        'Месяц': [12, 18, 24, 30, 36, 42, 48, 54, 60],
+        '30': [11, 16, 21, 26, 31, 36, 41, 45, 50],
+        '40': [10, 14, 18, 22, 26, 31, 35, 39, 43],
+        '50': [8, 12, 15, 19, 22, 26, 29, 33, 36],
+        '60': [7, 9, 12, 15, 18, 21, 23, 26, 29]
+    }
+    df = pd.DataFrame(data)
+    df.rename(columns={'30': 0.3, '40': 0.4, '50': 0.5, '60': 0.6}, inplace=True)
+
+
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Zero Mortgage Matrix', startrow=1)
+        workbook = writer.book
+        worksheet = writer.sheets['Zero Mortgage Matrix']
+
+        # Форматы для красивого отображения
+        header_format = workbook.add_format({
+            'bold': True, 'align': 'center', 'valign': 'vcenter',
+            'fg_color': '#C6E0B4', 'border': 1
+        })
+        percent_format = workbook.add_format({'num_format': '0%', 'align': 'center', 'border': 1})
+        month_format = workbook.add_format({'align': 'center', 'border': 1, 'bold': True, 'fg_color': '#C6E0B4'})
+
+        # Создаем заголовки
+        worksheet.merge_range('B1:E1', 'ПВ', header_format)
+        worksheet.write('A2', 'Месяц', header_format)
+        for col_num, value in enumerate(df.columns.values):
+            if col_num > 0: # Пропускаем 'Месяц'
+                worksheet.write(1, col_num, value, header_format)
+
+        # Применяем форматы к колонкам
+        worksheet.set_column('A:A', 10, month_format)
+        worksheet.set_column('B:E', 10, percent_format)
+
+    output.seek(0)
+    return output
 
 
 def generate_consolidated_report_by_period(year: int, period: str, property_type: str):

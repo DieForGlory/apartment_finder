@@ -150,6 +150,12 @@ def plan_fact_report():
     prop_type = request.args.get('property_type', planning_models.PropertyType.FLAT.value)
     usd_rate = currency_service.get_current_effective_rate()
 
+    # v-- ОТЛАДКА --v
+    print(f"DEBUG (report_routes): В шаблон plan_fact_report.html передается курс usd_to_uzs_rate = {usd_rate}")
+    # ^-- ОТЛАДКА --^
+
+    is_period_view = period != 'monthly'
+
     is_period_view = period != 'monthly'
     total_refunds = 0 # Инициализируем
 

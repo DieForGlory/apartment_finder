@@ -79,3 +79,26 @@ def calculate_dp_installment():
     except Exception as e:
         current_app.logger.error(f"Critical error in DP installment calculation: {e}")
         return jsonify(success=False, error="Произошла внутренняя ошибка на сервере."), 500
+
+@complex_calc_bp.route('/calculate-zero-mortgage', methods=['POST'])
+@login_required
+@permission_required('view_selection')
+def calculate_zero_mortgage():
+    """Обрабатывает AJAX-запрос для расчета ипотеки под 0%."""
+    data = request.get_json()
+    try:
+        additional_discounts = {
+            k: float(v) for k, v in data.get('additional_discounts', {}).items() if v and float(v) > 0
+        }
+        result = complex_calc_service.calculate_zero_mortgage(
+            sell_id=int(data.get('sell_id')),
+            term_months=int(data.get('term_months')),
+            dp_percent=int(data.get('dp_percent')),
+            additional_discounts=additional_discounts
+        )
+        return jsonify(success=True, data=result)
+    except (ValueError, TypeError) as e:
+        return jsonify(success=False, error=str(e)), 400
+    except Exception as e:
+        current_app.logger.error(f"Critical error in zero mortgage calculation: {e}")
+        return jsonify(success=False, error="Произошла внутренняя ошибка на сервере."), 500

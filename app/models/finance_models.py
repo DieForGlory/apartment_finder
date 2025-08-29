@@ -1,6 +1,16 @@
+from datetime import datetime
 from app.core.extensions import db
 
+class ZeroMortgageMatrix(db.Model):
+    __tablename__ = 'zero_mortgage_matrix'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, unique=True)
+    data = db.Column(db.JSON, nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    def __repr__(self):
+        return f'<ZeroMortgageMatrix {self.name}>'
 class FinanceOperation(db.Model):
     __tablename__ = 'finances'
 
@@ -35,4 +45,5 @@ class CurrencySettings(db.Model):
         if self.rate_source == 'cbu':
             self.effective_rate = self.cbu_rate
         else:
+            # ИСПРАВЛЕНИЕ: Устанавливаем ручной курс, а не курс ЦБ
             self.effective_rate = self.manual_rate

@@ -2,6 +2,8 @@
 
 from flask import current_app, abort
 from sqlalchemy.orm import joinedload
+
+from . import currency_service
 from ..core.extensions import db
 import json
 from datetime import date
@@ -22,7 +24,7 @@ def find_apartments_by_budget(budget: float, currency: str, property_type_str: s
     """
     Финальная версия с исправленной логикой области видимости переменной discount.
     """
-    usd_rate = current_app.config.get('USD_TO_UZS_RATE', 12650.0)
+    usd_rate = currency_service.get_current_effective_rate() or 12650.0
     budget_uzs = budget * usd_rate if currency.upper() == 'USD' else budget
 
     print(f"\n[SELECTION_SERVICE] 🔎 Поиск. Бюджет: {budget} {currency}. Тип: {property_type_str}")

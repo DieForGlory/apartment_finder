@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Хранилища для данных после успешного расчета
     let installmentCalcData = null;
     let dpInstallmentCalcData = null;
+    let zeroMortgageCalcData = null;
 
     // Функция для форматирования объекта в строку для URL
     const formatForUrl = (obj) => JSON.stringify(obj);
@@ -22,17 +23,16 @@ document.addEventListener('DOMContentLoaded', function() {
     if (installmentForm) {
         installmentForm.addEventListener('submit', function(e) {
             e.preventDefault();
-            const actionUrl = this.dataset.action; // Получаем URL из атрибута формы
+            const actionUrl = this.dataset.action;
             const printBtn = document.getElementById('print-kp-installment');
-            printBtn.classList.add('d-none'); // Скрываем кнопку при каждом новом расчете
-            installmentCalcData = null; // Сбрасываем данные
+            printBtn.classList.add('d-none');
+            installmentCalcData = null;
 
             const errorDisplay = document.getElementById('error-display');
             const discountInputs = this.querySelectorAll('.discount-input');
             let additionalDiscounts = {};
             let is_valid = true;
 
-            // Валидация скидок
             discountInputs.forEach(input => {
                 input.classList.remove('is-invalid');
                 const enteredValue = parseFloat(input.value);
@@ -57,7 +57,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 body: JSON.stringify({
                     sell_id: sellId,
                     term: document.getElementById('term').value,
-                    // ДОБАВЛЯЕМ СТРОКУ
                     start_date: document.getElementById('first_payment_date').value,
                     dp_amount: document.getElementById('dp-amount-standard').value,
                     dp_type: document.getElementById('dp-type-standard').value,
@@ -73,7 +72,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     document.getElementById('res-contract-value').textContent = formatCurrency(data.calculated_contract_value) + ' UZS';
                     document.getElementById('res-monthly-payment').textContent = formatCurrency(data.monthly_payment) + ' UZS';
 
-                    // Сохраняем данные и показываем кнопку
                     installmentCalcData = data;
                     printBtn.classList.remove('d-none');
                 } else {
@@ -95,7 +93,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (dpInstallmentForm) {
         dpInstallmentForm.addEventListener('submit', function(e) {
             e.preventDefault();
-            const actionUrl = this.dataset.action; // Получаем URL из атрибута формы
+            const actionUrl = this.dataset.action;
             const printBtn = document.getElementById('print-kp-dp-installment');
             printBtn.classList.add('d-none');
             dpInstallmentCalcData = null;
@@ -104,7 +102,6 @@ document.addEventListener('DOMContentLoaded', function() {
             let is_valid = true;
             let additionalDiscounts = {};
 
-            // Валидация
             this.querySelectorAll('.discount-input-dp').forEach(input => {
                 input.classList.remove('is-invalid');
                 const enteredValue = parseFloat(input.value);
@@ -131,7 +128,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     term: document.getElementById('dp-term').value,
                     dp_amount: document.getElementById('dp-amount').value,
                     dp_type: document.getElementById('dp-type').value,
-                    // ДОБАВЛЯЕМ СТРОКУ
                     start_date: document.getElementById('dp_first_payment_date').value,
                     additional_discounts: additionalDiscounts
                 })
@@ -145,9 +141,76 @@ document.addEventListener('DOMContentLoaded', function() {
                     document.getElementById('dp-res-mortgage').textContent = formatCurrency(data.mortgage_body) + ' UZS';
                     document.getElementById('dp-res-contract').textContent = formatCurrency(data.calculated_contract_value) + ' UZS';
 
-                    // Сохраняем данные и показываем кнопку
                     dpInstallmentCalcData = data;
                     printBtn.classList.remove('d-none');
+                } else {
+                    errorDisplay.textContent = result.error;
+                    errorDisplay.classList.remove('d-none');
+                }
+            })
+            .catch(err => {
+                console.error("Fetch Error:", err);
+                errorDisplay.textContent = 'Ошибка сети. Попробуйте позже.';
+                errorDisplay.classList.remove('d-none');
+            });
+        });
+    }
+
+    // --- ЛОГИКА ДЛЯ ИПОТЕКИ ПОД 0% ---
+    const zeroMortgageForm = document.getElementById('zero-mortgage-form');
+    if(zeroMortgageForm) {
+        zeroMortgageForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const actionUrl = this.dataset.action;
+            const errorDisplay = document.getElementById('zero-mortgage-error-display');
+            const printBtn = document.getElementById('print-kp-zero-mortgage');
+            printBtn.classList.add('d-none');
+            zeroMortgageCalcData = null;
+            errorDisplay.classList.add('d-none');
+
+            const discountInputs = this.querySelectorAll('.discount-input-zero-mortgage');
+            let additionalDiscounts = {};
+            let is_valid = true;
+
+            discountInputs.forEach(input => {
+                input.classList.remove('is-invalid');
+                const enteredValue = parseFloat(input.value);
+                const maxValue = parseFloat(input.max);
+                if (enteredValue > maxValue) {
+                    is_valid = false;
+                    input.classList.add('is-invalid');
+                    errorDisplay.textContent = `Скидка ${input.previousElementSibling.textContent} не может превышать ${input.max}%`;
+                    errorDisplay.classList.remove('d-none');
+                } else if (enteredValue > 0) {
+                    additionalDiscounts[input.id.replace('zero-mortgage-disc-', '')] = enteredValue / 100.0;
+                }
+            });
+
+            if (!is_valid) return;
+
+            ['zero-mortgage-res-contract', 'zero-mortgage-res-dp', 'zero-mortgage-res-monthly'].forEach(id => document.getElementById(id).textContent = '...');
+
+            fetch(actionUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sell_id: sellId,
+                    term_months: document.getElementById('zero-mortgage-term').value,
+                    dp_percent: document.getElementById('zero-mortgage-dp').value,
+                    additional_discounts: additionalDiscounts
+                })
+            })
+            .then(response => response.json())
+            .then(result => {
+                if(result.success) {
+                    const data = result.data;
+                    document.getElementById('zero-mortgage-res-contract').textContent = formatCurrency(data.contract_value) + ' UZS';
+                    document.getElementById('zero-mortgage-res-dp').textContent = formatCurrency(data.initial_payment) + ' UZS';
+                    document.getElementById('zero-mortgage-res-monthly').textContent = formatCurrency(data.monthly_payment) + ' UZS';
+
+                    zeroMortgageCalcData = data;
+                    printBtn.classList.remove('d-none');
+
                 } else {
                     errorDisplay.textContent = result.error;
                     errorDisplay.classList.remove('d-none');
@@ -182,6 +245,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 const queryParams = new URLSearchParams({
                     calc_type: 'dp_installment',
                     details: formatForUrl(dpInstallmentCalcData)
+                });
+                window.open(`/reports/commercial-offer/complex/${sellId}?${queryParams.toString()}`, '_blank');
+            }
+        });
+    }
+
+    const printKpZeroMortgageBtn = document.getElementById('print-kp-zero-mortgage');
+    if(printKpZeroMortgageBtn) {
+        printKpZeroMortgageBtn.addEventListener('click', function() {
+            if (zeroMortgageCalcData) {
+                const queryParams = new URLSearchParams({
+                    calc_type: 'zero_mortgage',
+                    details: formatForUrl(zeroMortgageCalcData)
                 });
                 window.open(`/reports/commercial-offer/complex/${sellId}?${queryParams.toString()}`, '_blank');
             }

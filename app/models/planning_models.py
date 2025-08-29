@@ -85,7 +85,17 @@ class ComplexComment(db.Model):
         db.UniqueConstraint('version_id', 'complex_name', name='_version_complex_uc'),
     )
 
+class ZeroMortgageMatrix(db.Model):
+    __bind_key__ = 'planning_db'
+    __tablename__ = 'zero_mortgage_matrix'
+    id = db.Column(db.Integer, primary_key=True)
+    term_months = db.Column(db.Integer, nullable=False)
+    dp_percent = db.Column(db.Integer, nullable=False)
+    cashback_percent = db.Column(db.Float, nullable=False)
 
+    __table_args__ = (
+        db.UniqueConstraint('term_months', 'dp_percent', name='_term_dp_uc'),
+    )
 class CalculatorSettings(db.Model):
     __bind_key__ = 'planning_db'
     __tablename__ = 'calculator_settings'
@@ -95,7 +105,7 @@ class CalculatorSettings(db.Model):
     dp_installment_max_term = db.Column(db.Integer, default=6)
     time_value_rate_annual = db.Column(db.Float, default=16.5)
     standard_installment_min_dp_percent = db.Column(db.Float, default=15.0)
-
+    zero_mortgage_whitelist = db.Column(db.Text, nullable=True)
 
 class ManagerSalesPlan(db.Model):
     __bind_key__ = 'planning_db'

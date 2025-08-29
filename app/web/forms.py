@@ -8,7 +8,8 @@ from wtforms.validators import DataRequired, Length, EqualTo, ValidationError, E
 from wtforms.widgets import CheckboxInput
 from ..models import auth_models
 from flask_babel import lazy_gettext as _
-
+from wtforms import StringField, SubmitField, FileField
+from flask_wtf.file import FileAllowed
 class UploadExcelForm(FlaskForm):
     """Форма для загрузки Excel файла."""
     excel_file = FileField(
@@ -17,7 +18,13 @@ class UploadExcelForm(FlaskForm):
     )
     submit = SubmitField(_('Загрузить'))
 
-
+class UploadZeroMortgageMatrixForm(FlaskForm):
+    """Форма для загрузки Excel файла с матрицей для ипотеки 0%."""
+    excel_file = FileField(
+        _('Выберите Excel-файл с матрицей'),
+        validators=[DataRequired(message=_("Необходимо выбрать файл."))]
+    )
+    submit = SubmitField(_('Загрузить матрицу'))
 class CreateUserForm(FlaskForm):
     """Форма создания пользователя."""
     username = StringField(_('Имя пользователя'), validators=[DataRequired(), Length(min=4, max=64)])
@@ -76,6 +83,24 @@ class CalculatorSettingsForm(FlaskForm):
     submit = SubmitField(_('Сохранить настройки'))
 
 
+class CalculatorSettingsForm(FlaskForm):
+    """Форма для настроек калькуляторов."""
+    standard_installment_whitelist = TextAreaField(_('ID квартир для обычной рассрочки (через запятую)'))
+    dp_installment_whitelist = TextAreaField(_('ID квартир для рассрочки на ПВ (через запятую)'))
+    dp_installment_max_term = IntegerField(_('Макс. срок рассрочки на ПВ (мес)'),
+                                           validators=[DataRequired(), NumberRange(min=1, max=36)])
+    time_value_rate_annual = FloatField(_('Годовая ставка для коэфф. (%)'),
+                                        validators=[DataRequired(), NumberRange(min=0)])
+    standard_installment_min_dp_percent = FloatField(
+        _('Мин. ПВ для стандартной рассрочки (%%)'),
+        validators=[DataRequired(message=_("Это поле обязательно.")), NumberRange(min=0, max=100)],
+        default=15.0
+    )
+    # --- НОВЫЕ ПОЛЯ ---
+    zero_mortgage_whitelist = TextAreaField(_('ID квартир для "Ипотеки под 0%" (через запятую)'))
+    excel_file = FileField(_('Загрузить новую матрицу для "Ипотеки под 0%" (Excel)'), validators=[Optional()])
+
+    submit = SubmitField(_('Сохранить настройки'))
 class UploadManagerPlanForm(FlaskForm):
     """Форма для загрузки Excel файла с планами менеджеров."""
     excel_file = FileField(

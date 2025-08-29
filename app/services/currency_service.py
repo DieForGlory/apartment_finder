@@ -4,19 +4,19 @@ import requests
 from datetime import datetime
 from app.core.extensions import db
 from app.models.finance_models import CurrencySettings
-
+from flask import current_app
 # API Центрального Банка Узбекистана для курса доллара
 CBU_API_URL = "https://cbu.uz/ru/arkhiv-kursov-valyut/json/USD/"
 
 
 def _get_settings():
     """Вспомогательная функция для получения единственной строки настроек."""
-    settings = CurrencySettings.query.first()
+    settings = db.session.get(CurrencySettings, 1) # Используем get() вместо first()
     if not settings:
-        settings = CurrencySettings()
+        settings = CurrencySettings(id=1) # Явно указываем ID при создании
         db.session.add(settings)
         # Установим начальные значения при первом создании
-        settings.manual_rate = 12500.0
+        settings.manual_rate = 13050.0
         settings.update_effective_rate()
         db.session.commit()
     return settings
@@ -72,10 +72,13 @@ def set_manual_rate(rate: float):
 
     settings = _get_settings()
     settings.manual_rate = rate
+    print(f"DEBUG (currency_service): Ручной курс в базе данных обновлен на: {rate}") # <-- ОТЛАДКА
 
     # Если активный источник - ручной, обновляем и актуальный курс
     if settings.rate_source == 'manual':
         settings.update_effective_rate()
+        print(f"DEBUG (currency_service): Источник 'ручной', effective_rate обновлен на: {settings.effective_rate}") # <-- ОТЛАДКА
+
 
     db.session.commit()
 
@@ -83,4 +86,7 @@ def set_manual_rate(rate: float):
 def get_current_effective_rate():
     """ЕДИНАЯ функция для получения актуального курса для всех расчетов."""
     settings = _get_settings()
+    # v-- ОТЛАДКА --v
+    print(f"DEBUG (currency_service): Запрошен effective_rate. Источник: '{settings.rate_source}', Значение: {settings.effective_rate}")
+    # ^-- ОТЛАДКА --^
     return settings.effective_rate
