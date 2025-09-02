@@ -142,6 +142,17 @@
                         <h5 class="card-title">{{ _('Рассрочка на ПВ (до 6 мес)') }}</h5>
                         <form id="dp-installment-form" data-action="{{ url_for('complex_calc.calculate_dp_installment') }}">
                             <div class="mb-3">
+                                <label class="form-label">{{ _('Тип ипотеки') }}</label>
+                                <div class="btn-group w-100" role="group">
+                                    <input type="radio" class="btn-check" name="mortgage_type" id="mortgage-standard" value="standard" checked>
+                                    <label class="btn btn-outline-primary" for="mortgage-standard">{{ _('Стандартная (до 420 млн)') }}</label>
+
+                                    <input type="radio" class="btn-check" name="mortgage_type" id="mortgage-extended" value="extended">
+                                    <label class="btn btn-outline-primary" for="mortgage-extended">{{ _('Расширенная (до 840 млн)') }}</label>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
                                 <label for="dp-term" class="form-label">{{ _('Срок рассрочки на ПВ (1-6 мес)') }}</label>
                                 <input type="number" class="form-control" id="dp-term" name="dp-term" required min="1" max="6" value="6">
                             </div>
@@ -203,6 +214,16 @@
                 <div class="col-md-5">
                     <h5 class="card-title">{{ _('Параметры ипотеки под 0%%') }}</h5>
                     <form id="zero-mortgage-form" data-action="{{ url_for('complex_calc.calculate_zero_mortgage') }}">
+                        <div class="mb-3">
+                            <label class="form-label">{{ _('Тип ипотеки') }}</label>
+                            <div class="btn-group w-100" role="group">
+                                <input type="radio" class="btn-check" name="zero_mortgage_type" id="zero-mortgage-standard" value="standard" checked>
+                                <label class="btn btn-outline-info" for="zero-mortgage-standard">{{ _('Стандартная (до 420 млн)') }}</label>
+
+                                <input type="radio" class="btn-check" name="zero_mortgage_type" id="zero-mortgage-extended" value="extended">
+                                <label class="btn btn-outline-info" for="zero-mortgage-extended">{{ _('Расширенная (до 840 млн)') }}</label>
+                            </div>
+                        </div>
                         <div class="mb-3">
                             <label for="zero-mortgage-term" class="form-label">{{ _('Срок рассрочки (мес)') }}</label>
                             <select class="form-select" id="zero-mortgage-term" name="term">

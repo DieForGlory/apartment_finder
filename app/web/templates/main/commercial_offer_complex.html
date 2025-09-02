@@ -35,14 +35,70 @@
             <div class="layout-main">
                 <div class="section-title">1. {{ _('Информация об объекте') }}</div>
                 <div class="info-block">
+                    <div class="info-item">
+                        <span class="info-label">{{ _('ЖК:') }}</span>
+                        <span class="info-value">{{ data.apartment.house.complex_name }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">{{ _('Тип/Комнат:') }}</span>
+                        <span class="info-value">{{ _(data.apartment.estate_sell_category) }} / {{ data.apartment.estate_rooms }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">{{ _('Этаж:') }}</span>
+                        <span class="info-value">{{ data.apartment.estate_floor }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">{{ _('Площадь:') }}</span>
+                        <span class="info-value">{{ data.apartment.estate_area }} м²</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">{{ _('Стоимость по прайсу:') }}</span>
+                        <span class="info-value price-value" data-uzs-value="{{ data.apartment.estate_price }}">{{ "{:,.0f}".format(data.apartment.estate_price)|replace(',', '.') }} UZS</span>
+                    </div>
                     </div>
 
                 <div class="section-title">2. {{ _('Детализация расчета') }}</div>
                 <div class="calc-details-card">
                     <div class="card-body">
                         {% if calc_type == 'standard_installment' %}
+                            <h5 class="card-title text-primary">{{ _('Расчет по стандартной рассрочке') }}</h5>
+                            <p class="card-text">
+                                {% trans term=details.term_months %}
+                                Расчет произведен на срок <strong>{{ term }} мес.</strong>
+                                {% endtrans %}
+                            </p>
+                            <hr>
+                            <dl>
+                                <dt>{{ _('Стоимость по прайсу:') }}</dt>
+                                <dd><span class="price-value" data-uzs-value="{{ details.price_list }}">{{ "{:,.0f}".format(details.price_list)|replace(',', '.') }} UZS</span></dd>
+                                <dt>{{ _('Расчетная скидка:') }}</dt>
+                                <dd class="text-danger">{{ "%.2f"|format(details.calculated_discount) }}%</dd>
+                                <dt class="result-row">{{ _('Итоговая стоимость договора:') }}</dt>
+                                <dd class="result-row price-final"><span class="price-value" data-uzs-value="{{ details.calculated_contract_value }}">{{ "{:,.0f}".format(details.calculated_contract_value)|replace(',', '.') }} UZS</span></dd>
+                                <dt class="border-top pt-2 mt-2">{{ _('Первоначальный взнос:') }}</dt>
+                                <dd class="border-top pt-2 mt-2 fw-bold"><span class="price-value" data-uzs-value="{{ details.initial_payment_uzs }}">{{ "{:,.0f}".format(details.initial_payment_uzs)|replace(',', '.') }} UZS</span></dd>
+                                <dt>{{ _('Ежемесячный платеж:') }}</dt>
+                                <dd class="fw-bold"><span class="price-value" data-uzs-value="{{ details.monthly_payment }}">{{ "{:,.0f}".format(details.monthly_payment)|replace(',', '.') }} UZS</span></dd>
+                            </dl>
                             {% elif calc_type == 'dp_installment' %}
-                            {% elif calc_type == 'zero_mortgage' %}
+                             <h5 class="card-title text-primary">{{ _('Расчет по рассрочке на Первоначальный Взнос') }}</h5>
+                             <p class="card-text">
+                                {% trans term=details.term_months %}
+                                Рассрочка на ПВ на срок <strong>{{ term }} мес.</strong>
+                                {% endtrans %}
+                            </p>
+                            <hr>
+                            <dl>
+                                <dt class="result-row">{{ _('Итоговая стоимость договора:') }}</dt>
+                                <dd class="result-row price-final"><span class="price-value" data-uzs-value="{{ details.calculated_contract_value }}">{{ "{:,.0f}".format(details.calculated_contract_value)|replace(',', '.') }} UZS</span></dd>
+
+                                <dt class="border-top pt-2 mt-2">{{ _('Ежемесячный платеж по ПВ:') }}</dt>
+                                <dd class="border-top pt-2 mt-2 fw-bold"><span class="price-value" data-uzs-value="{{ details.monthly_payment_for_dp }}">{{ "{:,.0f}".format(details.monthly_payment_for_dp)|replace(',', '.') }} UZS</span></dd>
+
+                                <dt>{{ _('Тело ипотеки (в банк):') }}</dt>
+                                <dd class="fw-bold"><span class="price-value" data-uzs-value="{{ details.mortgage_body }}">{{ "{:,.0f}".format(details.mortgage_body)|replace(',', '.') }} UZS</span></dd>
+                            </dl>
+                             {% elif calc_type == 'zero_mortgage' %}
                             <h5 class="card-title text-primary">{{ _('Расчет по "Ипотеке под 0%%"') }}</h5>
                             <p class="card-text">
                                 {% trans term=details.term_months, dp=details.dp_percent %}

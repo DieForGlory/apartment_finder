@@ -55,7 +55,7 @@
                 <div class="price-final mt-1" data-original-final-price="{{ option.final_price }}">{{ "{:,.0f}".format(option.final_price / 3) }} UZS / {{ _('мес.') }}</div>
                 <small class="text-muted">{{ _('Общая сумма:') }} <span class="total-sum">{{ "{:,.0f}".format(option.final_price) }}</span> UZS</small>
             </div>
-        {% elif option.type_key == 'easy_start_mortgage' %}
+        {% elif 'easy_start_mortgage' in option.type_key %}
             <div class="d-flex justify-content-between align-items-center mt-2">
                 <span class="fs-6">{{ _('Первый взнос (3 платежа):') }}</span>
                 <span class="price-initial" data-original-initial-payment="{{ option.initial_payment }}">{{ "{:,.0f}".format(option.initial_payment / 3) }} UZS / {{ _('мес.') }}</span>
@@ -104,13 +104,9 @@
     <h1 class="gradient-heading">{{ _('Карточка объекта') }} </h1>
     <div class="d-flex gap-2">
         <a href="{{ url_for('main.selection') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> {{ _('Назад к подбору') }}</a>
-        {% if data.apartment and data.apartment.id is not none %}
-        <button id="printKpBtn" class="btn btn-primary" data-sell-id="{{ data.apartment.id }}"><i class="bi bi-printer me-1"></i> {{ _('Распечатать КП') }}</button>
-        {% else %}
-        <button type="button" class="btn btn-success no-print" data-bs-toggle="modal" data-bs-target="#printChoiceModal">
-            <i class="fas fa-print"></i> {{ _('Печать КП') }}
+        <button id="printKpBtn" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#printChoiceModal">
+            <i class="bi bi-printer me-1"></i> {{ _('Распечатать КП') }}
         </button>
-        {% endif %}
     </div>
 </div>
 
@@ -180,6 +176,28 @@
     </div>
   </div>
 </div>
+
+<div class="modal fade" id="printChoiceModal" tabindex="-1" aria-labelledby="printChoiceModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="printChoiceModalLabel">{{ _('Выберите вариант для коммерческого предложения') }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted">{{ _('Выберите, какой тип ипотеки включить в печатную версию коммерческого предложения.') }}</p>
+        <div class="d-grid gap-2">
+            <button type="button" class="btn btn-primary print-variant-btn" data-mortgage-type="standard">
+                {{ _('100% оплата + Стандартная ипотека') }}
+            </button>
+            <button type="button" class="btn btn-info print-variant-btn" data-mortgage-type="extended">
+                {{ _('100% оплата + Расширенная ипотека') }}
+            </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 
@@ -190,14 +208,11 @@
         const cardData = {
             pricing: {{ data.pricing|tojson|safe if data and data.pricing else '[]' }},
             all_discounts_for_property_type: {{ all_discounts_for_property_type|tojson|safe if all_discounts_for_property_type else '[]' }},
-
-            // --- ДОБАВЛЕННЫЙ БЛОК ДЛЯ ПЕРЕДАЧИ ПЕРЕВОДОВ В JS ---
             i18n: {
                 applyDiscounts: "{{ _('Применить доп. скидки') }}",
                 appliedDiscounts: "{{ _('Доп. скидки') }}"
             }
         };
     </script>
-    {# Ссылка на наш новый файл скриптов. `defer` откладывает выполнение до полной загрузки HTML. #}
     <script src="{{ url_for('static', filename='js/apartment_card_java.js') }}" defer></script>
 {% endblock %}

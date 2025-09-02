@@ -153,6 +153,9 @@ def generate_commercial_offer(sell_id):
         return "Apartment not found", 404
 
     selections_json = request.args.get('selections', '{}')
+    # --- ИЗМЕНЕНИЕ: Получаем тип ипотеки для печати ---
+    mortgage_type_to_print = request.args.get('mortgage_type_to_print')
+
     try:
         user_selections = json.loads(selections_json)
     except json.JSONDecodeError:
@@ -164,40 +167,39 @@ def generate_commercial_offer(sell_id):
 
     for option in base_options:
         type_key = option['type_key']
-        base_price_deducted = option['price_after_deduction']
-        total_discount_rate = sum(d['value'] for d in option.get('discounts', []))
-        applied_discounts_details = [{'name': disc['name'], 'amount': base_price_deducted * disc['value']} for disc in option.get('discounts', [])]
 
-        base_payment_method_value = '100% оплата' if '100' in type_key or 'full_payment' in type_key else 'Ипотека'
-        discount_object = next((d for d in all_discounts if d['payment_method'] == base_payment_method_value), None)
-
-        if type_key in user_selections and discount_object:
+        # Применяем дополнительные скидки, если они были выбраны для этого варианта
+        additional_discount_rate = 0
+        if type_key in user_selections:
             for disc_name, disc_percent in user_selections[type_key].items():
-                server_percent = discount_object.get(disc_name, 0) * 100
-                if abs(float(disc_percent) - server_percent) < 0.01:
-                    rate_to_add = server_percent / 100.0
-                    total_discount_rate += rate_to_add
-                    applied_discounts_details.append({'name': disc_name.upper(), 'amount': base_price_deducted * rate_to_add})
+                additional_discount_rate += (disc_percent / 100.0)
 
-        final_price = base_price_deducted * (1 - total_discount_rate)
-        initial_payment = None
+        # Пересчитываем итоговую цену с учетом доп. скидок
+        base_final_price = option['final_price']
+        base_initial_payment = option.get('initial_payment')
+        price_for_additional_discount = option['price_after_deduction'] * (
+                    1 - sum(d['value'] for d in option.get('discounts', [])))
+        additional_discount_amount = price_for_additional_discount * additional_discount_rate
 
-        if 'mortgage' in type_key:
-            from ..services.selection_service import MAX_MORTGAGE, MIN_INITIAL_PAYMENT_PERCENT
-            initial_payment = max(0, final_price - MAX_MORTGAGE)
-            min_req_payment = final_price * MIN_INITIAL_PAYMENT_PERCENT
-            if initial_payment < min_req_payment:
-                initial_payment = min_req_payment
-            final_price = initial_payment + MAX_MORTGAGE
+        final_price_adjusted = base_final_price - additional_discount_amount
+        initial_payment_adjusted = base_initial_payment - additional_discount_amount if base_initial_payment is not None else None
 
-        option.update({
-            'final_price': final_price,
-            'initial_payment': initial_payment,
-            'applied_discounts': applied_discounts_details
-        })
+        option['final_price'] = final_price_adjusted
+        if initial_payment_adjusted is not None:
+            option['initial_payment'] = initial_payment_adjusted
+
         updated_pricing_for_template.append(option)
 
-    card_data['pricing'] = updated_pricing_for_template
+    # --- ИЗМЕНЕНИЕ: Фильтруем варианты для КП ---
+    final_pricing_options = []
+    if mortgage_type_to_print == 'standard':
+        final_pricing_options = [opt for opt in updated_pricing_for_template if 'extended' not in opt['type_key']]
+    elif mortgage_type_to_print == 'extended':
+        final_pricing_options = [opt for opt in updated_pricing_for_template if 'standard' not in opt['type_key']]
+    else:  # По умолчанию или если 'all'
+        final_pricing_options = updated_pricing_for_template
+
+    card_data['pricing'] = final_pricing_options
 
     current_date = datetime.now().strftime("%d.%m.%Y %H:%M")
     usd_rate_from_cbu = get_current_usd_rate()

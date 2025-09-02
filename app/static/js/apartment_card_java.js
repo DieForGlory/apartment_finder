@@ -67,7 +67,7 @@ document.addEventListener('DOMContentLoaded', function() {
             finalPriceSpan.innerHTML = formatCurrency(calculatedPrices.finalPrice / 3) + ' UZS / мес.';
             const totalSumSpan = optionElement.querySelector('.total-sum');
             if(totalSumSpan) totalSumSpan.textContent = formatCurrency(calculatedPrices.finalPrice);
-        } else if (typeKey === 'easy_start_mortgage') {
+        } else if (typeKey.includes('easy_start_mortgage')) {
             if (initialPaymentSpan) initialPaymentSpan.textContent = formatCurrency(calculatedPrices.initialPayment / 3) + ' UZS / мес.';
             finalPriceSpan.textContent = formatCurrency(calculatedPrices.finalPrice) + ' UZS';
         } else {
@@ -137,33 +137,40 @@ document.addEventListener('DOMContentLoaded', function() {
 
     document.querySelectorAll('.payment-option-card').forEach(card => updateOptionUI(card));
 
-    const printKpBtn = document.getElementById('printKpBtn');
-    if (printKpBtn) {
-        printKpBtn.addEventListener('click', function() {
-            const sellId = this.dataset.sellId;
-            if (!sellId) return;
+    // --- ИЗМЕНЕНИЕ: Новый обработчик для кнопок в модальном окне ---
+    const printModal = document.getElementById('printChoiceModal');
+    if (printModal) {
+        const printModalInstance = new bootstrap.Modal(printModal);
 
-            const selectionsForUrl = {};
-            for (const typeKey in appliedAdditionalDiscounts) {
-                const applied = {};
-                for (const discountName in appliedAdditionalDiscounts[typeKey].details) {
-                    const value = appliedAdditionalDiscounts[typeKey].details[discountName];
-                    if (value > 0) {
-                        applied[discountName] = value;
+        document.querySelectorAll('.print-variant-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const sellId = {{ data.apartment.id }};
+                const mortgageType = this.dataset.mortgageType;
+
+                const selectionsForUrl = {};
+                for (const typeKey in appliedAdditionalDiscounts) {
+                    const applied = {};
+                    for (const discountName in appliedAdditionalDiscounts[typeKey].details) {
+                        const value = appliedAdditionalDiscounts[typeKey].details[discountName];
+                        if (value > 0) {
+                            applied[discountName] = value;
+                        }
+                    }
+                    if (Object.keys(applied).length > 0) {
+                        selectionsForUrl[typeKey] = applied;
                     }
                 }
-                if (Object.keys(applied).length > 0) {
-                    selectionsForUrl[typeKey] = applied;
-                }
-            }
 
-            const selectionsJson = JSON.stringify(selectionsForUrl);
-            const queryParams = new URLSearchParams({
-                selections: selectionsJson
+                const selectionsJson = JSON.stringify(selectionsForUrl);
+                const queryParams = new URLSearchParams({
+                    selections: selectionsJson,
+                    mortgage_type_to_print: mortgageType
+                });
+
+                const printUrl = `/commercial-offer/${sellId}?${queryParams.toString()}`;
+                window.open(printUrl, '_blank');
+                printModalInstance.hide();
             });
-
-            const printUrl = `/commercial-offer/${sellId}?${queryParams.toString()}`;
-            window.open(printUrl, '_blank');
         });
     }
 });

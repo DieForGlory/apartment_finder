@@ -120,6 +120,8 @@ document.addEventListener('DOMContentLoaded', function() {
             errorDisplay.classList.add('d-none');
             ['dp-res-term', 'dp-res-monthly', 'dp-res-mortgage', 'dp-res-contract'].forEach(id => document.getElementById(id).textContent = '...');
 
+            const mortgageType = document.querySelector('input[name="mortgage_type"]:checked').value;
+
             fetch(actionUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -129,7 +131,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     dp_amount: document.getElementById('dp-amount').value,
                     dp_type: document.getElementById('dp-type').value,
                     start_date: document.getElementById('dp_first_payment_date').value,
-                    additional_discounts: additionalDiscounts
+                    additional_discounts: additionalDiscounts,
+                    mortgage_type: mortgageType
                 })
             })
             .then(response => response.json())
@@ -190,6 +193,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
             ['zero-mortgage-res-contract', 'zero-mortgage-res-dp', 'zero-mortgage-res-monthly'].forEach(id => document.getElementById(id).textContent = '...');
 
+            // --- ИЗМЕНЕНИЕ: Получаем значение типа ипотеки ---
+            const mortgageType = document.querySelector('input[name="zero_mortgage_type"]:checked').value;
+
             fetch(actionUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -197,7 +203,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     sell_id: sellId,
                     term_months: document.getElementById('zero-mortgage-term').value,
                     dp_percent: document.getElementById('zero-mortgage-dp').value,
-                    additional_discounts: additionalDiscounts
+                    additional_discounts: additionalDiscounts,
+                    mortgage_type: mortgageType // <-- ИЗМЕНЕНИЕ: Добавляем тип ипотеки в запрос
                 })
             })
             .then(response => response.json())

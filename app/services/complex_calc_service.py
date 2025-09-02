@@ -13,7 +13,12 @@ from app.services.discount_service import get_current_usd_rate
 import math
 
 DEFAULT_RATE = 16.5 / 12 / 100
-MAX_MORTGAGE_BODY = 840_000_000
+
+# Константы для разных типов ипотеки
+MAX_MORTGAGE_BODY_STANDARD = 420_000_000
+MAX_MORTGAGE_BODY_EXTENDED = 840_000_000
+MIN_DP_PERCENT_STANDARD = 0.15  # Процент
+MIN_DP_PERCENT_EXTENDED = 0.25  # Процент
 
 
 def calculate_installment_plan(sell_id: int, term_months: int, additional_discounts: dict, start_date=None,
@@ -65,14 +70,12 @@ def calculate_installment_plan(sell_id: int, term_months: int, additional_discou
     min_dp_percent = settings.standard_installment_min_dp_percent
     min_dp_uzs = price_for_calc * (min_dp_percent / 100.0)
 
-    # --- ИЗМЕНЕНИЕ: Скидка считается только из того, что ввел пользователь ---
     total_discount_rate = 0
     for disc_key, disc_value in additional_discounts.items():
         max_discount = discounts_100_payment.get(disc_key, 0)
         if disc_value > max_discount:
             raise ValueError(f"Скидка {disc_key.upper()} превышает максимум ({max_discount * 100}%)")
         total_discount_rate += disc_value
-    # --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
     if term_months <= 0:
         raise ValueError("Срок рассрочки должен быть больше нуля.")
@@ -124,7 +127,7 @@ def calculate_installment_plan(sell_id: int, term_months: int, additional_discou
 
 
 def calculate_dp_installment_plan(sell_id: int, term_months: int, dp_amount: float, dp_type: str,
-                                  additional_discounts: dict, start_date=None):
+                                  additional_discounts: dict, start_date=None, mortgage_type: str = 'standard'):
     """
     Рассчитывает рассрочку на ПВ. Все скидки передаются пользователем.
     """
@@ -151,14 +154,12 @@ def calculate_dp_installment_plan(sell_id: int, term_months: int, dp_amount: flo
     if price_for_calc <= 0:
         raise ValueError("Базовая цена для расчета должна быть положительной.")
 
-    # --- ИЗМЕНЕНИЕ: Скидка считается только из того, что ввел пользователь ---
     total_discount_rate = 0
     for disc_key, disc_value in additional_discounts.items():
         max_discount = discounts_mortgage.get(disc_key, 0)
         if disc_value > max_discount:
             raise ValueError(f"Скидка {disc_key.upper()} превышает максимум ({max_discount * 100}%)")
         total_discount_rate += disc_value
-    # --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
     price_after_discounts = price_for_calc * (1 - total_discount_rate)
 
@@ -171,9 +172,16 @@ def calculate_dp_installment_plan(sell_id: int, term_months: int, dp_amount: flo
     else:
         dp_uzs = dp_amount
 
-    min_dp = price_after_discounts * 0.15
+    if mortgage_type == 'extended':
+        MAX_MORTGAGE_BODY = MAX_MORTGAGE_BODY_EXTENDED
+        MIN_DP_PERCENT = MIN_DP_PERCENT_EXTENDED
+    else:
+        MAX_MORTGAGE_BODY = MAX_MORTGAGE_BODY_STANDARD
+        MIN_DP_PERCENT = MIN_DP_PERCENT_STANDARD
+
+    min_dp = price_after_discounts * MIN_DP_PERCENT
     if dp_uzs < min_dp:
-        raise ValueError(f"Первоначальный взнос не может быть меньше 15% ({min_dp:,.0f} UZS).")
+        raise ValueError(f"Первоначальный взнос не может быть меньше {MIN_DP_PERCENT * 100}% ({min_dp:,.0f} UZS).")
 
     mortgage_body = price_after_discounts - dp_uzs
     if mortgage_body > MAX_MORTGAGE_BODY:
@@ -230,7 +238,8 @@ def calculate_dp_installment_plan(sell_id: int, term_months: int, dp_amount: flo
     }
 
 
-def calculate_zero_mortgage(sell_id: int, term_months: int, dp_percent: int, additional_discounts: dict):
+def calculate_zero_mortgage(sell_id: int, term_months: int, dp_percent: int, additional_discounts: dict,
+                            mortgage_type: str = 'standard'):
     """
     Рассчитывает ипотеку под ноль и формирует график платежей.
     """
@@ -267,11 +276,27 @@ def calculate_zero_mortgage(sell_id: int, term_months: int, dp_percent: int, add
 
     contract_value = (price_for_calc * (1 - total_discount_rate)) / denominator
 
+    # --- ИЗМЕНЕНИЕ: Проверяем лимиты ипотеки ---
+    if mortgage_type == 'extended':
+        MAX_MORTGAGE_BODY = MAX_MORTGAGE_BODY_EXTENDED
+        MIN_DP_PERCENT = MIN_DP_PERCENT_EXTENDED
+    else:
+        MAX_MORTGAGE_BODY = MAX_MORTGAGE_BODY_STANDARD
+        MIN_DP_PERCENT = MIN_DP_PERCENT_STANDARD
+
+    if dp_percent < MIN_DP_PERCENT:
+        raise ValueError(f"Для этого типа ипотеки первоначальный взнос должен быть не менее {MIN_DP_PERCENT}%.")
+
     initial_payment = contract_value * (dp_percent / 100.0)
     remaining_amount = contract_value - initial_payment
+
+    if remaining_amount > MAX_MORTGAGE_BODY:
+        raise ValueError(
+            f"Тело кредита ({remaining_amount:,.0f} UZS) превышает лимит в {MAX_MORTGAGE_BODY:,.0f} UZS для данного типа ипотеки.")
+    # --- КОНЕЦ ИЗМЕНЕНИЯ ---
+
     monthly_payment = remaining_amount / term_months if term_months > 0 else 0
 
-    # --- НОВЫЙ БЛОК: Формирование графика платежей ---
     payment_schedule = []
     start_date_obj = date.today()
 
@@ -279,7 +304,7 @@ def calculate_zero_mortgage(sell_id: int, term_months: int, dp_percent: int, add
         "month_number": 0,
         "payment_date": start_date_obj.isoformat(),
         "amount": initial_payment,
-        "type": "initial_payment"  # Особый тип для ПВ
+        "type": "initial_payment"
     })
 
     current_payment_date = start_date_obj
@@ -291,7 +316,6 @@ def calculate_zero_mortgage(sell_id: int, term_months: int, dp_percent: int, add
             "amount": monthly_payment,
             "type": "monthly_payment"
         })
-    # --- КОНЕЦ НОВОГО БЛОКА ---
 
     return {
         "price_list": apartment_price,
@@ -300,5 +324,5 @@ def calculate_zero_mortgage(sell_id: int, term_months: int, dp_percent: int, add
         "monthly_payment": monthly_payment,
         "term_months": term_months,
         "dp_percent": dp_percent,
-        "payment_schedule": payment_schedule  # Возвращаем график
+        "payment_schedule": payment_schedule
     }
