@@ -1,3 +1,4 @@
+// dieforglory/apartment_finder/apartment_finder-f37e02bf8a9dc8b95aa12dfb12abacef7b6edc2c/app/static/js/apartment_card_java.js
 document.addEventListener('DOMContentLoaded', function() {
 
     if (typeof cardData === 'undefined' || cardData === null) {
@@ -138,13 +139,14 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.payment-option-card').forEach(card => updateOptionUI(card));
 
     // --- ИЗМЕНЕНИЕ: Новый обработчик для кнопок в модальном окне ---
-    const printModal = document.getElementById('printChoiceModal');
+     const printModal = document.getElementById('printChoiceModal');
     if (printModal) {
         const printModalInstance = new bootstrap.Modal(printModal);
 
         document.querySelectorAll('.print-variant-btn').forEach(button => {
             button.addEventListener('click', function() {
-                const sellId = {{ data.apartment.id }};
+                // ИСПРАВЛЕНИЕ: Получаем ID из объекта cardData, который теперь содержит apartment
+                const sellId = cardData.apartment.id;
                 const mortgageType = this.dataset.mortgageType;
 
                 const selectionsForUrl = {};

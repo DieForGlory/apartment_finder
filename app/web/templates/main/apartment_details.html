@@ -188,10 +188,10 @@
         <p class="text-muted">{{ _('Выберите, какой тип ипотеки включить в печатную версию коммерческого предложения.') }}</p>
         <div class="d-grid gap-2">
             <button type="button" class="btn btn-primary print-variant-btn" data-mortgage-type="standard">
-                {{ _('100% оплата + Стандартная ипотека') }}
+                {{ _('100%% оплата + Стандартная ипотека') }}
             </button>
             <button type="button" class="btn btn-info print-variant-btn" data-mortgage-type="extended">
-                {{ _('100% оплата + Расширенная ипотека') }}
+                {{ _('100%% оплата + Расширенная ипотека') }}
             </button>
         </div>
       </div>
@@ -206,6 +206,8 @@
     {# "Мостик" для передачи данных из Jinja2 в JavaScript #}
     <script>
         const cardData = {
+            // ИСПРАВЛЕНИЕ: Добавьте эту строку, чтобы передать данные об объекте в JS
+            apartment: {{ data.apartment|tojson|safe if data and data.apartment else '{}' }},
             pricing: {{ data.pricing|tojson|safe if data and data.pricing else '[]' }},
             all_discounts_for_property_type: {{ all_discounts_for_property_type|tojson|safe if all_discounts_for_property_type else '[]' }},
             i18n: {
