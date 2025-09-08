@@ -147,33 +147,26 @@ def plan_fact_report():
     year = request.args.get('year', today.year, type=int)
     period = request.args.get('period', 'monthly')
     month = request.args.get('month', today.month, type=int)
-    prop_type = request.args.get('property_type', planning_models.PropertyType.FLAT.value)
+    # ИЗМЕНЕНИЕ 1: Значение по умолчанию теперь 'All'
+    prop_type = request.args.get('property_type', 'All')
     usd_rate = currency_service.get_current_effective_rate()
 
-    # v-- ОТЛАДКА --v
-    print(f"DEBUG (report_routes): В шаблон plan_fact_report.html передается курс usd_to_uzs_rate = {usd_rate}")
-    # ^-- ОТЛАДКА --^
-
     is_period_view = period != 'monthly'
-
-    is_period_view = period != 'monthly'
-    total_refunds = 0 # Инициализируем
+    total_refunds = 0
 
     if is_period_view:
-        # Примечание: для периодов логика возвратов может потребовать доработки,
-        # пока мы просто суммируем их.
         report_data, totals = report_service.generate_consolidated_report_by_period(year, period, prop_type)
         summary_data = []
         grand_totals = {}
-        # Суммируем возвраты за весь период
         for m in report_service.PERIOD_MONTHS.get(period, []):
              total_refunds += report_service.get_refund_data(year, m, prop_type)
-
     else:
         summary_data = report_service.get_monthly_summary_by_property_type(year, month)
-        # --- ИЗМЕНЕНИЕ: Получаем третье значение - возвраты ---
         report_data, totals, total_refunds = report_service.generate_plan_fact_report(year, month, prop_type)
         grand_totals = report_service.calculate_grand_totals(year, month)
+
+    # ИЗМЕНЕНИЕ 2: Создаем список для шаблона, добавляя 'Все' в начало
+    property_types_for_template = ['All'] + [pt.value for pt in planning_models.PropertyType]
 
     return render_template('reports/plan_fact_report.html',
                            title="План-фактный отчет",
@@ -181,11 +174,11 @@ def plan_fact_report():
                            summary_data=summary_data,
                            totals=totals,
                            grand_totals=grand_totals,
-                           # --- НОВОЕ: Передаем возвраты в шаблон ---
                            total_refunds=total_refunds,
                            years=[today.year - 1, today.year, today.year + 1],
                            months=range(1, 13),
-                           property_types=list(planning_models.PropertyType),
+                           # ИЗМЕНЕНИЕ 3: Передаем новый список в шаблон
+                           property_types=property_types_for_template,
                            selected_year=year,
                            selected_month=month,
                            selected_period=period,

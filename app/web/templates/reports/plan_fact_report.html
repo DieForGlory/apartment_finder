@@ -42,7 +42,20 @@
                         {% for m in months %}<option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ '%02d'|format(m) }}</option>{% endfor %}
                     </select>
                 </div>
-                <div class="col-md-3"><label for="property_type" class="form-label">{{ _('Тип недвижимости') }}</label><select name="property_type" id="property_type" class="form-select">{% for pt in property_types %}<option value="{{ pt.value }}" {% if pt.value == selected_prop_type %}selected{% endif %}>{{ _(pt.value) }}</option>{% endfor %}</select></div>
+                <div class="col-md-3">
+                    <label for="property_type" class="form-label">{{ _('Тип недвижимости') }}</label>
+                    <select name="property_type" id="property_type" class="form-select">
+                        {% for pt_value in property_types %}
+                            <option value="{{ pt_value }}" {% if pt_value == selected_prop_type %}selected{% endif %}>
+                                {% if pt_value == 'All' %}
+                                    {{ _('Все') }}
+                                {% else %}
+                                    {{ _(pt_value) }}
+                                {% endif %}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
                 <div class="col-md-2"><button type="submit" class="btn btn-primary w-100">{{ _('Показать') }}</button></div>
             </div>
         </form>

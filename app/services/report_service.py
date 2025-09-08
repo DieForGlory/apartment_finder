@@ -131,7 +131,7 @@ def generate_consolidated_report_by_period(year: int, period: str, property_type
 
 def get_fact_income_data(year: int, month: int, property_type: str):
     """Собирает ФАКТИЧЕСКИЕ поступления (статус 'Проведено')."""
-    results = db.session.query(
+    query = db.session.query(
         EstateHouse.complex_name, func.sum(FinanceOperation.summa).label('fact_income')
     ).join(EstateSell, FinanceOperation.estate_sell_id == EstateSell.id) \
         .join(EstateHouse, EstateSell.house_id == EstateHouse.id) \
@@ -141,8 +141,11 @@ def get_fact_income_data(year: int, month: int, property_type: str):
         extract('month', FinanceOperation.date_added) == month,
         FinanceOperation.payment_type != "Возврат поступлений при отмене сделки",
         FinanceOperation.payment_type != "Уступка права требования",
-        EstateSell.estate_sell_category == property_type
-    ).group_by(EstateHouse.complex_name).all()
+    )
+    if property_type != 'All':
+        query = query.filter(EstateSell.estate_sell_category == property_type)
+
+    results = query.group_by(EstateHouse.complex_name).all()
     return {row.complex_name: (row.fact_income or 0) for row in results}
 
 
@@ -150,7 +153,7 @@ def get_expected_income_data(year: int, month: int, property_type: str):
     """
     Собирает ОЖИДАЕМЫЕ поступления (ИСКЛЮЧАЯ возвраты), их сумму и ID операций.
     """
-    results = db.session.query(
+    query = db.session.query(
         EstateHouse.complex_name,
         func.sum(FinanceOperation.summa).label('expected_income'),
         func.group_concat(FinanceOperation.id).label('income_ids')
@@ -160,11 +163,12 @@ def get_expected_income_data(year: int, month: int, property_type: str):
         FinanceOperation.status_name == "К оплате",
         extract('year', FinanceOperation.date_to) == year,
         extract('month', FinanceOperation.date_to) == month,
-        EstateSell.estate_sell_category == property_type,
-        # --- ГЛАВНОЕ ИЗМЕНЕНИЕ: Исключаем возвраты ---
         FinanceOperation.payment_type != "Возврат поступлений при отмене сделки"
-    ).group_by(EstateHouse.complex_name).all()
+    )
+    if property_type != 'All':
+        query = query.filter(EstateSell.estate_sell_category == property_type)
 
+    results = query.group_by(EstateHouse.complex_name).all()
     data = {}
     for row in results:
         ids = [int(id_str) for id_str in row.income_ids.split(',')] if row.income_ids else []
@@ -174,24 +178,31 @@ def get_refund_data(year: int, month: int, property_type: str):
     """
     Собирает данные по ВОЗВРАТАМ, запланированным на указанный период.
     """
-    results = db.session.query(
+    query = db.session.query(
         func.sum(FinanceOperation.summa).label('total_refunds')
     ).join(EstateSell, FinanceOperation.estate_sell_id == EstateSell.id) \
         .filter(
         FinanceOperation.status_name == "К оплате",
         extract('year', FinanceOperation.date_to) == year,
         extract('month', FinanceOperation.date_to) == month,
-        EstateSell.estate_sell_category == property_type,
         FinanceOperation.payment_type == "Возврат поступлений при отмене сделки"
-    ).scalar() # Получаем одно значение
+    )
+    if property_type != 'All':
+        query = query.filter(EstateSell.estate_sell_category == property_type)
 
-    return results or 0.0
+    return query.scalar() or 0.0
 
 def get_plan_income_data(year: int, month: int, property_type: str):
     """Получает плановые данные по поступлениям."""
-    # Используем planning_models.SalesPlan
-    results = planning_models.SalesPlan.query.filter_by(year=year, month=month, property_type=property_type).all()
-    return {row.complex_name: row.plan_income for row in results}
+    query = planning_models.SalesPlan.query.filter_by(year=year, month=month)
+    if property_type != 'All':
+        query = query.filter_by(property_type=property_type)
+
+    results = query.all()
+    plan_data = defaultdict(float)
+    for row in results:
+        plan_data[row.complex_name] += row.plan_income
+    return plan_data
 
 def generate_ids_excel(ids_str: str):
     """
@@ -210,9 +221,7 @@ def generate_ids_excel(ids_str: str):
 
 def get_fact_data(year: int, month: int, property_type: str):
     """Собирает фактические данные о продажах из БД."""
-
     effective_date = func.coalesce(EstateDeal.agreement_date, EstateDeal.preliminary_date)
-
     query = db.session.query(
         EstateHouse.complex_name,
         func.count(EstateDeal.id).label('fact_units')
@@ -224,21 +233,25 @@ def get_fact_data(year: int, month: int, property_type: str):
         EstateDeal.deal_status_name.in_(["Сделка в работе", "Сделка проведена"]),
         extract('year', effective_date) == year,
         extract('month', effective_date) == month,
-        EstateSell.estate_sell_category == property_type
-    ).group_by(EstateHouse.complex_name)
+    )
+    if property_type != 'All':
+        query = query.filter(EstateSell.estate_sell_category == property_type)
 
-    results = query.all()
-
+    results = query.group_by(EstateHouse.complex_name).all()
     return {row.complex_name: row.fact_units for row in results}
 
 
 def get_plan_data(year: int, month: int, property_type: str):
     """Получает плановые данные из нашей таблицы SalesPlan."""
-    # Используем planning_models.SalesPlan
-    results = planning_models.SalesPlan.query.filter_by(
-        year=year, month=month, property_type=property_type
-    ).all()
-    return {row.complex_name: row.plan_units for row in results}
+    query = planning_models.SalesPlan.query.filter_by(year=year, month=month)
+    if property_type != 'All':
+        query = query.filter_by(property_type=property_type)
+
+    results = query.all()
+    plan_data = defaultdict(int)
+    for row in results:
+        plan_data[row.complex_name] += row.plan_units
+    return plan_data
 
 
 def generate_plan_fact_report(year: int, month: int, property_type: str):
@@ -416,23 +429,32 @@ def get_monthly_summary_by_property_type(year: int, month: int):
 
 def get_fact_volume_data(year: int, month: int, property_type: str):
     effective_date = func.coalesce(EstateDeal.agreement_date, EstateDeal.preliminary_date)
-    results = db.session.query(
+    query = db.session.query(
         EstateHouse.complex_name, func.sum(EstateDeal.deal_sum).label('fact_volume')
     ).join(EstateSell, EstateDeal.estate_sell_id == EstateSell.id).join(EstateHouse,
                                                                         EstateSell.house_id == EstateHouse.id).filter(
         EstateDeal.deal_status_name.in_(["Сделка в работе", "Сделка проведена"]),
         extract('year', effective_date) == year,
-        extract('month', effective_date) == month,
-        EstateSell.estate_sell_category == property_type
-    ).group_by(EstateHouse.complex_name).all()
+        extract('month', effective_date) == month
+    )
+    if property_type != 'All':
+        query = query.filter(EstateSell.estate_sell_category == property_type)
+
+    results = query.group_by(EstateHouse.complex_name).all()
     return {row.complex_name: (row.fact_volume or 0) for row in results}
 
 
 def get_plan_volume_data(year: int, month: int, property_type: str):
     """Получает плановые данные по объему контрактации."""
-    # Используем planning_models.SalesPlan
-    results = planning_models.SalesPlan.query.filter_by(year=year, month=month, property_type=property_type).all()
-    return {row.complex_name: row.plan_volume for row in results}
+    query = planning_models.SalesPlan.query.filter_by(year=year, month=month)
+    if property_type != 'All':
+        query = query.filter_by(property_type=property_type)
+
+    results = query.all()
+    plan_data = defaultdict(float)
+    for row in results:
+        plan_data[row.complex_name] += row.plan_volume
+    return plan_data
 
 
 def get_project_dashboard_data(complex_name: str, property_type: str = None):
